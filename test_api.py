@@ -27,6 +27,23 @@ DEFAULT_BASE = "http://127.0.0.1:8000/api/v1"
 DEFAULT_KEY  = "ak_17f90e7c1f6ac3f5fc861d8cec4667a2b888c358a333bb81f75b631a9b50066b"
 
 # ---------------------------------------------------------------------------
+# Known method IDs (normalised to lowercase for comparison)
+# ---------------------------------------------------------------------------
+
+# kcat-capable methods
+KCAT_METHOD_IDS = ["DLKcat", "TurNup", "EITLEM", "UniKP", "KinForm-H", "KinForm-L"]
+# Km-capable methods
+KM_METHOD_IDS   = ["EITLEM", "UniKP", "KinForm-H"]
+# All recognised method IDs (de-duplicated, lowercase)
+ALL_METHOD_IDS  = sorted({m.lower() for m in KCAT_METHOD_IDS + KM_METHOD_IDS})
+
+
+def sel(methods: set, *names: str) -> bool:
+    """Return True if *any* of the given method names appear in the selected set."""
+    return any(n.lower() in methods for n in names)
+
+
+# ---------------------------------------------------------------------------
 # Tiny inline CSV fixtures
 # ---------------------------------------------------------------------------
 
@@ -130,7 +147,7 @@ def test_health(base: str) -> None:
     check("has timestamp",    "timestamp" in j)
 
 
-def test_methods(base: str) -> None:
+def test_methods(base: str, methods: set) -> None:
     section("GET /methods/ — no auth required")
     r = requests.get(f"{base}/methods/")
     check("status 200",              r.status_code == 200, f"got {r.status_code}")
@@ -142,16 +159,16 @@ def test_methods(base: str) -> None:
     check("has methods.kcat",        isinstance(j.get("methods", {}).get("kcat"), list))
     check("has methods.Km",          isinstance(j.get("methods", {}).get("Km"), list))
     kcat_ids = {m["id"] for m in j.get("methods", {}).get("kcat", [])}
-    check("DLKcat in kcat methods",  "DLKcat"   in kcat_ids)
-    check("TurNup in kcat methods",  "TurNup"   in kcat_ids)
-    check("EITLEM in kcat methods",  "EITLEM"   in kcat_ids)
-    check("UniKP in kcat methods",   "UniKP"    in kcat_ids)
-    check("KinForm-H in kcat",       "KinForm-H" in kcat_ids)
-    check("KinForm-L in kcat",       "KinForm-L" in kcat_ids)
+    if sel(methods, "DLKcat"):   check("DLKcat in kcat methods",  "DLKcat"    in kcat_ids)
+    if sel(methods, "TurNup"):   check("TurNup in kcat methods",  "TurNup"    in kcat_ids)
+    if sel(methods, "EITLEM"):   check("EITLEM in kcat methods",  "EITLEM"    in kcat_ids)
+    if sel(methods, "UniKP"):    check("UniKP in kcat methods",   "UniKP"     in kcat_ids)
+    if sel(methods, "KinForm-H"): check("KinForm-H in kcat",      "KinForm-H" in kcat_ids)
+    if sel(methods, "KinForm-L"): check("KinForm-L in kcat",      "KinForm-L" in kcat_ids)
     km_ids = {m["id"] for m in j.get("methods", {}).get("Km", [])}
-    check("EITLEM in Km methods",    "EITLEM"   in km_ids)
-    check("UniKP in Km methods",     "UniKP"    in km_ids)
-    check("KinForm-H in Km methods", "KinForm-H" in km_ids)
+    if sel(methods, "EITLEM"):   check("EITLEM in Km methods",    "EITLEM"    in km_ids)
+    if sel(methods, "UniKP"):    check("UniKP in Km methods",     "UniKP"     in km_ids)
+    if sel(methods, "KinForm-H"): check("KinForm-H in Km methods", "KinForm-H" in km_ids)
     check("has longSequenceOptions", "longSequenceOptions" in j)
 
 
@@ -190,13 +207,25 @@ def test_quota(base: str, headers: dict) -> None:
           j.get("remaining") == j.get("limit", 0) - j.get("used", 0))
 
 
-def test_submit_success(base: str, headers: dict) -> dict:
+def test_submit_success(base: str, headers: dict, methods: set) -> dict | None:
     """
-    Submit a valid job (kcat / DLKcat).  Returns the job dict so later tests
-    can poll its status and attempt to download its result.
+    Submit a valid job using the first available kcat method from *methods*.
+    Returns the job dict so later tests can poll its status and attempt to
+    download its result.  Returns None if no kcat method is selected.
     """
-    section("POST /submit/ — valid CSV file upload (kcat / DLKcat)")
-    r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "kcat", kcat_method="DLKcat")
+    # Pick the first kcat method that the user asked to test.
+    kcat_method = next(
+        (m for m in KCAT_METHOD_IDS if m.lower() in methods), None
+    )
+    if kcat_method is None:
+        print("\n  (skipping submit/status/result tests — no kcat method selected)")
+        return None
+
+    # TurNup requires a different CSV format; fall back if it's the only option.
+    csv_content = MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV
+
+    section(f"POST /submit/ — valid CSV file upload (kcat / {kcat_method})")
+    r = submit(base, headers, csv_content, "kcat", kcat_method=kcat_method)
     check("status 201",          r.status_code == 201, f"got {r.status_code}")
     j = r.json()
     check("has jobId",           "jobId"     in j)
@@ -209,38 +238,64 @@ def test_submit_success(base: str, headers: dict) -> dict:
     check("quota has limit",     "limit"     in q)
     remaining = q.get('remaining', '?')
     rem_str = f"{remaining:,}" if isinstance(remaining, int) else str(remaining)
-    print(f"         → Job ID: {j.get('jobId')}  |  Quota remaining: {rem_str}")
+    print(f"         → Job ID: {j.get('jobId')}  |  Method: {kcat_method}  |  Quota remaining: {rem_str}")
     return j
 
 
-def test_submit_km(base: str, headers: dict) -> None:
-    section("POST /submit/ — valid CSV file upload (Km / EITLEM)")
-    r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "Km", km_method="EITLEM")
+def test_submit_km(base: str, headers: dict, methods: set) -> None:
+    # Pick the first Km method that the user asked to test.
+    km_method = next(
+        (m for m in KM_METHOD_IDS if m.lower() in methods), None
+    )
+    if km_method is None:
+        print("\n  (skipping Km submit test — no Km-capable method selected)")
+        return
+    section(f"POST /submit/ — valid CSV file upload (Km / {km_method})")
+    r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "Km", km_method=km_method)
     check("status 201",     r.status_code == 201, f"got {r.status_code}")
     check("has jobId",      "jobId" in r.json())
 
 
-def test_submit_both(base: str, headers: dict) -> None:
-    section("POST /submit/ — valid CSV file upload (both / DLKcat + EITLEM)")
-    r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "both",
-               kcat_method="DLKcat", km_method="EITLEM")
+def test_submit_both(base: str, headers: dict, methods: set) -> None:
+    kcat_method = next(
+        (m for m in KCAT_METHOD_IDS if m.lower() in methods), None
+    )
+    km_method = next(
+        (m for m in KM_METHOD_IDS if m.lower() in methods), None
+    )
+    if kcat_method is None or km_method is None:
+        print("\n  (skipping 'both' submit test — need at least one kcat and one Km method selected)")
+        return
+    section(f"POST /submit/ — valid CSV file upload (both / {kcat_method} + {km_method})")
+    csv_content = MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV
+    r = submit(base, headers, csv_content, "both",
+               kcat_method=kcat_method, km_method=km_method)
     check("status 201",     r.status_code == 201, f"got {r.status_code}")
     check("has jobId",      "jobId" in r.json())
 
 
-def test_submit_turnup(base: str, headers: dict) -> None:
+def test_submit_turnup(base: str, headers: dict, methods: set) -> None:
+    if not sel(methods, "TurNup"):
+        print("\n  (skipping TurNup submit test — not in selected methods)")
+        return
     section("POST /submit/ — multi-substrate CSV (kcat / TurNup)")
     r = submit(base, headers, MULTI_SUBSTRATE_CSV, "kcat", kcat_method="TurNup")
     check("status 201",     r.status_code == 201, f"got {r.status_code}")
     check("has jobId",      "jobId" in r.json())
 
 
-def test_submit_json_body(base: str, headers: dict) -> None:
-    section("POST /submit/ — JSON body (inline data, no CSV file)")
+def test_submit_json_body(base: str, headers: dict, methods: set) -> None:
+    kcat_method = next(
+        (m for m in KCAT_METHOD_IDS if m.lower() in methods and m != "TurNup"), None
+    )  # TurNup needs multi-substrate format; pick any other kcat method
+    if kcat_method is None:
+        print("\n  (skipping JSON body submit test — no non-TurNup kcat method selected)")
+        return
+    section(f"POST /submit/ — JSON body (inline data, no CSV file) [{kcat_method}]")
     json_headers = {**headers, "Content-Type": "application/json"}
     payload = {
         "predictionType":      "kcat",
-        "kcatMethod":          "DLKcat",
+        "kcatMethod":          kcat_method,
         "handleLongSequences": "truncate",
         "useExperimental":     False,
         "data": [
@@ -336,7 +391,9 @@ def test_submit_errors(base: str, headers: dict) -> None:
     check("10001-row JSON body → 400",  r.status_code == 400, f"got {r.status_code}")
 
 
-def test_status(base: str, headers: dict, job: dict) -> None:
+def test_status(base: str, headers: dict, job: dict | None) -> None:
+    if job is None:
+        return
     section("GET /status/<jobId>/ — job status polling")
     job_id = job["jobId"]
 
@@ -361,7 +418,9 @@ def test_status(base: str, headers: dict, job: dict) -> None:
     check("error key present",     "error" in r.json())
 
 
-def test_result_not_ready(base: str, headers: dict, job: dict) -> None:
+def test_result_not_ready(base: str, headers: dict, job: dict | None) -> None:
+    if job is None:
+        return
     """
     Unless the job completed instantly (unlikely in tests), result should
     return 409 Conflict because the job is still Pending/Processing.
@@ -453,17 +512,17 @@ def test_validate(base: str, headers: dict) -> None:
         files={"file": csv_file(SINGLE_SUBSTRATE_CSV)},
         data={"runSimilarity": "false"},
     )
-    check("valid CSV → 200",             r.status_code == 200, f"got {r.status_code}")
-    j = r.json()
-    check("has rowCount",                "rowCount"          in j)
-    check("rowCount = 3",                j.get("rowCount")   == 3)
-    check("has invalidSubstrates",       "invalidSubstrates" in j)
-    check("has invalidProteins",         "invalidProteins"   in j)
-    check("has lengthViolations",        "lengthViolations"  in j)
-    check("has similarity key",          "similarity"        in j)
-    check("similarity is null",          j.get("similarity") is None)
-    check("no invalid substrates",       len(j.get("invalidSubstrates", [1])) == 0)
-    check("no invalid proteins",         len(j.get("invalidProteins",   [1])) == 0)
+    if check("valid CSV → 200",             r.status_code == 200, f"got {r.status_code}"):
+        j = r.json()
+        check("has rowCount",                "rowCount"          in j)
+        check("rowCount = 3",                j.get("rowCount")   == 3)
+        check("has invalidSubstrates",       "invalidSubstrates" in j)
+        check("has invalidProteins",         "invalidProteins"   in j)
+        check("has lengthViolations",        "lengthViolations"  in j)
+        check("has similarity key",          "similarity"        in j)
+        check("similarity is null",          j.get("similarity") is None)
+        check("no invalid substrates",       len(j.get("invalidSubstrates", [1])) == 0)
+        check("no invalid proteins",         len(j.get("invalidProteins",   [1])) == 0)
 
     # ── Invalid content — one valid row + one invalid row ────────────────────
     r = requests.post(
@@ -472,11 +531,11 @@ def test_validate(base: str, headers: dict) -> None:
         files={"file": csv_file(INVALID_CONTENT_CSV)},
         data={"runSimilarity": "false"},
     )
-    check("invalid CSV → 200",           r.status_code == 200, f"got {r.status_code}")
-    j = r.json()
-    check("rowCount = 2",                j.get("rowCount") == 2)
-    check("detects invalid substrate",   len(j.get("invalidSubstrates", [])) > 0)
-    check("detects invalid protein",     len(j.get("invalidProteins",   [])) > 0)
+    if check("invalid CSV → 200",           r.status_code == 200, f"got {r.status_code}"):
+        j = r.json()
+        check("rowCount = 2",                j.get("rowCount") == 2)
+        check("detects invalid substrate",   len(j.get("invalidSubstrates", [])) > 0)
+        check("detects invalid protein",     len(j.get("invalidProteins",   [])) > 0)
 
     # ── JSON body ────────────────────────────────────────────────────────────
     r = requests.post(
@@ -498,10 +557,10 @@ def test_validate(base: str, headers: dict) -> None:
             "runSimilarity": False,
         },
     )
-    check("JSON body → 200",             r.status_code == 200, f"got {r.status_code}")
-    j = r.json()
-    check("JSON rowCount = 1",           j.get("rowCount") == 1)
-    check("JSON similarity = null",      j.get("similarity") is None)
+    if check("JSON body → 200",             r.status_code == 200, f"got {r.status_code}"):
+        j = r.json()
+        check("JSON rowCount = 1",           j.get("rowCount") == 1)
+        check("JSON similarity = null",      j.get("similarity") is None)
 
     # ── Auth errors ──────────────────────────────────────────────────────────
     r = requests.post(f"{base}/validate/",
@@ -557,8 +616,7 @@ def test_validate_similarity(base: str, headers: dict) -> None:
         print("         (skipped — request timed out after 10 minutes)")
         return
 
-    check("status 200",                  r.status_code == 200, f"got {r.status_code}")
-    if r.status_code != 200:
+    if not check("status 200",           r.status_code == 200, f"got {r.status_code}"):
         return
 
     j = r.json()
@@ -585,7 +643,7 @@ def test_validate_similarity(base: str, headers: dict) -> None:
         check(f"{method_name} has average_max_similarity","average_max_similarity" in method_data)
         check(f"{method_name} has count_max",             "count_max"              in method_data)
         hist = method_data.get("histogram_max", [])
-        check(f"{method_name} histogram has 10 bins",     len(hist) == 10)
+        check(f"{method_name} histogram has 101 bins",    len(hist) == 101)
         break
 
 
@@ -610,32 +668,55 @@ def main():
                         help="API Bearer token (default: hardcoded test key)")
     parser.add_argument("--skip-similarity", action="store_true",
                         help="Skip the slow runSimilarity=true test (requires MMseqs2)")
+    parser.add_argument(
+        "--methods",
+        default="all",
+        metavar="METHOD[,METHOD…]",
+        help=(
+            "Comma-separated list of prediction methods to test. "
+            f"Recognised values (case-insensitive): {', '.join(ALL_METHOD_IDS)}. "
+            "Use 'all' (default) to test every method."
+        ),
+    )
     args = parser.parse_args()
 
     base    = args.base.rstrip("/")
     key     = args.key
     headers = {"Authorization": f"Bearer {key}"}
 
+    # Build the normalised set of selected methods.
+    if args.methods.strip().lower() == "all":
+        methods: set = {m.lower() for m in ALL_METHOD_IDS}
+    else:
+        methods = {m.strip().lower() for m in args.methods.split(",") if m.strip()}
+        unknown = methods - {m.lower() for m in ALL_METHOD_IDS}
+        if unknown:
+            parser.error(
+                f"Unknown method(s): {', '.join(sorted(unknown))}. "
+                f"Valid choices: {', '.join(ALL_METHOD_IDS)}"
+            )
+
     print("=" * 70)
     print("  KineticXPredictor API Test Suite")
     print(f"  Base URL : {base}")
     print(f"  API Key  : {key[:15]}…")
+    print(f"  Methods  : {', '.join(sorted(methods))}")
     print("=" * 70)
 
     # Run all test groups
     test_health(base)
-    test_methods(base)
+    test_methods(base, methods)
     test_auth(base, key)
     test_quota(base, headers)
 
     # Submit a real job — we'll use its ID for status / result tests
-    job = test_submit_success(base, headers)
+    job = test_submit_success(base, headers, methods)
 
     # Other valid submission variants
-    test_submit_km(base, headers)
-    test_submit_both(base, headers)
-    test_submit_turnup(base, headers)
-    test_submit_json_body(base, headers)
+    test_submit_km(base, headers, methods)
+    test_submit_both(base, headers, methods)
+    test_submit_turnup(base, headers, methods)
+    test_submit_json_body(base, headers, methods)
 
     # All the ways submission can fail
     test_submit_errors(base, headers)
