@@ -22,7 +22,7 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: true,
       proxy: {
-        '/api': {
+        '/api/': {
           target: DEV_API_TARGET,
           changeOrigin: true,
           secure: false,
