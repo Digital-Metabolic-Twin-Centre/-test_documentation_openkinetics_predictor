@@ -23,7 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ── MMseqs2 static binary (needed by /validate/?runSimilarity=true) ───────────
-RUN wget -q https://mmseqs.com/latest/mmseqs-linux-avx2.tar.gz -O /tmp/mmseqs.tar.gz \
+# Use the SSE4.1 build — compatible with older/virtualised CPUs that lack AVX2.
+# Fall back to sse2 if even that fails: change "sse41" → "sse2" below.
+RUN wget -q https://mmseqs.com/latest/mmseqs-linux-sse41.tar.gz -O /tmp/mmseqs.tar.gz \
     && tar -xzf /tmp/mmseqs.tar.gz -C /tmp \
     && mv /tmp/mmseqs/bin/mmseqs /usr/local/bin/mmseqs \
     && chmod +x /usr/local/bin/mmseqs \
