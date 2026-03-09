@@ -441,34 +441,71 @@ def test_result_not_ready(base: str, headers: dict, job: dict | None) -> None:
     check("fake jobId → 404",  r.status_code == 404, f"got {r.status_code}")
 
 
-def test_result_completed(base: str, headers: dict) -> None:
+def test_result_completed(base: str, headers: dict, job: dict | None,
+                          poll_timeout: int = 300) -> None:
     """
-    Find the most recently completed job in the system (if any) and
+    Poll the job submitted by test_submit_success until it completes, then
     download its results in both CSV and JSON formats.
+
+    Falls back to a local DB lookup only when running against localhost and
+    no submitted job is available (e.g. worker not running).
+    poll_timeout — seconds to wait for the job to finish (default 300 s / 5 min).
     """
     section("GET /result/<jobId>/ — downloading a completed job")
 
-    # Ask Django for a completed job we can use.
-    import os, sys
-    sys.path.insert(0, "/home/saleh/webKinPred")
-    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "webKinPred.settings")
-    try:
-        import django
-        django.setup()
-        from api.models import Job
-        completed = Job.objects.filter(
-            status="Completed", output_file__isnull=False
-        ).exclude(output_file="").order_by("-completion_time").first()
-    except Exception as e:
-        print(f"         (skipped — could not query DB: {e})")
-        return
+    job_id: str | None = job.get("jobId") if job else None
 
-    if not completed:
-        print("         (skipped — no completed jobs in the database yet)")
-        return
+    if job_id:
+        # Poll the status endpoint until the job is done (or we time out).
+        print(f"         → Polling job {job_id} until completion "
+              f"(timeout {poll_timeout}s)…")
+        deadline = time.time() + poll_timeout
+        interval = 5
+        while time.time() < deadline:
+            r = requests.get(f"{base}/status/{job_id}/", headers=headers)
+            if r.status_code != 200:
+                break
+            status = r.json().get("status", "")
+            if status in ("Completed", "Failed"):
+                break
+            time.sleep(interval)
+            interval = min(interval * 1.5, 30)  # back off up to 30 s
+        else:
+            print(f"         (skipped — job did not complete within {poll_timeout}s)")
+            return
 
-    job_id = completed.public_id
-    print(f"         → Using completed job: {job_id}")
+        # Re-check final status
+        r = requests.get(f"{base}/status/{job_id}/", headers=headers)
+        if r.status_code == 200 and r.json().get("status") == "Failed":
+            print(f"         (skipped — job {job_id} ended in Failed state)")
+            return
+        if r.status_code != 200 or r.json().get("status") != "Completed":
+            print(f"         (skipped — job {job_id} not yet completed; "
+                  f"status={r.json().get('status', '?')})")
+            return
+
+        print(f"         → Job {job_id} completed — downloading result")
+    else:
+        # No submitted job available — attempt a local DB fallback (dev only).
+        import os as _os
+        import sys as _sys
+        _sys.path.insert(0, "/home/saleh/webKinPred")
+        _os.environ.setdefault("DJANGO_SETTINGS_MODULE", "webKinPred.settings")
+        try:
+            import django
+            django.setup()
+            from api.models import Job as _Job
+            completed = _Job.objects.filter(
+                status="Completed", output_file__isnull=False
+            ).exclude(output_file="").order_by("-completion_time").first()
+        except Exception as e:
+            print(f"         (skipped — no submitted job and could not query DB: {e})")
+            return
+        if not completed:
+            print("         (skipped — no completed jobs in the database)")
+            return
+        job_id = completed.public_id
+        print(f"         → Using DB-found completed job: {job_id}")
 
     # CSV download
     r = requests.get(f"{base}/result/{job_id}/", headers=headers)
@@ -627,8 +664,8 @@ def test_validate_similarity(base: str, headers: dict) -> None:
 
     # The similarity service may return {"error": "..."} if mmseqs2 is unavailable
     if "error" in sim:
-        print(f"         (similarity analysis failed — possibly mmseqs2 not available: {sim['error']})")
-        check("similarity attempted",    True)
+        check("similarity succeeded (mmseqs2 available)",
+              False, sim["error"])
         return
 
     check("similarity is a dict",        isinstance(sim, dict))
@@ -668,6 +705,9 @@ def main():
                         help="API Bearer token (default: hardcoded test key)")
     parser.add_argument("--skip-similarity", action="store_true",
                         help="Skip the slow runSimilarity=true test (requires MMseqs2)")
+    parser.add_argument("--poll-timeout", type=int, default=300, metavar="SECONDS",
+                        help="Seconds to wait for a submitted job to complete before "
+                             "skipping the result-download test (default: 300)")
     parser.add_argument(
         "--methods",
         default="all",
@@ -727,8 +767,8 @@ def main():
     # Result endpoint (job not done yet)
     test_result_not_ready(base, headers, job)
 
-    # Result endpoint (look for an already-completed job in the DB)
-    test_result_completed(base, headers)
+    # Result endpoint (poll the submitted job until done, then download)
+    test_result_completed(base, headers, job, poll_timeout=args.poll_timeout)
 
     # Validate endpoint — fast checks (no similarity)
     test_validate(base, headers)
