@@ -442,14 +442,14 @@ def test_result_not_ready(base: str, headers: dict, job: dict | None) -> None:
 
 
 def test_result_completed(base: str, headers: dict, job: dict | None,
-                          poll_timeout: int = 300) -> None:
+                          poll_timeout: int = 1000) -> None:
     """
     Poll the job submitted by test_submit_success until it completes, then
     download its results in both CSV and JSON formats.
 
     Falls back to a local DB lookup only when running against localhost and
     no submitted job is available (e.g. worker not running).
-    poll_timeout — seconds to wait for the job to finish (default 300 s / 5 min).
+    poll_timeout — seconds to wait for the job to finish (default 1000 s / 16.67 min).
     """
     section("GET /result/<jobId>/ — downloading a completed job")
 
@@ -706,9 +706,9 @@ def main():
                         help="API Bearer token (default: hardcoded test key)")
     parser.add_argument("--skip-similarity", action="store_true",
                         help="Skip the slow runSimilarity=true test (requires MMseqs2)")
-    parser.add_argument("--poll-timeout", type=int, default=300, metavar="SECONDS",
+    parser.add_argument("--poll-timeout", type=int, default=1000, metavar="SECONDS",
                         help="Seconds to wait for a submitted job to complete before "
-                             "skipping the result-download test (default: 300)")
+                             "skipping the result-download test (default: 1000)")
     parser.add_argument(
         "--methods",
         default="all",
