@@ -404,22 +404,24 @@ function JobStatus() {
                     </div>
                   )}
 
-                  {/* Beautiful, expandable details for skipped/unpredicted rows (if any) */}
+                  {/* Expandable details for skipped/unpredicted rows — only on Completed */}
                   {skippedRowsMessage && (
                     <div className="mt-3">
                       <ExpandableErrorMessage errorMessage={skippedRowsMessage} />
                     </div>
                   )}
-                  {/* Keep main backend error (if any) in a separate block */}
+
+                  {/* User-friendly failure banner */}
                   {jobStatus.status === 'Failed' && (
-                    <Alert variant="danger" className="mt-3">
-                      <div className="fw-semibold mb-2">Job failed</div>
-                      {jobStatus.error_message ? (
-                        <ExpandableErrorMessage errorMessage={jobStatus.error_message} />
-                      ) : (
-                        <div>No error message provided.</div>
-                      )}
-                    </Alert>
+                    <div className="job-failed-banner mt-3">
+                      <div className="job-failed-header">
+                        <XCircle size={20} className="me-2" />
+                        Job Failed
+                      </div>
+                      <div className="job-failed-body">
+                        {failedMessage}
+                      </div>
+                    </div>
                   )}
                 </>
               )}
@@ -433,7 +435,98 @@ function JobStatus() {
 
 export default JobStatus;
 
+// ---------------------------------------------------------------------------
 // Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert raw backend error strings into user-friendly messages.
+ * Catches common patterns (OOM, subprocess failures, timeouts, missing data)
+ * and replaces them with actionable, non-technical text.
+ */
+function sanitiseErrorForUser(raw) {
+  if (!raw || typeof raw !== 'string') {
+    return 'An unexpected error occurred while processing your job. Please try again or contact support.';
+  }
+
+  const lower = raw.toLowerCase();
+
+  // Memory / OOM
+  if (
+    lower.includes('out of memory') ||
+    lower.includes('memory') ||
+    lower.includes('oom') ||
+    lower.includes('sigkill') ||
+    lower.includes('killed') ||
+    lower.includes('ram') ||
+    lower.includes('returncode == 137') ||
+    lower.includes('exit status 137') ||
+    lower.includes('returncode == -9') ||
+    lower.includes('exit status -9')
+  ) {
+    return (
+      'The prediction model ran out of memory while processing your data. ' +
+      'This usually happens with very large or numerous protein sequences. ' +
+      'Try reducing the number of rows or the length of your sequences and resubmit.'
+    );
+  }
+
+  // Subprocess / non-zero exit (the exact issue the user reported)
+  if (
+    lower.includes('returned non-zero exit status') ||
+    lower.includes('calledprocesserror') ||
+    lower.includes('non-zero exit')
+  ) {
+    return (
+      'The prediction model encountered an internal error and could not complete. ' +
+      'This may be caused by unusually long sequences, unsupported characters in your input, ' +
+      'or a temporary resource issue. Please verify your input data and try again.'
+    );
+  }
+
+  // Timeout
+  if (lower.includes('timeout') || lower.includes('timed out')) {
+    return (
+      'The prediction timed out. Your input may be too large for the selected model. ' +
+      'Try reducing the number of rows and resubmitting.'
+    );
+  }
+
+  // Missing columns
+  if (lower.includes('missing column')) {
+    return (
+      'Your input file is missing one or more required columns. ' +
+      'Please check the expected CSV format and resubmit.'
+    );
+  }
+
+  // Failed to read CSV
+  if (lower.includes('failed to read input csv')) {
+    return (
+      'The uploaded CSV file could not be read. ' +
+      'Please ensure it is a valid CSV file and try again.'
+    );
+  }
+
+  // If the message already looks clean (no paths, exit codes, tracebacks),
+  // return it as-is. Otherwise fall back to a generic message.
+  const hasInternalDetails =
+    /\/[a-z_/]+\.[a-z]+/i.test(raw) ||  // file paths
+    /exit status/i.test(raw) ||           // exit codes
+    /traceback/i.test(raw) ||             // Python tracebacks
+    /\bFile "/.test(raw);                 // Python stack frames
+
+  if (hasInternalDetails) {
+    return (
+      'The prediction model encountered an unexpected error. ' +
+      'Please verify your input data and try again. If the problem persists, contact support.'
+    );
+  }
+
+  // Message looks user-safe — pass it through
+  return raw;
+}
+
 function num(x) {
   const n = Number(x);
   return Number.isFinite(n) ? n : 0;
