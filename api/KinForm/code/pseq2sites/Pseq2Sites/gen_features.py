@@ -130,7 +130,9 @@ def main():
             npy_path = residue_dir / f"{cid}.npy"
             if npy_path.exists():
                 chain_feats.append(np.load(npy_path))
-                npy_path.unlink()
+                # Do NOT unlink — t5_embeddings.py will reuse these residue files
+                # to derive mean/weighted embeddings without reloading T5, then
+                # delete them itself.
             else:
                 ok = False
                 break

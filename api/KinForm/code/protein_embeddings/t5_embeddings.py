@@ -145,6 +145,49 @@ def get_prot_t5_embeddings(
             return None
         return _load_existing_embeddings(seq_dict, paths, settings, all_layers, layer)
 
+    # ── derive mean/weighted from pre-computed residue files (no T5 load) ── #
+    # If gen_features.py already ran T5 for binding-site prediction it will have
+    # left per-residue .npy files for this layer on disk.  We can compute mean
+    # and weighted embeddings from them with pure numpy, then delete the residue
+    # files, avoiding a second full T5 forward pass.
+    missing_keys = [k for k, ok in key_to_exist.items() if not ok]
+
+    if (not all_layers
+            and "residue" not in settings
+            and settings.issubset({"mean", "weighted"})
+            and missing_keys):
+        if layer is None:
+            _residue_dir = precomputed_root / "prot_t5_last" / "residue_vecs"
+        else:
+            _residue_dir = precomputed_root / f"prot_t5_layer_{layer}" / "residue_vecs"
+
+        if all((_residue_dir / f"{k}.npy").exists() for k in missing_keys):
+            print(f"Deriving embeddings from {len(missing_keys)} pre-computed residue file(s) "
+                  f"(layer {'last' if layer is None else layer}) — T5 not loaded.")
+            for key in missing_keys:
+                residue_path = _residue_dir / f"{key}.npy"
+                residue_emb = np.load(residue_path)  # [L, 1024] float32
+
+                if "mean" in settings:
+                    np.save(paths["mean"] / f"{key}.npy", residue_emb.mean(axis=0))
+
+                if "weighted" in settings:
+                    weights = _fetch_weights(key, weights_df, weights_key_col, weights_col)
+                    if len(weights) != residue_emb.shape[0]:
+                        raise ValueError(
+                            f"Weight length ({len(weights)}) != embedding length "
+                            f"({residue_emb.shape[0]}) for {key}"
+                        )
+                    np.save(paths["weighted"] / f"{key}.npy",
+                            _weighted_mean(residue_emb, weights, normalize=True))
+
+                residue_path.unlink()
+
+            if only_save:
+                return None
+            return _load_existing_embeddings(seq_dict, paths, settings, all_layers, layer)
+    # ─────────────────────────────────────────────────────────────────────── #
+
     # --------------------------- model load ------------------------------- #
     print("Loading ProtT5-XL UniRef50 ...")
     tokenizer = T5Tokenizer.from_pretrained(PROTT5XL_MODEL_PATH, do_lower_case=False)
@@ -232,6 +275,94 @@ def get_prot_t5_embeddings(
     if only_save:
         return None
     return _load_existing_embeddings(seq_dict, paths, settings, all_layers, layer)
+
+
+# --------------------------------------------------------------------------- #
+#                       MULTI-LAYER RESIDUE EXTRACTION                        #
+# --------------------------------------------------------------------------- #
+def _get_prot_t5_residue_multi_layer(
+    seq_dict: Dict[str, str],
+    layers: List,          # e.g. [19, None]  (None = last encoder layer)
+    *,
+    batch_size: int = 2,
+    id_to_seq=None,
+) -> None:
+    """Load T5 once and save per-residue embeddings for every layer in `layers`.
+
+    Produces exactly the same .npy files as calling
+      get_prot_t5_embeddings(setting='residue', layer=L)
+    for each L, but uses a single model load and a single forward pass per
+    batch instead of one model load per layer.
+    """
+    precomputed_root = Path(os.environ.get("KINFORM_MEDIA_PATH")) / "sequence_info"
+    assert all(k in id_to_seq and id_to_seq[k] == v for k, v in seq_dict.items()), (
+        "Sequence mismatch between provided seq_dict and id_to_seq"
+    )
+
+    # Build (and create) output directories for each requested layer — mirrors
+    # the path logic in get_prot_t5_embeddings with setting='residue'.
+    layer_dirs: Dict = {}
+    for layer in layers:
+        if layer is None:
+            d = precomputed_root / "prot_t5_last" / "residue_vecs"
+        else:
+            d = precomputed_root / f"prot_t5_layer_{layer}" / "residue_vecs"
+        d.mkdir(parents=True, exist_ok=True)
+        layer_dirs[layer] = d
+
+    # Only process sequences that are missing for at least one layer.
+    missing_keys = [
+        k for k in seq_dict
+        if any(not (layer_dirs[l] / f"{k}.npy").exists() for l in layers)
+    ]
+
+    if not missing_keys:
+        print("All residue embeddings already on disk — skipping model load.")
+        return
+
+    # ── single model load ──────────────────────────────────────────────────
+    print("Loading ProtT5-XL UniRef50 ...")
+    tokenizer = T5Tokenizer.from_pretrained(PROTT5XL_MODEL_PATH, do_lower_case=False)
+    model = T5EncoderModel.from_pretrained(
+        PROTT5XL_MODEL_PATH,
+        torch_dtype=torch.float16,
+        low_cpu_mem_usage=True,
+        output_hidden_states=True,
+    )
+    model.eval()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    print(f"Using device: {device}")
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters()) // 1e6:,} M")
+
+    batches = [missing_keys[i:i + batch_size] for i in range(0, len(missing_keys), batch_size)]
+    for batch_keys in tqdm(batches, desc="ProtT5 residue (multi-layer)"):
+        batch_seqs = [seq_dict[k] for k in batch_keys]
+        batch_strs = [" ".join(list(re.sub(r"[UZOB]", "X", s))) for s in batch_seqs]
+        token_data = tokenizer(
+            batch_strs, return_tensors="pt", padding=True, add_special_tokens=True,
+        ).to(device)
+
+        with torch.no_grad():
+            outputs = model(**token_data)
+        hidden_states: Tuple[torch.Tensor, ...] = outputs.hidden_states  # len=25
+
+        seq_lens = (token_data["attention_mask"] == 1).sum(dim=1) - 1  # excl. <eos>
+        for idx, key in enumerate(batch_keys):
+            L = seq_lens[idx].item()
+            for layer in layers:
+                out_path = layer_dirs[layer] / f"{key}.npy"
+                if out_path.exists():
+                    continue  # already written (e.g. partial previous run)
+                layer_tensor = hidden_states[-1] if layer is None else hidden_states[layer + 1]
+                np.save(out_path, layer_tensor[idx, :L].float().cpu().numpy())
+
+        del token_data, outputs, hidden_states
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    del model, tokenizer
+    gc.collect()
 
 
 # --------------------------------------------------------------------------- #
@@ -460,27 +591,41 @@ Examples:
             # Default layers
             layers = [19, None]
         
-        # Run embeddings for each layer
-        for layer in layers:
-            layer_name = "last" if layer is None else str(layer)
+        # When extracting residue embeddings for multiple layers, use a single
+        # T5 forward pass for all layers instead of one load per layer.
+        if settings_requested == {"residue"} and len(layers) > 1:
             print(f"\n{'='*70}")
-            print(f"Extracting ProtT5 {args.setting} embeddings for layer {layer_name}")
+            print(f"Extracting ProtT5 residue embeddings for layers: {layers} (single model load)")
             print(f"{'='*70}")
-            
-            embeddings = get_prot_t5_embeddings(
+            _get_prot_t5_residue_multi_layer(
                 seq_dict,
+                layers=layers,
                 batch_size=args.batch_size,
-                setting=args.setting,
-                all_layers=False,
-                layer=layer,
-                only_save=True,
                 id_to_seq=id_to_seq,
-                weights_df=weights_df,
-                weights_key_col=args.weights_key_col,
-                weights_col=args.weights_col,
             )
-            
-            print(f"✓ Completed ProtT5 layer {layer_name} {args.setting} embedding extraction")
+            print(f"✓ Completed ProtT5 residue extraction for layers: {layers}")
+        else:
+            # All other cases: per-layer loop (single layer, mean, weighted, etc.)
+            for layer in layers:
+                layer_name = "last" if layer is None else str(layer)
+                print(f"\n{'='*70}")
+                print(f"Extracting ProtT5 {args.setting} embeddings for layer {layer_name}")
+                print(f"{'='*70}")
+
+                embeddings = get_prot_t5_embeddings(
+                    seq_dict,
+                    batch_size=args.batch_size,
+                    setting=args.setting,
+                    all_layers=False,
+                    layer=layer,
+                    only_save=True,
+                    id_to_seq=id_to_seq,
+                    weights_df=weights_df,
+                    weights_key_col=args.weights_key_col,
+                    weights_col=args.weights_col,
+                )
+
+                print(f"✓ Completed ProtT5 layer {layer_name} {args.setting} embedding extraction")
     
     print(f"\n{'='*70}")
     print(f"✓ All ProtT5 embeddings complete for {len(seq_dict)} sequences")
