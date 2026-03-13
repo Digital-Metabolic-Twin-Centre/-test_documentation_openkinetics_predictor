@@ -6,15 +6,7 @@ from typing import Any, Dict, Optional, Tuple
 from django.http import JsonResponse
 
 from api.models import Job
-from api.tasks import (
-    run_both_predictions,
-    run_dlkcat_predictions,
-    run_eitlem_predictions,
-    run_kinform_h_predictions,
-    run_kinform_l_predictions,
-    run_turnup_predictions,
-    run_unikp_predictions,
-)
+from api.tasks import run_both_prediction, run_prediction
 from api.utils.job_utils import (
     create_job_directory,
     create_job_status_response_data,
@@ -171,18 +163,18 @@ def process_job_submission_from_params(
 def handle_quota_validation(ip_address: str, requested_rows: int) -> Optional[JsonResponse]:
     """
     Handle quota validation and return error response if quota exceeded.
-    
+
     Args:
         ip_address: Client IP address
         requested_rows: Number of rows being requested
-        
+
     Returns:
         JsonResponse with error if quota exceeded, None if allowed
     """
     allowed, remaining, ttl = reserve_or_reject(ip_address, requested_rows)
 
     rate_headers = create_rate_limit_headers(DAILY_LIMIT, remaining, ttl)
-    
+
     if not allowed:
         error_response = JsonResponse({
             "error": (
@@ -190,35 +182,36 @@ def handle_quota_validation(ip_address: str, requested_rows: int) -> Optional[Js
                 f"{remaining} predictions remaining today; this upload requires {requested_rows}."
             )
         }, status=429)
-        
-        # Add rate limiting headers
+
         for key, value in rate_headers.items():
             error_response[key] = value
-        
+
         return error_response
-    
+
     return None
 
 
-def create_job_record(params: Dict[str, Any], ip_address: str, requested_rows: int, user) -> Job:
+def create_job_record(
+    params: Dict[str, Any], ip_address: str, requested_rows: int, user
+) -> Job:
     """
     Create and save a new job record.
-    
+
     Args:
         params: Job parameters dictionary
         ip_address: Client IP address
         requested_rows: Number of rows in the request
         user: User model instance
-        
+
     Returns:
         Created Job instance
     """
     job = Job(
-        prediction_type=params['prediction_type'],
-        kcat_method=params['kcat_method'],
-        km_method=params['km_method'],
+        prediction_type=params["prediction_type"],
+        kcat_method=params["kcat_method"],
+        km_method=params["km_method"],
         status="Pending",
-        handle_long_sequences=params['handle_long_sequences'],
+        handle_long_sequences=params["handle_long_sequences"],
         ip_address=ip_address,
         requested_rows=requested_rows,
         user=user,
@@ -228,56 +221,48 @@ def create_job_record(params: Dict[str, Any], ip_address: str, requested_rows: i
     return job
 
 
-def dispatch_prediction_task(public_id: str, params: Dict[str, Any], experimental_results: Optional[Dict]) -> None:
+def dispatch_prediction_task(
+    public_id: str,
+    params: Dict[str, Any],
+    experimental_results: Optional[list],
+) -> None:
     """
-    Dispatch appropriate prediction task based on parameters.
-    
+    Dispatch the appropriate Celery prediction task based on job parameters.
+
+    Uses the two generic tasks (run_prediction, run_both_prediction) which
+    look up the method at runtime via the registry.  No per-method task
+    functions are needed.
+
     Args:
         public_id: Job public ID
         params: Job parameters
-        experimental_results: Experimental results if available
+        experimental_results: Pre-fetched experimental results or None
     """
-    prediction_type = params['prediction_type']
-    kcat_method = params['kcat_method']
-    km_method = params['km_method']
-    print(f"DEBUG: Dispatching task: {prediction_type}, {kcat_method}, {km_method}")
+    prediction_type = params["prediction_type"]
+    kcat_method = params["kcat_method"]
+    km_method = params["km_method"]
+
+    print(f"Dispatching task: type={prediction_type}, kcat={kcat_method}, km={km_method}")
+
     if prediction_type == "both":
-        run_both_predictions.delay(public_id, experimental_results)
+        run_both_prediction.delay(
+            public_id, kcat_method, km_method, experimental_results
+        )
     elif prediction_type == "kcat":
-        method_to_func = {
-            "DLKcat": run_dlkcat_predictions,
-            "TurNup": run_turnup_predictions,
-            "EITLEM": run_eitlem_predictions,
-            "UniKP": run_unikp_predictions,
-            "KinForm-H": run_kinform_h_predictions,
-            "KinForm-L": run_kinform_l_predictions,
-        }
-        pred_func = method_to_func.get(kcat_method)
-        if pred_func:
-            pred_func.delay(public_id, experimental_results)
-        else:
-            print("No valid prediction function found for the given method.")
+        run_prediction.delay(public_id, kcat_method, "kcat", experimental_results)
     elif prediction_type == "Km":
-        method_to_func = {
-            "EITLEM": run_eitlem_predictions,
-            "UniKP": run_unikp_predictions,
-            "KinForm-H": run_kinform_h_predictions,
-        }
-        pred_func = method_to_func.get(km_method)
-        if pred_func:
-            pred_func.delay(public_id, experimental_results)
-            print("Dispatching task to Celery:", prediction_type, kcat_method, km_method)
-        else:
-            print("No valid prediction function found for the given method.")
+        run_prediction.delay(public_id, km_method, "Km", experimental_results)
+    else:
+        print(f"Unknown prediction_type '{prediction_type}' — no task dispatched.")
 
 
 def get_job_status_data(job: Job) -> Dict[str, Any]:
     """
     Get formatted job status data.
-    
+
     Args:
         job: Job model instance
-        
+
     Returns:
         Dictionary containing job status information
     """

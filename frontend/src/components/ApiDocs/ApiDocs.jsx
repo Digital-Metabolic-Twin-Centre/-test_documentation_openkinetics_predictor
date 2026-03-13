@@ -668,7 +668,7 @@ export default function ApiDocs() {
     "moleculesProcessed": 50,
     "predictionsTotal": 50,
     "predictionsMade": 48,
-    "invalidMolecules": 2
+    "invalidRows": 2
   }
 }`} />
               <p className="example-section-label">Response — Failed</p>

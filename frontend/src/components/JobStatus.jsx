@@ -47,7 +47,7 @@ function JobStatus() {
     totalMolecules: 0,
     predictionsMade: 0,
     totalPredictions: 0,
-    invalidMolecules: 0,
+    invalidRows: 0,
   });
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -98,7 +98,7 @@ function JobStatus() {
           totalMolecules: data.total_molecules,
           predictionsMade: data.predictions_made,
           totalPredictions: data.total_predictions,
-          invalidMolecules: data.invalid_molecules,
+          invalidRows: data.invalid_rows,
         }));
 
         const nextDelay =
@@ -141,7 +141,7 @@ function JobStatus() {
       totalMolecules: 0,
       predictionsMade: 0,
       totalPredictions: 0,
-      invalidMolecules: 0,
+      invalidRows: 0,
     });
     if (publicId) fetchJobStatus(publicId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -352,7 +352,7 @@ function JobStatus() {
                     <Col sm={6} lg={3}>
                       <div className="stat-card">
                         <div className="stat-label">Invalid Rows</div>
-                        <div className="stat-value">{metrics.invalidMolecules}</div>
+                        <div className="stat-value">{metrics.invalidRows}</div>
                       </div>
                     </Col>
                   </Row>

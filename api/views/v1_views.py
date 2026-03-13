@@ -91,112 +91,76 @@ def api_list_methods(request):
 
     No authentication required — this endpoint acts as living documentation
     so clients can discover what methods exist and what CSV columns they need
-    before writing any code.
-    """
-    methods = {
-        "kcat": [
-            {
-                "id": "DLKcat",
-                "name": "DLKcat",
-                "description": (
-                    "Deep-learning model for kcat prediction using enzyme sequence "
-                    "and substrate structure."
-                ),
-                "maxSequenceLength": None,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "TurNup",
-                "name": "TurNup",
-                "description": (
-                    "Machine-learning model optimised for natural wild-type reactions "
-                    "with multi-substrate / multi-product support."
-                ),
-                "maxSequenceLength": 1024,
-                "requiredColumns": ["Protein Sequence", "Substrates", "Products"],
-                "substrateFormat": "Semicolon-separated SMILES or InChI strings",
-            },
-            {
-                "id": "EITLEM",
-                "name": "EITLEM",
-                "description": (
-                    "Ensemble deep-learning model that predicts kcat and KM "
-                    "simultaneously from enzyme sequence and substrate."
-                ),
-                "maxSequenceLength": 1024,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "UniKP",
-                "name": "UniKP",
-                "description": (
-                    "Unified kinetic parameter predictor for kcat and KM, "
-                    "based on protein language model embeddings."
-                ),
-                "maxSequenceLength": 1000,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "KinForm-H",
-                "name": "KinForm-H",
-                "description": (
-                    "KinForm variant recommended for enzymes with high sequence "
-                    "similarity to the training set."
-                ),
-                "maxSequenceLength": 1500,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "KinForm-L",
-                "name": "KinForm-L",
-                "description": (
-                    "KinForm variant recommended for enzymes with low sequence "
-                    "similarity to the training set."
-                ),
-                "maxSequenceLength": 1500,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-        ],
-        "Km": [
-            {
-                "id": "EITLEM",
-                "name": "EITLEM",
-                "description": "Predicts KM from enzyme sequence and substrate.",
-                "maxSequenceLength": 1024,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "UniKP",
-                "name": "UniKP",
-                "description": "Predicts KM from enzyme sequence and substrate.",
-                "maxSequenceLength": 1000,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-            {
-                "id": "KinForm-H",
-                "name": "KinForm-H",
-                "description": (
-                    "Predicts KM — recommended when the enzyme has high similarity "
-                    "to the training data."
-                ),
-                "maxSequenceLength": 1500,
-                "requiredColumns": ["Protein Sequence", "Substrate"],
-                "substrateFormat": "SMILES or InChI",
-            },
-        ],
+    before writing any code.  The response is generated directly from the
+    method registry, so it is always up to date when new methods are added.
+
+    Response shape
+    --------------
+    {
+      "methods": {
+        "<method_key>": {
+          "displayName":       str,
+          "description":       str,
+          "authors":           str,
+          "publicationTitle":  str,
+          "citationUrl":       str,
+          "repoUrl":           str,
+          "moreInfo":          str,
+          "supports":          list[str],   // e.g. ["kcat", "Km"]
+          "inputFormat":       str,         // "single" or "multi"
+          "maxSeqLen":         int | null,  // null means no limit
+          "requiredColumns":   list[str],   // includes "Protein Sequence"
+          "substrateFormat":   str,
+        },
+        ...
+      },
+      "predictionTypes": ["kcat", "Km", "both"],
+      "longSequenceOptions": { "truncate": "...", "skip": "..." },
+      "notes": { ... }
     }
+    """
+    from api.methods.registry import all_methods
+
+    registry = all_methods()
+
+    # Build the full method detail object for each key.
+    def _method_obj(key, desc):
+        max_len = None if desc.max_seq_len == float("inf") else int(desc.max_seq_len)
+        required_cols = ["Protein Sequence"] + list(desc.col_to_kwarg.keys())
+        substrate_fmt = (
+            "Semicolon-separated SMILES or InChI strings"
+            if desc.input_format == "multi"
+            else "SMILES or InChI"
+        )
+        return {
+            "id": key,
+            "displayName": desc.display_name,
+            "description": desc.description,
+            "authors": desc.authors,
+            "publicationTitle": desc.publication_title,
+            "citationUrl": desc.citation_url,
+            "repoUrl": desc.repo_url,
+            "moreInfo": desc.more_info,
+            "supports": desc.supports,
+            "inputFormat": desc.input_format,
+            "maxSeqLen": max_len,
+            "requiredColumns": required_cols,
+            "substrateFormat": substrate_fmt,
+        }
+
+    # Group methods by the prediction targets they support.
+    methods_payload = {"kcat": [], "Km": []}
+    for key, desc in registry.items():
+        obj = _method_obj(key, desc)
+        if "kcat" in desc.supports:
+            methods_payload["kcat"].append(obj)
+        if "Km" in desc.supports:
+            methods_payload["Km"].append(obj)
 
     return JsonResponse(
         {
+            "methods": methods_payload,
             "predictionTypes": ["kcat", "Km", "both"],
-            "methods": methods,
             "longSequenceOptions": {
                 "truncate": "Shorten sequences that exceed the model's maximum length.",
                 "skip": "Omit rows where the sequence exceeds the model's maximum length.",
@@ -204,7 +168,8 @@ def api_list_methods(request):
             "notes": {
                 "both": (
                     "When predictionType is 'both', you must specify both kcatMethod "
-                    "and kmMethod.  KinForm-L is not available as a Km method."
+                    "and kmMethod.  Not all methods support KM — check the 'supports' "
+                    "field of each method."
                 ),
                 "quota": "Each row in your CSV counts as one prediction against your daily quota.",
             },
@@ -420,7 +385,7 @@ def api_job_status(request, public_id):
             "moleculesProcessed": job.molecules_processed,
             "predictionsTotal": job.total_predictions,
             "predictionsMade": job.predictions_made,
-            "invalidMolecules": job.invalid_molecules,
+            "invalidRows": job.invalid_rows,
         },
     }
 

@@ -1,8 +1,8 @@
 // /home/saleh/webKinPred/frontend/src/components/job-submission/hooks/useJobSubmission.js
 import { useState, useMemo, useRef, useEffect } from 'react';
-import kcatMethodsByCsvType from '../constants/kcatMethodsByCsvType';
 import {
   detectCsvFormat,
+  fetchMethods,
   validateCsv,
   fetchSequenceSimilaritySummary,
   submitJob as submitJobApi,
@@ -11,7 +11,6 @@ import {
 } from '../services/api';
 
 function makeSessionId() {
-  // Simple UUID-ish
   return 'vs_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
@@ -39,7 +38,7 @@ export default function useJobSubmission() {
   const [similarityData, setSimilarityData] = useState(null);
   const [submissionResult, setSubmissionResult] = useState(null);
 
-  // New: live log state
+  // Live log state
   const [validationSessionId, setValidationSessionId] = useState('');
   const userCancelledRef = useRef(false);
   const [liveLogs, setLiveLogs] = useState([]);
@@ -47,11 +46,38 @@ export default function useJobSubmission() {
   const eventSourceRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // Allowed methods derived from format
+  // ── Method registry (fetched once from the backend) ────────────────────────
+  // `methods` is a plain object keyed by method key, e.g.:
+  //   { DLKcat: { supports: ["kcat"], inputFormat: "single", ... }, ... }
+  const [methods, setMethods] = useState(null);
+
+  useEffect(() => {
+    fetchMethods()
+      .then(setMethods)
+      .catch((err) => {
+        console.error('Failed to fetch method registry from backend:', err);
+      });
+  }, []);
+
+  // ── Allowed methods derived from CSV format and registry ──────────────────
+
+  /** Methods that support kcat and match the detected CSV input format. */
   const allowedKcatMethods = useMemo(() => {
-    if (!csvFormatInfo?.csv_type) return [];
-    return kcatMethodsByCsvType[csvFormatInfo.csv_type] || [];
-  }, [csvFormatInfo]);
+    if (!csvFormatInfo?.csv_type || !methods) return [];
+    return Object.entries(methods)
+      .filter(([, m]) => m.supports.includes('kcat') && m.inputFormat === csvFormatInfo.csv_type)
+      .map(([key]) => key);
+  }, [csvFormatInfo, methods]);
+
+  /** Methods that support Km (always single-substrate). */
+  const allowedKmMethods = useMemo(() => {
+    if (!methods) return [];
+    return Object.entries(methods)
+      .filter(([, m]) => m.supports.includes('Km'))
+      .map(([key]) => key);
+  }, [methods]);
+
+  // ── Event handlers ────────────────────────────────────────────────────────
 
   const resetMethods = () => {
     setKcatMethod('');
@@ -90,7 +116,9 @@ export default function useJobSubmission() {
       } else {
         setCsvFormatInfo(null);
         setCsvFormatValid(false);
-        setCsvFormatError(Array.isArray(data.errors) ? data.errors.join('; ') : 'Invalid CSV format.');
+        setCsvFormatError(
+          Array.isArray(data.errors) ? data.errors.join('; ') : 'Invalid CSV format.'
+        );
       }
     } catch (err) {
       setCsvFormatInfo(null);
@@ -101,35 +129,31 @@ export default function useJobSubmission() {
 
   const openStream = (sid) => {
     if (eventSourceRef.current) {
-        try { eventSourceRef.current.close(); } catch {}
+      try { eventSourceRef.current.close(); } catch { /* ignore */ }
     }
-
     const es = openProgressStream(sid);
     eventSourceRef.current = es;
     setLiveLogs([]);
     setStreamConnected(true);
 
     es.onmessage = (evt) => {
-        if (!evt?.data) return;
-        setLiveLogs((prev) => [...prev, evt.data]);
+      if (!evt?.data) return;
+      setLiveLogs((prev) => [...prev, evt.data]);
     };
-
-    es.onerror = (err) => {
-        // Log any errors
-        setStreamConnected(false);
+    es.onerror = () => {
+      setStreamConnected(false);
     };
-    };
+  };
 
   const closeStream = () => {
     if (eventSourceRef.current) {
-      try { eventSourceRef.current.close(); } catch {}
+      try { eventSourceRef.current.close(); } catch { /* ignore */ }
       eventSourceRef.current = null;
     }
     setStreamConnected(false);
   };
 
   useEffect(() => {
-    // Clean up on unmount
     return () => closeStream();
   }, []);
 
@@ -142,35 +166,35 @@ export default function useJobSubmission() {
     setIsValidating(true);
 
     try {
-        const validation = await validateCsv({
+      const validation = await validateCsv({
         file: csvFile,
         predictionType,
         kcatMethod,
         kmMethod,
-        });
-        const invalid_substrates = validation.invalid_substrates;
-        const invalid_proteins = validation.invalid_proteins;
-        const length_violations = validation.length_violations; 
-        const simPromise = fetchSequenceSimilaritySummary({ file: csvFile, useExperimental, validationSessionId: sid });
-        const sim = await simPromise;
-        if (userCancelledRef.current) return
-        // Handle the results after both promises resolve
-        setSimilarityData(sim);
-        setSubmissionResult({ invalid_substrates, invalid_proteins, length_violations });
-        setShowValidationResults(true);
+      });
+      const { invalid_substrates, invalid_proteins, length_violations } = validation;
+      const simPromise = fetchSequenceSimilaritySummary({
+        file: csvFile,
+        useExperimental,
+        validationSessionId: sid,
+      });
+      const sim = await simPromise;
+      if (userCancelledRef.current) return;
+      setSimilarityData(sim);
+      setSubmissionResult({ invalid_substrates, invalid_proteins, length_violations });
+      setShowValidationResults(true);
     } catch (err) {
       if (!userCancelledRef.current) {
         alert('Validation failed. Please try again. ' + (err?.message || ''));
       }
     } finally {
-        setTimeout(() => closeStream(), 3500);
-        setIsValidating(false);
+      setTimeout(() => closeStream(), 3500);
+      setIsValidating(false);
     }
-    };
+  };
 
   const cancelValidation = async () => {
     if (!validationSessionId) {
-      // just close UI if nothing started
       setIsValidating(false);
       closeStream();
       return;
@@ -238,7 +262,10 @@ export default function useJobSubmission() {
     similarityData,
     submissionResult,
 
+    // registry-derived method lists
+    methods,
     allowedKcatMethods,
+    allowedKmMethods,
 
     // logs
     liveLogs,

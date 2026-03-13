@@ -49,7 +49,9 @@ TARGET_DBS = {
 # Set to None if mmseqs2 is installed directly on PATH (e.g. in Dockerfile.web).
 # Set to "/opt/conda/bin/conda" if running inside the full worker image.
 CONDA_PATH = None
-MODEL_LIMITS = {"EITLEM": 1024, "TurNup": 1024, "UniKP": 1000, "DLKcat": float("inf"), "KinForm-H": 1500, "KinForm-L": 1500}
+# Per-method sequence-length limits are now defined in each method descriptor
+# (api/methods/<method>.py) and derived via api.methods.registry.get_model_limits().
+# Do not add MODEL_LIMITS back here.
 SERVER_LIMIT = 10000
 DEBUG = True
 ALLOWED_FRONTEND_IPS = ["127.0.0.1", "localhost", "frontend", "backend"]

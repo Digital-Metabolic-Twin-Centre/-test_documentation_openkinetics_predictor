@@ -1,792 +1,555 @@
 # api/tasks.py
+#
+# Celery tasks for running kinetic-parameter predictions.
+#
+# There are two entry-point tasks:
+#
+#   run_prediction(public_id, method_key, target, experimental_results)
+#       Used for single-target jobs (prediction_type = "kcat" or "Km").
+#
+#   run_both_prediction(public_id, kcat_key, km_key, experimental_results)
+#       Used for dual-target jobs (prediction_type = "both").
+#
+# Both tasks delegate to internal helpers (_execute_prediction /
+# _execute_both_prediction) that contain the shared prediction logic.
+# Adding a new method requires no changes here — it is picked up automatically
+# by the method registry.
+
+from __future__ import annotations
+
+import os
+from collections import defaultdict
+
+import pandas as pd
 from celery import shared_task
 from django.conf import settings
-import pandas as pd
-import os
-import signal
-import subprocess
 from django.utils import timezone
 
-try:
-    from webKinPred.config_docker import MODEL_LIMITS, SERVER_LIMIT
-except ImportError:
-    from webKinPred.config_local import MODEL_LIMITS, SERVER_LIMIT
+from api.methods.base import PredictionError
+from api.methods.registry import get as get_method
 from api.models import Job
+from api.prediction_engines.generic_subprocess import run_generic_subprocess_prediction
+from api.utils.extra_info import _source, build_extra_info
 from api.utils.handle_long import get_valid_indices, truncate_sequences
-from api.utils.safe_read import safe_read_csv
-from api.prediction_engines.dlkcat import dlkcat_predictions
-from api.prediction_engines.turnup import turnup_predictions
-from api.prediction_engines.eitlem import eitlem_predictions
-from api.prediction_engines.unikp import unikp_predictions
-from api.prediction_engines.kinform import kinform_predictions
 from api.utils.quotas import credit_back
-from api.utils.extra_info import build_extra_info, _source
+from api.utils.safe_read import safe_read_csv
+
+try:
+    from webKinPred.config_docker import SERVER_LIMIT
+except ImportError:
+    from webKinPred.config_local import SERVER_LIMIT
 
 
-def _sanitise_error(e, model_name=""):
+# ---------------------------------------------------------------------------
+# Celery tasks
+# ---------------------------------------------------------------------------
+
+@shared_task
+def run_prediction(
+    public_id: str,
+    method_key: str,
+    target: str,
+    experimental_results: list | None = None,
+) -> None:
     """
-    Turn raw Python exceptions into user-facing messages stored in the DB.
-
-    subprocess.CalledProcessError produces strings like:
-        Command '['/opt/conda/envs/…/python', …]' returned non-zero exit status 1.
-    which are meaningless (and ugly) for end-users.
-    """
-    msg = str(e)
-    lower = msg.lower()
-
-    # Memory / OOM  (may also come through as generic Exception)
-    if any(kw in lower for kw in (
-        "out of memory", "memory", "oom", "sigkill", "killed", "ram",
-    )):
-        return f"{model_name} prediction failed due to insufficient memory. Try reducing the number of rows or sequence lengths."
-
-    # CalledProcessError or similar subprocess crash
-    if isinstance(e, subprocess.CalledProcessError) or "non-zero exit status" in lower:
-        return f"{model_name} prediction model encountered an internal error and could not complete."
-
-    # Timeout
-    if "timeout" in lower or "timed out" in lower:
-        return f"{model_name} prediction timed out. Your input may be too large for this model."
-
-    # Missing columns
-    if "missing column" in lower:
-        return msg  # already user-friendly from our own ValueError
-
-    # File read errors
-    if "failed to read input csv" in lower:
-        return "The uploaded CSV file could not be read. Please ensure it is a valid CSV."
-
-    # If the raw message doesn't contain internal paths / stack traces,
-    # pass it through.  Otherwise use a generic fallback.
-    import re
-    if re.search(r"/[a-z_/]+\.[a-z]+", msg, re.I) or "Traceback" in msg:
-        return f"{model_name} prediction encountered an unexpected error. Please verify your input and try again."
-
-    return msg
-
-
-def handle_ram_error(job, error_msg):
-    """Handle RAM/memory related errors"""
-    job.status = "Failed"
-    job.error_message = error_msg
-    job.completion_time = timezone.now()
-    job.save(update_fields=["status", "error_message", "completion_time"])
-    credit_back(job.ip_address, job.requested_rows)
-
-
-def run_model(
-    *,
-    job,
-    model_key: str,
-    df: pd.DataFrame,
-    pred_func,  # callable -> (preds, invalid_idx)
-    requires_cols: list[str],
-    extra_kwargs: dict | None = None,
-    output_col: str,
-    handle_long: str = "skip",
-    experimental_results: dict | None = None,
-):
-    """
-    Generic prediction runner.
+    Run a single-target prediction job.
 
     Parameters
     ----------
-    job             : Job   - Django Job row (already fetched)
-    model_key       : str   - key inside MODEL_LIMITS (e.g. 'dlkcat')
-    df              : DataFrame of the CSV
-    pred_func       : callable(**kwargs) -> (preds, invalid_idxs)
-    requires_cols   : list  - columns that must exist in df
-    extra_kwargs    : dict  - pass-through to pred_func (e.g. kinetics_type)
-    output_col      : str   - column to write predictions into
-    handle_long     : 'skip'|'truncate'
-    experimental_results : dict | None - If provided, will be used instead of predictions
+    public_id : str
+        The job's public identifier.
+    method_key : str
+        Registry key of the prediction method (e.g. ``"DLKcat"``).
+    target : str
+        Prediction target: ``"kcat"`` or ``"Km"``.
+    experimental_results : list | None
+        Pre-fetched experimental values to merge into the output, or None.
     """
-    try:
-        extra_kwargs = extra_kwargs or {}
-        # ------- 1. validate required columns ----------------------------------
-        missing = [c for c in requires_cols if c not in df.columns]
-        if missing:
-            raise ValueError(
-                f"Missing column(s) required for {model_key}: {', '.join(missing)}"
-            )
-
-        # ------- 2. gather core inputs ----------------------------------------
-        sequences = df["Protein Sequence"].tolist()
-        limit = min(SERVER_LIMIT, MODEL_LIMITS[model_key])
-        print("handle_long:", handle_long)
-        # ------- 3. length handling -------------------------------------------
-        if handle_long == "truncate":
-            lens_before = [len(seq) for seq in sequences]
-            sequences_proc, valid_idx = truncate_sequences(sequences, limit)
-            lens_after = [len(seq) for seq in sequences_proc]
-            print("Lengths before truncation:", lens_before)
-            print("Lengths after truncation:", lens_after)
-        else:  # skip
-            valid_idx = get_valid_indices(sequences, limit, mode="skip")
-            sequences_proc = [sequences[i] for i in valid_idx]
-
-        # ------- 4. model-specific other inputs --------------------------------
-        kwargs = {
-            "sequences": sequences_proc,
-            "public_id": job.public_id,
-        } | extra_kwargs
-
-        if model_key == "DLKcat":
-            kwargs["substrates"] = [df["Substrate"][i] for i in valid_idx]
-        elif model_key == "TurNup":
-            kwargs["substrates"] = [df["Substrates"][i] for i in valid_idx]
-            kwargs["products"] = [df["Products"][i] for i in valid_idx]
-        elif model_key in {"EITLEM", "UniKP", "KinForm-H", "KinForm-L"}:
-            kwargs["substrates"] = [df["Substrate"][i] for i in valid_idx]
-        if model_key in {"KinForm-H", "KinForm-L"}:
-            kwargs["model_variant"] = model_key.split("-")[1]
-
-        # ------- 5. run prediction --------------------------------------------
-        full_preds = ["" for _ in sequences]
-        extra_info = ["" for _ in sequences]
-        sources = ["" for _ in sequences]  # For storing source info if needed
-        invalid_global: list[int] = []
-        if valid_idx:
-            pred_subset, invalid_subset = pred_func(**kwargs)
-            for i, p in zip(valid_idx, pred_subset):
-                full_preds[i] = p
-                sources[i] = f"Prediction from {model_key}"
-            invalid_global = [valid_idx[i] for i in invalid_subset]
-        exp_res_key = "km_value" if job.prediction_type == "Km" else "kcat_value"
-        experimental_results = experimental_results or []
-        for exp_res in experimental_results:
-            if exp_res["found"]:
-                idx = exp_res["idx"]
-                if exp_res["protein_sequence"] != sequences[idx]:
-                    print(
-                        f"Protein sequence mismatch at index {idx}: "
-                        f"expected {sequences[idx]}, got {exp_res['protein_sequence']}"
-                    )
-                    continue
-                prediction = full_preds[idx]
-                full_preds[idx] = exp_res[exp_res_key]
-                sources[idx] = _source(exp_res)
-                extra_info[idx] = build_extra_info(
-                    exp_res, job.prediction_type, prediction, model_key
-                )
-
-        # ------- 6. write CSV --------------------------------------------------
-        df.insert(0, "Extra Info", extra_info)
-        df.insert(0, "Source", sources)
-        df.insert(0, output_col, full_preds)
-        csv_out = os.path.join(
-            settings.MEDIA_ROOT, "jobs", str(job.public_id), "output.csv"
-        )
-        df.to_csv(csv_out, index=False)
-        # ------- 7. process results and credit back --------------------------
-        try:
-            empty_rows = int((df[output_col] == "").sum())  # non-empty predictions
-            na_rows = int(df[output_col].isna().sum())
-        except Exception:
-            empty_rows = int(job.requested_rows)
-            na_rows = 0
-        # Credit back unused reactions
-
-        to_refund = empty_rows + na_rows
-        to_refund = min(to_refund, int(job.requested_rows))
-        to_refund = max(0, to_refund)
-        credit_back(job.ip_address, to_refund)
-        # ------- 7. update job -------------------------------------------------
-        job.output_file.name = os.path.relpath(csv_out, settings.MEDIA_ROOT)
-        job.error_message = (
-            (
-                f"Predictions could not be made for {len(invalid_global)} row(s): "
-                + ", ".join(map(str, invalid_global))
-            )
-            if invalid_global
-            else ""
-        )
-
-        job.save(update_fields=["output_file", "error_message"])
-        return csv_out
-    except Exception as e:
-        credit_back(job.ip_address, job.requested_rows)
-        raise e
-
-
-# ------------------------------------------------------------ DLKcat
-@shared_task
-def run_dlkcat_predictions(public_id, experimental_results=None):
     job = Job.objects.get(public_id=public_id)
     job.status = "Processing"
     job.save(update_fields=["status"])
-    try:
-        df = safe_read_csv(
-            os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv"),
-            job.ip_address,
-            job.requested_rows,
-        )
-        if df is None:
-            raise ValueError("Failed to read input CSV file.")
-        run_model(
-            job=job,
-            model_key="DLKcat",
-            df=df,
-            pred_func=dlkcat_predictions,
-            requires_cols=["Substrate"],
-            output_col="kcat (1/s)",
-            handle_long=job.handle_long_sequences,
-            experimental_results=experimental_results,
-        )
-        Job.objects.filter(pk=job.pk).update(
-            status="Completed",
-            completion_time=timezone.now(),
-        )
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, "DLKcat prediction terminated due to insufficient memory"
-            )
-        else:
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, "DLKcat"), completion_time=timezone.now()
-            )
-    except MemoryError:
-        handle_ram_error(job, "DLKcat prediction ran out of memory")
-    except Exception as e:
-        Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(e, "DLKcat"), completion_time=timezone.now()
-        )
 
+    desc = get_method(method_key)
 
-# ------------------------------------------------------------ TurNup
-@shared_task
-def run_turnup_predictions(public_id, experimental_results=None):
-    job = Job.objects.get(public_id=public_id)
-    job.status = "Processing"
-    job.save(update_fields=["status"])
     try:
-        df = safe_read_csv(
-            os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv"),
-            job.ip_address,
-            job.requested_rows,
-        )
-        if df is None:
-            raise ValueError("Failed to read input CSV file.")
-        run_model(
-            job=job,
-            model_key="TurNup",
-            df=df,
-            pred_func=turnup_predictions,
-            requires_cols=["Substrates", "Products"],
-            output_col="kcat (1/s)",
-            handle_long=job.handle_long_sequences,
-            experimental_results=experimental_results,
-        )
+        df = _load_input(job)
+        _execute_prediction(job, desc, df, target, experimental_results or [])
         Job.objects.filter(pk=job.pk).update(
             status="Completed",
             completion_time=timezone.now(),
         )
 
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, "TurNup prediction terminated due to insufficient memory"
-            )
-        else:
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, "TurNup"), completion_time=timezone.now()
-            )
-    except MemoryError:
-        handle_ram_error(job, "TurNup prediction ran out of memory")
-    except Exception as e:
+    except PredictionError as e:
         Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(e, "TurNup"), completion_time=timezone.now()
-        )
-
-
-# ------------------------------------------------------------ EITLEM
-@shared_task
-def run_eitlem_predictions(public_id, experimental_results=None):
-    job = Job.objects.get(public_id=public_id)
-    job.status = "Processing"
-    job.save(update_fields=["status"])
-
-    try:
-        df = safe_read_csv(
-            os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv"),
-            job.ip_address,
-            job.requested_rows,
-        )
-        if df is None:
-            raise ValueError("Failed to read input CSV file.")
-        kin_flag = job.prediction_type.upper()  # “KCAT” | “KM”
-        out_col = "kcat (1/s)" if kin_flag == "KCAT" else "KM (mM)"
-
-        run_model(
-            job=job,
-            model_key="EITLEM",
-            df=df,
-            pred_func=eitlem_predictions,
-            requires_cols=["Substrate"],
-            output_col=out_col,
-            handle_long=job.handle_long_sequences,
-            extra_kwargs={"kinetics_type": kin_flag},
-            experimental_results=experimental_results,
-        )
-
-        Job.objects.filter(pk=job.pk).update(
-            status="Completed",
+            status="Failed",
+            error_message=str(e),
             completion_time=timezone.now(),
         )
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, "EITLEM prediction terminated due to insufficient memory"
-            )
-        else:
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, "EITLEM"), completion_time=timezone.now()
-            )
+
     except MemoryError:
-        handle_ram_error(job, "EITLEM prediction ran out of memory")
+        _handle_oom(job, desc.display_name)
+
     except Exception as e:
         Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(e, "EITLEM"), completion_time=timezone.now()
-        )
-
-
-# ------------------------------------------------------------ UniKP
-@shared_task
-def run_unikp_predictions(public_id, experimental_results=None):
-    job = Job.objects.get(public_id=public_id)
-    job.status = "Processing"
-    job.save(update_fields=["status"])
-
-    try:
-        df = safe_read_csv(
-            os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv"),
-            job.ip_address,
-            job.requested_rows,
-        )
-        if df is None:
-            raise ValueError("Failed to read input CSV file.")
-
-        # Decide column name & kinetics flag once
-        kin_flag = job.prediction_type.upper()  # “KCAT” | “KM”
-        out_col = "kcat (1/s)" if kin_flag == "KCAT" else "KM (mM)"
-
-        run_model(
-            job=job,
-            model_key="UniKP",
-            df=df,
-            pred_func=unikp_predictions,
-            requires_cols=["Substrate"],
-            output_col=out_col,
-            handle_long=job.handle_long_sequences,
-            extra_kwargs={"kinetics_type": kin_flag},
-            experimental_results=experimental_results,
-        )
-
-        Job.objects.filter(pk=job.pk).update(
-            status="Completed",
+            status="Failed",
+            error_message=_sanitise_unexpected(e, desc.display_name),
             completion_time=timezone.now(),
         )
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, "UniKP prediction terminated due to insufficient memory"
-            )
-        else:
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, "UniKP"), completion_time=timezone.now()
-            )
-    except MemoryError:
-        handle_ram_error(job, "UniKP prediction ran out of memory")
-    except Exception as e:
-        Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(e, "UniKP"), completion_time=timezone.now()
-        )
+
 
 @shared_task
-def run_kinform_h_predictions(public_id, experimental_results=None):
-    return run_kinform_predictions(public_id, variant="H", experimental_results=experimental_results)
-@shared_task
-def run_kinform_l_predictions(public_id, experimental_results=None):
-    return run_kinform_predictions(public_id, variant="L", experimental_results=experimental_results)
-
-def run_kinform_predictions(public_id, variant, experimental_results=None):
-    job = Job.objects.get(public_id=public_id)
-    job.status = "Processing"
-    job.save(update_fields=["status"])
-    assert variant in {"H", "L"}, "variant must be 'H' or 'L'"
-    model_key = f"KinForm-{variant}"
-    try:
-        df = safe_read_csv(
-            os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv"),
-            job.ip_address,
-            job.requested_rows,
-        )
-        if df is None:
-            raise ValueError("Failed to read input CSV file.")
-
-        # Decide column name & kinetics flag once
-        kin_flag = job.prediction_type.upper()  # “KCAT” | “KM”
-        out_col = "kcat (1/s)" if kin_flag == "KCAT" else "KM (mM)"
-
-        run_model(
-            job=job,
-            model_key=model_key,
-            df=df,
-            pred_func=kinform_predictions,
-            requires_cols=["Substrate"],
-            output_col=out_col,
-            handle_long=job.handle_long_sequences,
-            extra_kwargs={"kinetics_type": kin_flag},
-            experimental_results=experimental_results,
-        )
-
-        Job.objects.filter(pk=job.pk).update(
-            status="Completed",
-            completion_time=timezone.now(),
-        )
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, f"{model_key} prediction terminated due to insufficient memory"
-            )
-        else:
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, model_key), completion_time=timezone.now()
-            )
-    except MemoryError:
-        handle_ram_error(job, f"{model_key} prediction ran out of memory")
-    except Exception as e:
-        Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(e, model_key), completion_time=timezone.now()
-        )
-
-# ------------------------------------------------------------ Run Both
-@shared_task
-def run_both_predictions(public_id, experimental_results=None):
+def run_both_prediction(
+    public_id: str,
+    kcat_key: str,
+    km_key: str,
+    experimental_results: list | None = None,
+) -> None:
     """
-    Predict kcat **and** KM for every row, optionally overwriting either
-    (or both) with experimental values supplied via `experimental_results`.
+    Run a dual-target prediction job (kcat and KM in sequence).
 
-    experimental_results is a flat list whose items have at least:
-        {'found': bool, 'idx': <row>, 'kcat_value' or 'km_value', …}
-    For `lookup_experimental(..., param_type="both")` the list is
-    interleaved:  kcat₀, KM₀, kcat₁, KM₁, …
+    Parameters
+    ----------
+    public_id : str
+        The job's public identifier.
+    kcat_key : str
+        Registry key of the kcat prediction method.
+    km_key : str
+        Registry key of the KM prediction method.
+    experimental_results : list | None
+        Pre-fetched experimental values to merge into the output, or None.
     """
-    from collections import defaultdict
-    from .models import Job
-    import os, pandas as pd
-    from django.conf import settings
-    from django.utils import timezone
-    from api.prediction_engines.dlkcat import dlkcat_predictions
-    from api.prediction_engines.turnup import turnup_predictions
-    from api.prediction_engines.eitlem import eitlem_predictions
-    from api.prediction_engines.unikp import unikp_predictions
-    from api.utils.extra_info import build_extra_info, _source
-    from api.utils.quotas import credit_back
-
-    # ───────────────────────── 0.  House-keeping ─────────────────────────
     job = Job.objects.get(public_id=public_id)
-    job_dir = os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id))
-    infile = os.path.join(job_dir, "input.csv")
-
-    job.status, job.predictions_made, job.total_predictions = "Processing", 0, 0
+    job.status = "Processing"
+    job.predictions_made = 0
+    job.total_predictions = 0
     job.save(update_fields=["status", "predictions_made", "total_predictions"])
 
-    kcat_method = job.kcat_method
-    km_method = job.km_method
-
-    multisub = False  # only true for TurNup
-    invalid_indices = set()  # will accumulate across both passes
+    kcat_desc = get_method(kcat_key)
+    km_desc = get_method(km_key)
 
     try:
-        df = pd.read_csv(infile)
-        sequences = df["Protein Sequence"].tolist()
-        results_df = df.copy()  # will receive new columns
-        protein_ids = None  # placeholder for future use
-
-        # ─────────────────── 1. Handle long sequences ────────────────────
-        # Get limits for both methods
-        kcat_limit = min(SERVER_LIMIT, MODEL_LIMITS[kcat_method])
-        km_limit = min(SERVER_LIMIT, MODEL_LIMITS[km_method])
-        # Use the more restrictive limit for both predictions
-        limit = min(kcat_limit, km_limit)
-
-        print(f"handle_long_sequences: {job.handle_long_sequences}")
-        print(f"Using limit: {limit} (kcat_limit: {kcat_limit}, km_limit: {km_limit})")
-
-        # Apply sequence handling
-        if job.handle_long_sequences == "truncate":
-            lens_before = [len(seq) for seq in sequences]
-            sequences_proc, valid_indices = truncate_sequences(sequences, limit)
-            lens_after = [len(seq) for seq in sequences_proc]
-            print("Lengths before truncation:", lens_before)
-            print("Lengths after truncation:", lens_after)
-        else:  # skip
-            valid_indices = get_valid_indices(sequences, limit, mode="skip")
-            sequences_proc = [sequences[i] for i in valid_indices]
-
-        print(
-            f"Processing {len(sequences_proc)} sequences out of {len(sequences)} total"
+        df = _load_input(job)
+        _execute_both_prediction(
+            job, kcat_desc, km_desc, df, experimental_results or []
         )
-
-        # Add skipped sequences to invalid_indices if we're in skip mode
-        if job.handle_long_sequences == "skip":
-            all_indices = set(range(len(sequences)))
-            valid_indices_set = set(valid_indices)
-            skipped_indices = all_indices - valid_indices_set
-            invalid_indices.update(skipped_indices)
-
-        # ─────────────────── 2.  default meta-columns ────────────────────
-        n_rows = len(df)
-        kcat_src = [f"Prediction from {kcat_method}"] * n_rows
-        km_src = [f"Prediction from {km_method}"] * n_rows
-        kcat_extra = [""] * n_rows
-        km_extra = [""] * n_rows
-
-        # ─────────────────── 3.  kcat predictions  ───────────────────────
-        # Initialize with empty predictions for all rows
-        kcat_pred = [""] * n_rows
-
-        if valid_indices:  # Only predict if we have valid sequences
-            if kcat_method == "DLKcat":
-                subs = [df["Substrate"].iloc[i] for i in valid_indices]
-                kcat_subset, bad_subset = dlkcat_predictions(
-                    sequences=sequences_proc,
-                    substrates=subs,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                )
-            elif kcat_method == "EITLEM":
-                subs = [df["Substrate"].iloc[i] for i in valid_indices]
-                kcat_subset, bad_subset = eitlem_predictions(
-                    sequences=sequences_proc,
-                    substrates=subs,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    kinetics_type="KCAT",
-                )
-            elif kcat_method == "UniKP":
-                subs = [df["Substrate"].iloc[i] for i in valid_indices]
-                kcat_subset, bad_subset = unikp_predictions(
-                    sequences=sequences_proc,
-                    substrates=subs,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    kinetics_type="KCAT",
-                )
-            elif kcat_method in {"KinForm-H", "KinForm-L"}:
-                subs = [df["Substrate"].iloc[i] for i in valid_indices]
-                kcat_subset, bad_subset = kinform_predictions(
-                    sequences=sequences_proc,
-                    substrates=subs,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    model_variant=kcat_method,
-                    kinetics_type="KCAT",
-                )
-            elif kcat_method == "TurNup":
-                multisub = True
-                subs = [df["Substrates"].iloc[i] for i in valid_indices]
-                prods = [df["Products"].iloc[i] for i in valid_indices]
-                kcat_subset, bad_subset = turnup_predictions(
-                    sequences=sequences_proc,
-                    substrates=subs,
-                    products=prods,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                )
-            else:
-                raise ValueError("Invalid kcat method")
-
-            # Map predictions back to original indices
-            for i, pred in zip(valid_indices, kcat_subset):
-                kcat_pred[i] = pred
-            # Track invalid indices from predictions
-            invalid_indices.update(valid_indices[j] for j in bad_subset)
-
-        results_df["kcat (1/s)"] = kcat_pred
-
-        # ─────────────────── 4.  KM predictions  ─────────────────────────
-        # Initialize with empty predictions for all rows
-        km_pred_full = [""] * n_rows
-
-        if valid_indices:  # Only predict if we have valid sequences
-            if multisub:
-                # explode Substrates to one-row-per-substrate for valid indices only
-                aug_rows = []
-                for idx in valid_indices:
-                    row = df.iloc[idx]
-                    for smi in [
-                        s.strip()
-                        for s in str(row["Substrates"]).split(";")
-                        if s.strip()
-                    ]:
-                        aug_rows.append(
-                            {
-                                "original_idx": idx,
-                                "sequence": sequences_proc[
-                                    valid_indices.index(idx)
-                                ],  # Use processed sequence
-                                "substrate": smi,
-                            }
-                        )
-                aug_df = pd.DataFrame(aug_rows)
-                seq_km = aug_df["sequence"].tolist()
-                subs_km = aug_df["substrate"].tolist()
-            else:
-                seq_km = sequences_proc
-                subs_km = [df["Substrate"].iloc[i] for i in valid_indices]
-
-            if km_method == "EITLEM":
-                km_pred, bad_km = eitlem_predictions(
-                    sequences=seq_km,
-                    substrates=subs_km,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    kinetics_type="KM",
-                )
-            elif km_method == "UniKP":
-                km_pred, bad_km = unikp_predictions(
-                    sequences=seq_km,
-                    substrates=subs_km,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    kinetics_type="KM",
-                )
-            elif km_method in {"KinForm-H", "KinForm-L"}:
-                km_pred, bad_km = kinform_predictions(
-                    sequences=seq_km,
-                    substrates=subs_km,
-                    public_id=job.public_id,
-                    protein_ids=protein_ids,
-                    model_variant=km_method,
-                    kinetics_type="KM",
-                )
-            else:
-                raise ValueError("Invalid KM method")
-
-            # Track invalid indices from KM predictions
-            invalid_indices.update(valid_indices[j] for j in bad_km)
-
-            if multisub:
-                # regroup semicolon-separated predictions for valid indices
-                from collections import defaultdict
-
-                km_map = defaultdict(list)
-                for r, pred in zip(aug_df["original_idx"], km_pred):
-                    km_map[r].append(str(pred))
-                # Fill in predictions for valid indices only
-                for idx in valid_indices:
-                    if idx in km_map:
-                        km_pred_full[idx] = ";".join(km_map[idx])
-            else:
-                # Map predictions back to original indices
-                for i, pred in zip(valid_indices, km_pred):
-                    km_pred_full[i] = pred
-
-        results_df["KM (mM)"] = km_pred_full
-
-        # ─────────────────── 5.  experimental overwrites ─────────────────
-        if experimental_results:
-            for exp in experimental_results:
-                if not exp.get("found"):
-                    continue
-                idx = exp["idx"]
-                p_seq = exp["protein_sequence"]
-                # Check against original sequences (not processed ones)
-                if p_seq != sequences[idx]:
-                    print(
-                        f"Protein sequence mismatch at index {idx}: "
-                        f"expected {sequences[idx]}, got {p_seq}"
-                    )
-                    continue
-
-                if "kcat_value" in exp:  # kcat overwrite
-                    prev_val = results_df.at[idx, "kcat (1/s)"]
-                    results_df.at[idx, "kcat (1/s)"] = exp["kcat_value"]
-                    kcat_src[idx] = _source(exp)
-                    kcat_extra[idx] = build_extra_info(
-                        exp, "kcat", prev_val, kcat_method
-                    )
-                elif "km_value" in exp:  # KM overwrite
-                    prev_val = results_df.at[idx, "KM (mM)"]
-                    results_df.at[idx, "KM (mM)"] = exp["km_value"]
-                    km_src[idx] = _source(exp)
-                    km_extra[idx] = build_extra_info(exp, "Km", prev_val, km_method)
-
-        # ─────────────────── 6.  attach meta-columns  ────────────────────
-        results_df.insert(0, "Extra Info KM", km_extra)
-        results_df.insert(0, "Source KM", km_src)
-        results_df.insert(0, "Extra Info kcat", kcat_extra)
-        results_df.insert(0, "Source kcat", kcat_src)
-
-        # bring prediction columns to the front
-        preferred_order = [
-            "kcat (1/s)",
-            "Source kcat",
-            "Extra Info kcat",
-            "KM (mM)",
-            "Source KM",
-            "Extra Info KM",
-        ]
-        results_df = results_df[
-            preferred_order
-            + [c for c in results_df.columns if c not in preferred_order]
-        ]
-
-        # ─────────────────── 7.  save & update job  ──────────────────────
-        out_csv = os.path.join(job_dir, "output.csv")
-        results_df.to_csv(out_csv, index=False)
-
-        # Calculate processed rows (rows with non-empty predictions for both kcat and KM)
-        try:
-            kcat_processed = int((results_df["kcat (1/s)"] != "").sum())
-            km_processed = int((results_df["KM (mM)"] != "").sum())
-            processed_rows = min(kcat_processed, km_processed)  # Conservative estimate
-        except Exception:
-            processed_rows = len(valid_indices) if valid_indices else 0
-
-        # Credit back unused reactions
-        to_refund = max(0, int(job.requested_rows) - processed_rows)
-        if to_refund > 0:
-            credit_back(job.ip_address, to_refund)
-
-        if invalid_indices:
-            invalid_indices = sorted(invalid_indices)
-            job.error_message = (
-                f"Predictions could not be made for {len(invalid_indices)} row(s): "
-                f"{', '.join(map(str, invalid_indices))}"
-            )
-        else:
-            job.error_message = ""
-
         Job.objects.filter(pk=job.pk).update(
             status="Completed",
             completion_time=timezone.now(),
-            output_file=os.path.relpath(out_csv, settings.MEDIA_ROOT),
         )
 
-    except subprocess.CalledProcessError as e:
-        # Check if it's a memory error
-        if e.returncode == -9 or e.returncode == 137:  # SIGKILL (OOM killer)
-            handle_ram_error(
-                job, "Run Both prediction terminated due to insufficient memory"
-            )
-        else:
-            credit_back(job.ip_address, job.requested_rows)
-            Job.objects.filter(pk=job.pk).update(
-                status="Failed", error_message=_sanitise_error(e, "Run Both"), completion_time=timezone.now()
-            )
-    except MemoryError:
-        handle_ram_error(job, "Run Both prediction ran out of memory")
-    except Exception as exc:
-        credit_back(job.ip_address, job.requested_rows)
+    except PredictionError as e:
         Job.objects.filter(pk=job.pk).update(
-            status="Failed", error_message=_sanitise_error(exc, "Run Both"), completion_time=timezone.now()
+            status="Failed",
+            error_message=str(e),
+            completion_time=timezone.now(),
         )
+
+    except MemoryError:
+        _handle_oom(job, f"{kcat_desc.display_name}/{km_desc.display_name}")
+
+    except Exception as e:
+        label = f"{kcat_desc.display_name}/{km_desc.display_name}"
+        Job.objects.filter(pk=job.pk).update(
+            status="Failed",
+            error_message=_sanitise_unexpected(e, label),
+            completion_time=timezone.now(),
+        )
+
+
+# ---------------------------------------------------------------------------
+# Core prediction logic
+# ---------------------------------------------------------------------------
+
+def _execute_prediction(
+    job: Job,
+    desc,
+    df: pd.DataFrame,
+    target: str,
+    experimental_results: list,
+) -> None:
+    """
+    Run a single-target prediction and write output.csv.
+
+    Validates required columns, applies sequence-length handling, invokes the
+    method's pred_func, merges experimental overwrites, writes the output CSV,
+    and credits back rows that produced no prediction.
+    """
+    # ── 1. Validate required columns ──────────────────────────────────────────
+    required_cols = ["Protein Sequence"] + list(desc.col_to_kwarg.keys())
+    missing = [c for c in required_cols if c not in df.columns]
+    if missing:
+        raise ValueError(
+            f"Missing column(s) required for {desc.display_name}: "
+            + ", ".join(missing)
+        )
+
+    # ── 2. Extract sequences and apply length limit ───────────────────────────
+    sequences = df["Protein Sequence"].tolist()
+    limit = min(SERVER_LIMIT, desc.max_seq_len)
+
+    if job.handle_long_sequences == "truncate":
+        sequences_proc, valid_idx = truncate_sequences(sequences, limit)
+    else:
+        valid_idx = get_valid_indices(sequences, limit, mode="skip")
+        sequences_proc = [sequences[i] for i in valid_idx]
+
+    # ── 3. Build pred_func kwargs from descriptor ─────────────────────────────
+    call_kwargs: dict = {}
+    for col, kwarg_name in desc.col_to_kwarg.items():
+        call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
+    call_kwargs.update(desc.target_kwargs.get(target, {}))
+
+    # ── 4. Run predictions ────────────────────────────────────────────────────
+    output_col = desc.output_cols[target]
+    n_rows = len(sequences)
+    full_preds: list = [""] * n_rows
+    sources: list[str] = [""] * n_rows
+    extra_info: list[str] = [""] * n_rows
+    invalid_global: list[int] = []
+
+    if valid_idx:
+        pred_subset, invalid_subset = _invoke_method_prediction(
+            desc=desc,
+            sequences=sequences_proc,
+            public_id=job.public_id,
+            target=target,
+            **call_kwargs,
+        )
+        for global_i, pred in zip(valid_idx, pred_subset):
+            full_preds[global_i] = pred if pred is not None else ""
+            sources[global_i] = f"Prediction from {desc.display_name}"
+        invalid_global = _map_subset_invalid_indices(valid_idx, invalid_subset)
+
+    # ── 5. Apply experimental overwrites ──────────────────────────────────────
+    exp_key = "km_value" if target == "Km" else "kcat_value"
+    for exp in experimental_results:
+        if not exp.get("found"):
+            continue
+        idx = exp["idx"]
+        if exp.get("protein_sequence") != sequences[idx]:
+            print(f"  Protein sequence mismatch at index {idx}, skipping experimental overwrite.")
+            continue
+        prev = full_preds[idx]
+        full_preds[idx] = exp[exp_key]
+        sources[idx] = _source(exp)
+        extra_info[idx] = build_extra_info(exp, target, prev, desc.display_name)
+
+    # ── 6. Write output CSV ───────────────────────────────────────────────────
+    df.insert(0, "Extra Info", extra_info)
+    df.insert(0, "Source", sources)
+    df.insert(0, output_col, full_preds)
+
+    out_path = _output_path(job.public_id)
+    df.to_csv(out_path, index=False)
+
+    # ── 7. Credit back empty rows and update job ──────────────────────────────
+    empty = int((df[output_col] == "").sum()) + int(df[output_col].isna().sum())
+    credit_back(job.ip_address, min(max(0, empty), int(job.requested_rows)))
+
+    job.output_file.name = os.path.relpath(out_path, settings.MEDIA_ROOT)
+    job.error_message = (
+        f"Predictions could not be made for {len(invalid_global)} row(s): "
+        + ", ".join(map(str, invalid_global))
+        if invalid_global else ""
+    )
+    job.save(update_fields=["output_file", "error_message"])
+
+
+def _execute_both_prediction(
+    job: Job,
+    kcat_desc,
+    km_desc,
+    df: pd.DataFrame,
+    experimental_results: list,
+) -> None:
+    """
+    Run kcat and KM predictions in sequence and write a combined output.csv.
+
+    Uses the stricter of the two methods' sequence-length limits.  When the
+    kcat method uses multi-substrate format (input_format == "multi"), KM is
+    predicted per individual substrate (exploding the "Substrates" column)
+    and the results are rejoined with semicolons.
+    """
+    sequences = df["Protein Sequence"].tolist()
+    n_rows = len(sequences)
+
+    # ── 1. Length handling — apply the stricter of the two limits ─────────────
+    kcat_limit = min(SERVER_LIMIT, kcat_desc.max_seq_len)
+    km_limit = min(SERVER_LIMIT, km_desc.max_seq_len)
+    limit = min(kcat_limit, km_limit)
+
+    if job.handle_long_sequences == "truncate":
+        sequences_proc, valid_idx = truncate_sequences(sequences, limit)
+    else:
+        valid_idx = get_valid_indices(sequences, limit, mode="skip")
+        sequences_proc = [sequences[i] for i in valid_idx]
+
+    # Pre-compute position lookup for multi-sub Km section
+    valid_idx_to_pos: dict[int, int] = {
+        global_i: pos for pos, global_i in enumerate(valid_idx)
+    }
+
+    # Rows skipped by length handling are immediately invalid
+    invalid_indices: set[int] = set(range(n_rows)) - set(valid_idx)
+
+    # ── 2. Initialise result arrays ───────────────────────────────────────────
+    kcat_preds: list = [""] * n_rows
+    kcat_src: list[str] = [f"Prediction from {kcat_desc.display_name}"] * n_rows
+    kcat_extra: list[str] = [""] * n_rows
+    km_preds: list = [""] * n_rows
+    km_src: list[str] = [f"Prediction from {km_desc.display_name}"] * n_rows
+    km_extra: list[str] = [""] * n_rows
+
+    # ── 3. kcat predictions ───────────────────────────────────────────────────
+    if valid_idx:
+        kcat_call_kwargs: dict = {}
+        for col, kwarg_name in kcat_desc.col_to_kwarg.items():
+            kcat_call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
+        kcat_call_kwargs.update(kcat_desc.target_kwargs.get("kcat", {}))
+
+        kcat_subset, kcat_bad = _invoke_method_prediction(
+            desc=kcat_desc,
+            sequences=sequences_proc,
+            public_id=job.public_id,
+            target="kcat",
+            **kcat_call_kwargs,
+        )
+        for global_i, pred in zip(valid_idx, kcat_subset):
+            kcat_preds[global_i] = pred if pred is not None else ""
+        invalid_indices.update(_map_subset_invalid_indices(valid_idx, kcat_bad))
+
+    # ── 4. KM predictions ─────────────────────────────────────────────────────
+    # Special-case bridge: when the submitted CSV is multi-substrate
+    # (Substrates/Products) but the selected KM method expects a single
+    # "Substrate" input, explode Substrates and predict KM per substrate.
+    is_multisub = (
+        "Substrate" in km_desc.col_to_kwarg
+        and "Substrate" not in df.columns
+        and "Substrates" in df.columns
+    )
+
+    if valid_idx:
+        if is_multisub:
+            # Explode "Substrates" column: predict KM per individual substrate,
+            # then re-join results with ";" for each original row.
+            aug_rows = []
+            for global_i in valid_idx:
+                row = df.iloc[global_i]
+                pos = valid_idx_to_pos[global_i]
+                for smiles in [
+                    s.strip()
+                    for s in str(row["Substrates"]).split(";")
+                    if s.strip()
+                ]:
+                    aug_rows.append({
+                        "original_idx": global_i,
+                        "sequence": sequences_proc[pos],
+                        "substrate": smiles,
+                    })
+            aug_df = pd.DataFrame(aug_rows)
+            km_call_kwargs = {
+                "substrates": aug_df["substrate"].tolist(),
+            }
+            km_call_kwargs.update(km_desc.target_kwargs.get("Km", {}))
+            km_subset, km_bad = _invoke_method_prediction(
+                desc=km_desc,
+                sequences=aug_df["sequence"].tolist(),
+                public_id=job.public_id,
+                target="Km",
+                **km_call_kwargs,
+            )
+            # Group predictions back by original row index
+            km_map: dict[int, list] = defaultdict(list)
+            for original_i, pred in zip(aug_df["original_idx"], km_subset):
+                km_map[original_i].append("" if pred is None else str(pred))
+            for global_i in valid_idx:
+                if global_i in km_map:
+                    km_preds[global_i] = ";".join(km_map[global_i])
+            invalid_indices.update(
+                _map_subset_invalid_indices(aug_df["original_idx"].tolist(), km_bad)
+            )
+
+        else:
+            km_call_kwargs = {}
+            for col, kwarg_name in km_desc.col_to_kwarg.items():
+                km_call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
+            km_call_kwargs.update(km_desc.target_kwargs.get("Km", {}))
+
+            km_subset, km_bad = _invoke_method_prediction(
+                desc=km_desc,
+                sequences=sequences_proc,
+                public_id=job.public_id,
+                target="Km",
+                **km_call_kwargs,
+            )
+            for global_i, pred in zip(valid_idx, km_subset):
+                km_preds[global_i] = pred if pred is not None else ""
+            invalid_indices.update(_map_subset_invalid_indices(valid_idx, km_bad))
+
+    # ── 5. Experimental overwrites ────────────────────────────────────────────
+    for exp in experimental_results:
+        if not exp.get("found"):
+            continue
+        idx = exp["idx"]
+        if exp.get("protein_sequence") != sequences[idx]:
+            print(f"  Protein sequence mismatch at index {idx}, skipping experimental overwrite.")
+            continue
+        if "kcat_value" in exp:
+            prev = kcat_preds[idx]
+            kcat_preds[idx] = exp["kcat_value"]
+            kcat_src[idx] = _source(exp)
+            kcat_extra[idx] = build_extra_info(exp, "kcat", prev, kcat_desc.display_name)
+        elif "km_value" in exp:
+            prev = km_preds[idx]
+            km_preds[idx] = exp["km_value"]
+            km_src[idx] = _source(exp)
+            km_extra[idx] = build_extra_info(exp, "Km", prev, km_desc.display_name)
+
+    # ── 6. Assemble output DataFrame ──────────────────────────────────────────
+    results_df = df.copy()
+    results_df["kcat (1/s)"] = kcat_preds
+    results_df["KM (mM)"] = km_preds
+    results_df.insert(0, "Extra Info KM", km_extra)
+    results_df.insert(0, "Source KM", km_src)
+    results_df.insert(0, "Extra Info kcat", kcat_extra)
+    results_df.insert(0, "Source kcat", kcat_src)
+
+    preferred = [
+        "kcat (1/s)", "Source kcat", "Extra Info kcat",
+        "KM (mM)", "Source KM", "Extra Info KM",
+    ]
+    results_df = results_df[
+        preferred + [c for c in results_df.columns if c not in preferred]
+    ]
+
+    # ── 7. Write CSV, credit back, update job ─────────────────────────────────
+    out_path = _output_path(job.public_id)
+    results_df.to_csv(out_path, index=False)
+
+    fully_predicted = (
+        (results_df["kcat (1/s)"] != "")
+        & results_df["kcat (1/s)"].notna()
+        & (results_df["KM (mM)"] != "")
+        & results_df["KM (mM)"].notna()
+    )
+    processed = int(fully_predicted.sum())
+    to_refund = max(0, int(job.requested_rows) - processed)
+    if to_refund > 0:
+        credit_back(job.ip_address, to_refund)
+
+    invalid_sorted = sorted(invalid_indices)
+    Job.objects.filter(pk=job.pk).update(
+        output_file=os.path.relpath(out_path, settings.MEDIA_ROOT),
+        error_message=(
+            f"Predictions could not be made for {len(invalid_sorted)} row(s): "
+            + ", ".join(map(str, invalid_sorted))
+            if invalid_sorted else ""
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+def _invoke_method_prediction(
+    desc,
+    sequences: list[str],
+    public_id: str,
+    target: str,
+    **call_kwargs,
+) -> tuple[list, list[int]]:
+    """
+    Invoke a method using either:
+
+    1) a custom `pred_func` (legacy/current methods), or
+    2) the built-in generic subprocess engine (recommended for new methods).
+    """
+    if desc.pred_func is not None:
+        return desc.pred_func(
+            sequences=sequences,
+            public_id=public_id,
+            **call_kwargs,
+        )
+
+    if desc.subprocess is not None:
+        return run_generic_subprocess_prediction(
+            desc=desc,
+            sequences=sequences,
+            public_id=public_id,
+            target=target,
+            **call_kwargs,
+        )
+
+    raise PredictionError(
+        f"{desc.display_name} is not configured with a prediction engine."
+    )
+
+
+def _map_subset_invalid_indices(
+    global_indices: list[int],
+    invalid_subset: list[int] | None,
+) -> list[int]:
+    """Map local invalid indices returned by a method to original row indices."""
+    if not invalid_subset:
+        return []
+
+    mapped: list[int] = []
+    for local_idx in invalid_subset:
+        try:
+            idx = int(local_idx)
+        except (TypeError, ValueError):
+            continue
+        if 0 <= idx < len(global_indices):
+            mapped.append(global_indices[idx])
+    return mapped
+
+
+def _load_input(job: Job) -> pd.DataFrame:
+    """Read the job's input CSV, crediting back quota on failure."""
+    path = os.path.join(settings.MEDIA_ROOT, "jobs", str(job.public_id), "input.csv")
+    df = safe_read_csv(path, job.ip_address, job.requested_rows)
+    if df is None:
+        raise PredictionError(
+            "The uploaded CSV file could not be read. "
+            "Please ensure it is a valid CSV and try again."
+        )
+    return df
+
+
+def _output_path(public_id: str) -> str:
+    return os.path.join(settings.MEDIA_ROOT, "jobs", str(public_id), "output.csv")
+
+
+def _handle_oom(job: Job, label: str) -> None:
+    """Mark job as failed with an out-of-memory message and credit back quota."""
+    msg = (
+        f"{label} prediction terminated due to insufficient memory. "
+        "Try reducing the number of rows or the sequence lengths."
+    )
+    Job.objects.filter(pk=job.pk).update(
+        status="Failed",
+        error_message=msg,
+        completion_time=timezone.now(),
+    )
+    credit_back(job.ip_address, job.requested_rows)
+
+
+def _sanitise_unexpected(exc: Exception, label: str) -> str:
+    """
+    Convert an unexpected (non-PredictionError) exception to a user-facing
+    message, stripping internal paths and stack traces.
+    """
+    import re
+    msg = str(exc)
+    # If the message contains file paths or the word "Traceback", it's too
+    # technical for a user.  Replace with a generic fallback.
+    if re.search(r"/[a-z_/]+\.[a-z]+", msg, re.IGNORECASE) or "Traceback" in msg:
+        return (
+            f"{label} prediction encountered an unexpected error. "
+            "Please verify your input and try again."
+        )
+    return msg or (
+        f"{label} prediction encountered an unexpected error. "
+        "Please verify your input and try again."
+    )

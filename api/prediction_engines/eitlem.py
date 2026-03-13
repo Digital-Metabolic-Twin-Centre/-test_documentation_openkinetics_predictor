@@ -1,200 +1,185 @@
+# api/prediction_engines/eitlem.py
+#
+# Prediction engine for the EITLEM-Kinetics model.
+#
+# Wraps the EITLEM prediction script in a subprocess call.  Handles molecule
+# validation, progress reporting, and user-friendly error messages.
+
 import os
 import subprocess
+
+import numpy as np
 import pandas as pd
 from rdkit import Chem
-from api.utils.convert_to_mol import convert_to_mol
+
+from api.methods.base import PredictionError
 from api.models import Job
+from api.prediction_engines.subprocess_runner import run_prediction_subprocess
+from api.utils.convert_to_mol import convert_to_mol
 from webKinPred.settings import MEDIA_ROOT
-import numpy as np
 
 try:
-    from webKinPred.config_docker import PYTHON_PATHS, PREDICTION_SCRIPTS
+    from webKinPred.config_docker import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
 except ImportError:
     try:
-        from webKinPred.config_local import PYTHON_PATHS, PREDICTION_SCRIPTS
+        from webKinPred.config_local import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
     except ImportError:
         PYTHON_PATHS = {}
         PREDICTION_SCRIPTS = {}
+        DATA_PATHS = {}
 
-
-def run_prediction_subprocess(command, job, env=None):
-    """
-    Run a prediction subprocess and update job progress based on stdout.
-
-    Parameters:
-    - command: List of command-line arguments to run the subprocess.
-    - job: Job object to update progress.
-    - env: Environment variables to pass to subprocess.
-    """
-    try:
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            env=env,  # Pass environment variables
-        )
-
-        # Read stdout line by line
-        for line in iter(process.stdout.readline, ""):
-            if not line:
-                break
-            # Process the line
-            print("Subprocess output:", line.strip())
-            # Check if it's a progress update
-            if line.startswith("Progress:"):
-                # Extract the number of predictions made
-                parts = line.strip().split()
-                if len(parts) >= 2:
-                    try:
-                        progress = parts[1]
-                        predictions_made, total_predictions = progress.split("/")
-                        predictions_made = int(predictions_made)
-                        total_predictions = int(total_predictions)
-                        # Update the job object
-                        job.predictions_made = predictions_made
-                        job.total_predictions = total_predictions
-                        job.save(
-                            update_fields=["predictions_made", "total_predictions"]
-                        )
-                    except Exception as e:
-                        print("Error parsing progress update:", e)
-            else:
-                # Handle other output if needed
-                pass
-
-        # Wait for the subprocess to finish
-        process.wait()
-
-        if process.returncode != 0:
-            # An error occurred - check if it's memory-related
-            if (
-                process.returncode == -9 or process.returncode == 137
-            ):  # SIGKILL (OOM killer)
-                raise subprocess.CalledProcessError(
-                    process.returncode, process.args, "Process killed by OOM killer"
-                )
-            else:
-                raise subprocess.CalledProcessError(process.returncode, process.args)
-
-    except Exception as e:
-        print("An error occurred while running the subprocess:")
-        print(e)
-        raise e
+_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
 
 def eitlem_predictions(
-    sequences, substrates, public_id, protein_ids=None, kinetics_type="KCAT"
-):
-    print("Running EITLEM model...")
+    sequences: list[str],
+    public_id: str,
+    substrates: list[str],
+    kinetics_type: str = "KCAT",
+    **kwargs,
+) -> tuple[list, list[int]]:
+    """
+    Run the EITLEM-Kinetics model on the given protein sequences and substrates.
 
-    # Get the Job object
+    Parameters
+    ----------
+    sequences : list[str]
+        Pre-filtered protein sequences.
+    public_id : str
+        Job identifier for progress tracking.
+    substrates : list[str]
+        Substrate SMILES or InChI strings, one per sequence.
+    kinetics_type : str
+        ``"KCAT"`` (default) or ``"KM"``.
+
+    Returns
+    -------
+    predictions : list
+        Predicted values (float) or None for invalid rows.
+    invalid_indices : list[int]
+        Indices of rows that could not be processed.
+
+    Raises
+    ------
+    PredictionError
+        On subprocess failure or any unrecoverable error.
+    """
+    print(f"Running EITLEM model (kinetics_type={kinetics_type})...")
+
     job = Job.objects.get(public_id=public_id)
-
-    # Initialize progress fields
     job.molecules_processed = 0
-    job.invalid_molecules = 0
+    job.invalid_rows = 0
     job.predictions_made = 0
-    job.save(
-        update_fields=["molecules_processed", "invalid_molecules", "predictions_made"]
-    )
+    job.total_molecules = len(sequences)
+    job.save(update_fields=[
+        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
+    ])
 
-    # Define paths
-    python_path = PYTHON_PATHS["EITLEM"]
-    prediction_script = PREDICTION_SCRIPTS["EITLEM"]
+    python_path = PYTHON_PATHS.get("EITLEM", "")
+    prediction_script = PREDICTION_SCRIPTS.get("EITLEM", "")
     job_dir = os.path.join(MEDIA_ROOT, "jobs", str(public_id))
-    input_temp_file = os.path.join(job_dir, f"input_{public_id}.csv")
-    output_temp_file = os.path.join(job_dir, f"output_{public_id}.csv")
-    # Set environment variables for the subprocess to use Docker-compatible paths
+    input_file = os.path.join(job_dir, f"input_{public_id}.csv")
+    output_file = os.path.join(job_dir, f"output_{public_id}.csv")
+
     env = os.environ.copy()
-    try:
-        from webKinPred.config_docker import DATA_PATHS
-
+    if DATA_PATHS.get("media"):
         env["EITLEM_MEDIA_PATH"] = DATA_PATHS["media"]
+    if DATA_PATHS.get("tools"):
         env["EITLEM_TOOLS_PATH"] = DATA_PATHS["tools"]
-    except (ImportError, KeyError):
-        # If not using Docker config, don't set environment variables
-        pass
 
-    total_molecules = len(sequences)
-    job.total_molecules = total_molecules
-    job.save(update_fields=["total_molecules"])
+    valid_indices: list[int] = []
+    invalid_indices: list[int] = []
+    valid_smiles: list[str] = []
+    valid_sequences: list[str] = []
+    predictions: list = [None] * len(sequences)
 
-    valid_indices = []
-    invalid_indices = []
-    smiles_list = []
-    valid_sequences = []
-    alphabet = set("ACDEFGHIKLMNPQRSTVWY")
-
-    # Process substrates and update progress
+    # ── Validate inputs molecule by molecule ──────────────────────────────────
     for idx, (seq, substrate) in enumerate(zip(sequences, substrates)):
-        mol = convert_to_mol(substrate)
         job.molecules_processed += 1
-        seq_valid = all(c in alphabet for c in seq)
+        seq_valid = all(c in _AMINO_ACIDS for c in seq)
+        mol = convert_to_mol(substrate)
+
         if mol and seq_valid:
-            smiles = Chem.MolToSmiles(mol)
-            smiles_list.append(smiles)
+            valid_smiles.append(Chem.MolToSmiles(mol))
             valid_sequences.append(seq)
             valid_indices.append(idx)
         else:
+            print(f"  Row {idx + 1}: invalid {'sequence' if not seq_valid else 'substrate'}")
             invalid_indices.append(idx)
-            job.invalid_molecules += 1
-        # Save job progress after each molecule
-        job.save(update_fields=["molecules_processed", "invalid_molecules"])
+            job.invalid_rows += 1
 
-    # Update total predictions
+        job.save(update_fields=["molecules_processed", "invalid_rows"])
+
     job.total_predictions = len(valid_indices)
     job.save(update_fields=["total_predictions"])
 
-    # Prepare DataFrame for valid entries
-    if valid_indices:
-        df_input = pd.DataFrame(
-            {"Substrate SMILES": smiles_list, "Protein Sequence": valid_sequences}
+    if not valid_indices:
+        return predictions, invalid_indices
+
+    # ── Write CSV input file ──────────────────────────────────────────────────
+    try:
+        df_input = pd.DataFrame({
+            "Substrate SMILES": valid_smiles,
+            "Protein Sequence": valid_sequences,
+        })
+        df_input.to_csv(input_file, index=False)
+    except OSError as e:
+        raise PredictionError(
+            "EITLEM could not write its input file. "
+            "Please contact support if this persists."
+        ) from e
+
+    # ── Run prediction subprocess ─────────────────────────────────────────────
+    try:
+        run_prediction_subprocess(
+            command=[python_path, prediction_script, input_file, output_file, kinetics_type],
+            job=job,
+            env=env,
+            label="EITLEM",
         )
-        df_input.to_csv(input_temp_file, index=False)
-    else:
-        df_input = pd.DataFrame()
+    except subprocess.CalledProcessError as e:
+        _cleanup(input_file, output_file)
+        if e.returncode in (-9, 137):
+            raise PredictionError(
+                "EITLEM ran out of memory. "
+                "Try reducing the number of rows or the sequence lengths."
+            ) from e
+        raise PredictionError(
+            "EITLEM encountered an internal error and could not complete. "
+            "Please verify your input and try again."
+        ) from e
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        if isinstance(e, PredictionError):
+            raise
+        raise PredictionError(
+            "EITLEM encountered an unexpected error. "
+            "Please verify your input and try again."
+        ) from e
 
-    # Run the prediction script
-    predictions = [None] * total_molecules  # Initialize with None
-    if not df_input.empty:
-        try:
-            command = [
-                python_path,
-                prediction_script,
-                input_temp_file,
-                output_temp_file,
-                kinetics_type,
-            ]
-            run_prediction_subprocess(command, job, env)
+    # ── Read output CSV ───────────────────────────────────────────────────────
+    try:
+        df_output = pd.read_csv(output_file)
+        raw_values = df_output["Predicted Value"].tolist()
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        raise PredictionError(
+            "EITLEM completed but its output file could not be read. "
+            "Please contact support if this persists."
+        ) from e
 
-            # Read the output file
-            df_output = pd.read_csv(output_temp_file)
-            predicted_values = df_output["Predicted Value"].tolist()
+    for local_idx, pred in enumerate(raw_values):
+        global_idx = valid_indices[local_idx]
+        predictions[global_idx] = None if pred in ("None", "", np.nan, "nan") else pred
 
-            # Merge predictions back into the original order
-            for idx_in_valid_list, pred in enumerate(predicted_values):
-                idx = valid_indices[idx_in_valid_list]
-                if pred in ["None", "", np.nan, "nan"]:
-                    predictions[idx] = None
-                else:
-                    predictions[idx] = pred
-
-        except Exception as e:
-            print("An error occurred while running the EITLEM subprocess:")
-            print(e)
-            # Clean up temporary files
-            if os.path.exists(input_temp_file):
-                os.remove(input_temp_file)
-            if os.path.exists(output_temp_file):
-                os.remove(output_temp_file)
-            raise e
-
-    # Clean up temporary files
-    if os.path.exists(input_temp_file):
-        os.remove(input_temp_file)
-    if os.path.exists(output_temp_file):
-        os.remove(output_temp_file)
-
+    _cleanup(input_file, output_file)
     return predictions, invalid_indices
+
+
+def _cleanup(*paths: str) -> None:
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass

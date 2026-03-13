@@ -1,6 +1,30 @@
 // /home/saleh/webKinPred/frontend/src/components/job-submission/services/api.js
 import apiClient from '../../appClient';
 
+/**
+ * Fetch the full method registry from the backend.
+ *
+ * The API returns methods grouped by target: { kcat: [{id, ...}, ...], Km: [...] }.
+ * This function flattens that into a plain object keyed by method id, e.g.:
+ *   {
+ *     "DLKcat": { id: "DLKcat", displayName, supports: ["kcat"], inputFormat: "single", ... },
+ *     "UniKP":  { id: "UniKP",  supports: ["kcat", "Km"], ... },
+ *     ...
+ *   }
+ *
+ * No authentication required.
+ */
+export async function fetchMethods() {
+  const { data } = await apiClient.get('/v1/methods/');
+  const flat = {};
+  for (const group of Object.values(data.methods)) {
+    for (const m of group) {
+      flat[m.id] = m;
+    }
+  }
+  return flat;
+}
+
 export async function detectCsvFormat(file) {
   const formData = new FormData();
   formData.append('file', file);

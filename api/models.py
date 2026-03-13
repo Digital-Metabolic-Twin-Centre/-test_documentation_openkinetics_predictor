@@ -71,7 +71,7 @@ class Job(models.Model):
 
     total_molecules = models.IntegerField(default=0)
     molecules_processed = models.IntegerField(default=0)
-    invalid_molecules = models.IntegerField(default=0)
+    invalid_rows = models.IntegerField(default=0)
     total_predictions = models.IntegerField(default=0)
     predictions_made = models.IntegerField(default=0)
     user = models.ForeignKey(ApiUser, on_delete=models.SET_NULL, null=True, blank=True)

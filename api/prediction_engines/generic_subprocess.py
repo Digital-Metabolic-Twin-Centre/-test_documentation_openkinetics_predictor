@@ -1,0 +1,418 @@
+"""
+Generic subprocess prediction engine.
+
+This engine is intended for most new methods: the contributor only writes a
+prediction script and method descriptor. No custom Python engine module is
+required unless the method needs bespoke behavior.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import os
+import re
+import subprocess
+from typing import Any
+
+from api.methods.base import MethodDescriptor, PredictionError
+from api.models import Job
+from api.prediction_engines.subprocess_runner import run_prediction_subprocess
+from api.utils.convert_to_mol import convert_to_mol
+from webKinPred.settings import MEDIA_ROOT
+
+try:
+    from webKinPred.config_docker import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
+except ImportError:
+    try:
+        from webKinPred.config_local import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
+    except ImportError:
+        PYTHON_PATHS = {}
+        PREDICTION_SCRIPTS = {}
+        DATA_PATHS = {}
+
+
+def run_generic_subprocess_prediction(
+    desc: MethodDescriptor,
+    sequences: list[str],
+    public_id: str,
+    target: str,
+    **kwargs,
+) -> tuple[list, list[int]]:
+    """
+    Execute a method via the built-in generic subprocess engine.
+
+    Expected prediction-script contract
+    -----------------------------------
+    Command:
+      python <script> <extra_args...> --input <input.json> --output <output.json>
+
+    Input JSON:
+      {
+        "method": "<method key>",
+        "target": "kcat" | "Km",
+        "public_id": "<job id>",
+        "rows": [
+          {"sequence": "...", "...": "..."},
+          ...
+        ],
+        "params": {"...": "..."}
+      }
+
+    Output JSON:
+      {"predictions": [...], "invalid_indices": [...]}   OR just [...]
+    """
+    cfg = desc.subprocess
+    if cfg is None:
+        raise PredictionError(
+            f"{desc.display_name} is not configured with a subprocess engine."
+        )
+
+    job = Job.objects.get(public_id=public_id)
+    _initialise_job_progress(job, len(sequences))
+
+    row_kwarg_names = list(dict.fromkeys(desc.col_to_kwarg.values()))
+    per_row_inputs = _extract_row_inputs(
+        method_label=desc.display_name,
+        row_kwarg_names=row_kwarg_names,
+        sequences=sequences,
+        call_kwargs=kwargs,
+    )
+    static_params = {
+        key: value for key, value in kwargs.items() if key not in row_kwarg_names
+    }
+
+    predictions: list[Any] = [None] * len(sequences)
+    valid_rows, valid_indices, invalid_indices = _validate_rows(
+        sequences=sequences,
+        per_row_inputs=per_row_inputs,
+        input_format=desc.input_format,
+        desc=desc,
+        job=job,
+    )
+
+    job.total_predictions = len(valid_indices)
+    job.predictions_made = 0
+    job.save(update_fields=["total_predictions", "predictions_made"])
+
+    if not valid_indices:
+        return predictions, invalid_indices
+
+    python_path, script_path = _resolve_subprocess_paths(desc)
+    env = _build_subprocess_env(desc)
+
+    job_dir = os.path.join(MEDIA_ROOT, "jobs", str(public_id))
+    safe_method = re.sub(r"[^A-Za-z0-9_-]+", "_", desc.key)
+    input_file = os.path.join(job_dir, f"{safe_method}_input_{public_id}.json")
+    output_file = os.path.join(job_dir, f"{safe_method}_output_{public_id}.json")
+
+    payload = {
+        "method": desc.key,
+        "target": target,
+        "public_id": public_id,
+        "rows": valid_rows,
+        "params": static_params,
+    }
+
+    try:
+        with open(input_file, "w", encoding="utf-8") as f:
+            json.dump(payload, f)
+    except OSError as e:
+        raise PredictionError(
+            f"{desc.display_name} could not write its input file. "
+            "Please contact support if this persists."
+        ) from e
+
+    command = [
+        python_path,
+        script_path,
+        *cfg.extra_args,
+        cfg.input_flag,
+        input_file,
+        cfg.output_flag,
+        output_file,
+    ]
+
+    try:
+        run_prediction_subprocess(
+            command=command,
+            job=job,
+            env=env,
+            label=desc.display_name,
+        )
+    except subprocess.CalledProcessError as e:
+        _cleanup(input_file, output_file)
+        if e.returncode in (-9, 137):
+            raise PredictionError(
+                f"{desc.display_name} ran out of memory. "
+                "Try reducing the number of rows or the sequence lengths."
+            ) from e
+        raise PredictionError(
+            f"{desc.display_name} encountered an internal error and could not complete. "
+            "Please verify your input and try again."
+        ) from e
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        if isinstance(e, PredictionError):
+            raise
+        raise PredictionError(
+            f"{desc.display_name} encountered an unexpected error. "
+            "Please verify your input and try again."
+        ) from e
+
+    try:
+        pred_subset, invalid_subset = _read_output(desc.display_name, output_file)
+    except PredictionError:
+        _cleanup(input_file, output_file)
+        raise
+
+    if len(pred_subset) != len(valid_rows):
+        _cleanup(input_file, output_file)
+        raise PredictionError(
+            f"{desc.display_name} produced {len(pred_subset)} prediction(s) "
+            f"for {len(valid_rows)} valid input row(s)."
+        )
+
+    for local_idx, value in enumerate(pred_subset):
+        global_idx = valid_indices[local_idx]
+        predictions[global_idx] = _normalise_prediction(value)
+
+    invalid_all = set(invalid_indices)
+    for local_idx in invalid_subset:
+        if 0 <= local_idx < len(valid_indices):
+            invalid_all.add(valid_indices[local_idx])
+
+    _cleanup(input_file, output_file)
+    return predictions, sorted(invalid_all)
+
+
+def _initialise_job_progress(job: Job, total_rows: int) -> None:
+    job.molecules_processed = 0
+    job.invalid_rows = 0
+    job.predictions_made = 0
+    job.total_molecules = total_rows
+    job.save(
+        update_fields=[
+            "molecules_processed",
+            "invalid_rows",
+            "predictions_made",
+            "total_molecules",
+        ]
+    )
+
+
+def _extract_row_inputs(
+    method_label: str,
+    row_kwarg_names: list[str],
+    sequences: list[str],
+    call_kwargs: dict[str, Any],
+) -> dict[str, list[Any]]:
+    n_rows = len(sequences)
+    out: dict[str, list[Any]] = {}
+
+    for key in row_kwarg_names:
+        values = call_kwargs.get(key)
+        if not isinstance(values, list):
+            raise PredictionError(
+                f"{method_label} input mapping is invalid for '{key}'."
+            )
+        if len(values) != n_rows:
+            raise PredictionError(
+                f"{method_label} input mapping length mismatch for '{key}'."
+            )
+        out[key] = values
+
+    return out
+
+
+def _validate_rows(
+    sequences: list[str],
+    per_row_inputs: dict[str, list[Any]],
+    input_format: str,
+    desc: MethodDescriptor,
+    job: Job,
+) -> tuple[list[dict[str, Any]], list[int], list[int]]:
+    cfg = desc.subprocess
+    assert cfg is not None
+
+    valid_rows: list[dict[str, Any]] = []
+    valid_indices: list[int] = []
+    invalid_indices: list[int] = []
+
+    allowed = set(cfg.allowed_amino_acids)
+
+    for idx, seq in enumerate(sequences):
+        row = {"sequence": seq}
+        for key, values in per_row_inputs.items():
+            row[key] = values[idx]
+
+        is_valid = True
+
+        if cfg.validate_sequence:
+            if not isinstance(seq, str) or not seq or any(c not in allowed for c in seq):
+                is_valid = False
+
+        if is_valid and cfg.validate_chemistry:
+            is_valid = _chemistry_is_valid(row, input_format)
+
+        if is_valid:
+            valid_indices.append(idx)
+            valid_rows.append(row)
+        else:
+            invalid_indices.append(idx)
+            job.invalid_rows += 1
+
+        job.molecules_processed += 1
+        job.save(update_fields=["molecules_processed", "invalid_rows"])
+
+    return valid_rows, valid_indices, invalid_indices
+
+
+def _split_tokens(value: Any) -> list[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, (list, tuple)):
+        out: list[str] = []
+        for item in value:
+            out.extend(_split_tokens(item))
+        return out
+
+    text = str(value).strip()
+    if not text:
+        return []
+    if text.lower() in {"none", "nan"}:
+        return []
+
+    return [tok.strip() for tok in text.split(";") if tok.strip()]
+
+
+def _chemistry_is_valid(row: dict[str, Any], input_format: str) -> bool:
+    chem_fields: list[tuple[str, Any]] = []
+    for key in ("substrates", "substrate", "products", "product"):
+        if key in row:
+            chem_fields.append((key, row[key]))
+
+    if input_format == "multi":
+        has_substrates = any(k in row for k in ("substrates", "substrate"))
+        has_products = any(k in row for k in ("products", "product"))
+        if not (has_substrates and has_products):
+            return False
+
+    if not chem_fields:
+        # Sequence-only methods are allowed.
+        return True
+
+    for _key, value in chem_fields:
+        tokens = _split_tokens(value)
+        if not tokens:
+            return False
+        for token in tokens:
+            if convert_to_mol(token) is None:
+                return False
+
+    return True
+
+
+def _resolve_subprocess_paths(desc: MethodDescriptor) -> tuple[str, str]:
+    cfg = desc.subprocess
+    assert cfg is not None
+
+    python_path = cfg.python_path or (
+        PYTHON_PATHS.get(cfg.python_path_key, "") if cfg.python_path_key else ""
+    )
+    script_path = cfg.script_path or (
+        PREDICTION_SCRIPTS.get(cfg.script_key, "") if cfg.script_key else ""
+    )
+
+    if not python_path:
+        raise PredictionError(
+            f"{desc.display_name} is not configured correctly (missing python path)."
+        )
+    if not script_path:
+        raise PredictionError(
+            f"{desc.display_name} is not configured correctly (missing prediction script path)."
+        )
+
+    return python_path, script_path
+
+
+def _build_subprocess_env(desc: MethodDescriptor) -> dict[str, str]:
+    cfg = desc.subprocess
+    assert cfg is not None
+
+    env = os.environ.copy()
+
+    for env_var, data_key in cfg.data_path_env.items():
+        path = DATA_PATHS.get(data_key)
+        if path:
+            env[env_var] = path
+
+    for env_var, value in cfg.extra_env.items():
+        env[env_var] = str(value)
+
+    return env
+
+
+def _read_output(method_label: str, output_file: str) -> tuple[list[Any], list[int]]:
+    try:
+        with open(output_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except Exception as e:
+        raise PredictionError(
+            f"{method_label} completed but its output file could not be read. "
+            "Please contact support if this persists."
+        ) from e
+
+    if isinstance(data, list):
+        return data, []
+
+    if isinstance(data, dict):
+        preds = data.get("predictions")
+        invalid = data.get("invalid_indices", [])
+
+        if not isinstance(preds, list):
+            raise PredictionError(
+                f"{method_label} output format is invalid: 'predictions' must be a list."
+            )
+
+        invalid_out: list[int] = []
+        if isinstance(invalid, list):
+            for idx in invalid:
+                try:
+                    invalid_out.append(int(idx))
+                except (TypeError, ValueError):
+                    continue
+        return preds, invalid_out
+
+    raise PredictionError(
+        f"{method_label} output format is invalid. "
+        "Expected a JSON list or an object with 'predictions'."
+    )
+
+
+def _normalise_prediction(value: Any) -> Any:
+    if value is None:
+        return None
+
+    if isinstance(value, float) and math.isnan(value):
+        return None
+
+    if isinstance(value, str):
+        trimmed = value.strip()
+        if trimmed == "":
+            return None
+        if trimmed.lower() in {"none", "nan"}:
+            return None
+        return value
+
+    return value
+
+
+def _cleanup(*paths: str) -> None:
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass

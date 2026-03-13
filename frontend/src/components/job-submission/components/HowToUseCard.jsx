@@ -1,13 +1,19 @@
 // src/components/HowToUseCard.js
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, Row, Col, Alert, ListGroup, Button, Badge } from 'react-bootstrap';
 import { BoxArrowInDown, Bullseye, CloudUpload, Cpu, Github } from 'react-bootstrap-icons';
 import '../../../styles/components/HowToUseCard.css';
-import methodDetails from '../constants/methodDetails';
+import { fetchMethods } from '../services/api';
 
 
 export default function HowToUseCard() {
+  const [methods, setMethods] = useState({});
+
+  useEffect(() => {
+    fetchMethods().then(setMethods).catch(() => {});
+  }, []);
+
   return (
     <Card className="section-container how-to-use-card mb-4">
       <Card.Header as="h3" className="text-center">
@@ -112,12 +118,12 @@ export default function HowToUseCard() {
         <hr className="my-4" />
         <h4 className="text-center mb-4">Available Prediction Methods</h4>
         <Row className="g-3">
-          {Object.entries(methodDetails).map(([methodName, details]) => (
-            <Col key={methodName} md={6} lg={4}>
+          {Object.entries(methods).map(([key, details]) => (
+            <Col key={key} md={6} lg={4}>
               <Card className="method-card h-100">
                 <Card.Body className="d-flex flex-column">
                   <div className="d-flex justify-content-between align-items-start mb-2">
-                    <Card.Title className="method-title mb-0">{methodName}</Card.Title>
+                    <Card.Title className="method-title mb-0">{details.displayName}</Card.Title>
                     <a
                       href={details.repoUrl}
                       target="_blank"

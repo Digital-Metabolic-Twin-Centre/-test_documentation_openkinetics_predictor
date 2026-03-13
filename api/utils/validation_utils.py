@@ -7,9 +7,20 @@ from typing import List, Dict, Any, Optional, Tuple
 from api.utils.convert_to_mol import convert_to_mol
 
 try:
-    from webKinPred.config_docker import MODEL_LIMITS, SERVER_LIMIT
+    from webKinPred.config_docker import SERVER_LIMIT
 except ImportError:
-    from webKinPred.config_local import MODEL_LIMITS, SERVER_LIMIT
+    from webKinPred.config_local import SERVER_LIMIT
+
+
+def _get_model_limits() -> dict:
+    """
+    Return per-method sequence-length limits from the method registry.
+
+    Imported lazily (inside a function) so that this module can be safely
+    imported before Django's app registry is fully initialised.
+    """
+    from api.methods.registry import get_model_limits
+    return get_model_limits()
 
 
 def safe_convert_to_mol(value: Any) -> Optional[Any]:
@@ -171,26 +182,21 @@ def validate_protein_sequence_characters(sequence: str) -> List[str]:
 def calculate_sequence_length_violations(sequence_length: int) -> Dict[str, int]:
     """
     Calculate which models would reject a sequence based on length limits.
-    
+
     Args:
         sequence_length: Length of the protein sequence
-        
+
     Returns:
         Dictionary mapping model names to violation count (0 or 1)
     """
-    violations = {}
-    
-    if sequence_length > SERVER_LIMIT:
-        violations["Server"] = 1
-    else:
-        violations["Server"] = 0
-    
-    for model_name, limit in MODEL_LIMITS.items():
-        if sequence_length > limit:
-            violations[model_name] = 1
-        else:
-            violations[model_name] = 0
-    
+    model_limits = _get_model_limits()
+    violations: Dict[str, int] = {}
+
+    violations["Server"] = 1 if sequence_length > SERVER_LIMIT else 0
+
+    for model_name, limit in model_limits.items():
+        violations[model_name] = 1 if sequence_length > limit else 0
+
     return violations
 
 
@@ -205,7 +211,8 @@ def validate_protein_sequences(dataframe: pd.DataFrame) -> Tuple[List[Dict[str, 
         Tuple of (invalid_proteins_list, aggregated_length_violations)
     """
     invalid_proteins = []
-    total_length_violations = {model: 0 for model in MODEL_LIMITS}
+    model_limits = _get_model_limits()
+    total_length_violations = {model: 0 for model in model_limits}
     total_length_violations["Server"] = 0
     
     for i, sequence in enumerate(dataframe["Protein Sequence"]):

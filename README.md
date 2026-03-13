@@ -293,10 +293,9 @@ All errors return JSON with a single `error` key:
 
 ---
 
-## Adding a New Model
+## Adding a New Prediction Method
 
-... todo ...
-Create a new module in `api/prediction_engines/` following existing wrappers.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for a step-by-step guide. The short version: define a descriptor in `api/methods/`, then choose either the shared subprocess path (script only) or a custom engine in `api/prediction_engines/`, and register runtime paths in config. The framework auto-discovers new methods — no manual wiring needed.
 
 ## Attribution
 

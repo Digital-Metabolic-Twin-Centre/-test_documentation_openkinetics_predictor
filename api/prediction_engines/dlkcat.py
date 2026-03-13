@@ -1,212 +1,195 @@
-# dlkcat.py
+# api/prediction_engines/dlkcat.py
+#
+# Prediction engine for the DLKcat model.
+#
+# Wraps the DLKcat prediction script in a subprocess call.  Handles molecule
+# validation, progress reporting, and user-friendly error messages.
 
 import os
 import subprocess
-from rdkit import Chem
-from api.utils.convert_to_mol import convert_to_mol
-from api.models import Job  # Import the Job model to update progress
+
 import numpy as np
+from rdkit import Chem
+
+from api.methods.base import PredictionError
+from api.models import Job
+from api.prediction_engines.subprocess_runner import run_prediction_subprocess
+from api.utils.convert_to_mol import convert_to_mol
 from webKinPred.settings import MEDIA_ROOT
 
 try:
-    from webKinPred.config_docker import PYTHON_PATHS, PREDICTION_SCRIPTS
+    from webKinPred.config_docker import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
 except ImportError:
     try:
-        from webKinPred.config_local import PYTHON_PATHS, PREDICTION_SCRIPTS
+        from webKinPred.config_local import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
     except ImportError:
         PYTHON_PATHS = {}
         PREDICTION_SCRIPTS = {}
+        DATA_PATHS = {}
+
+_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
 
-def dlkcat_predictions(sequences, substrates, public_id, protein_ids=None):
+def dlkcat_predictions(
+    sequences: list[str],
+    public_id: str,
+    substrates: list[str],
+    **kwargs,
+) -> tuple[list, list[int]]:
     """
-    Run DLKCAT model on the given sequences and substrates.
+    Run the DLKcat model on the given protein sequences and substrates.
 
-    Parameters:
-    sequences: list of strings
-        A list of protein sequences.
-    substrates: list of strings
-        A list of substrate InChIs or SMILES.
-    public_id: int
-        The job ID for tracking purposes.
-    protein_ids: list of strings, optional
-        A list of protein accession numbers.
+    Parameters
+    ----------
+    sequences : list[str]
+        Pre-filtered protein sequences.
+    public_id : str
+        Job identifier for progress tracking.
+    substrates : list[str]
+        Substrate SMILES or InChI strings, one per sequence.
 
-    Returns:
-    list of floats
-        A list of predicted kcat values. In the same order as the input sequences.
+    Returns
+    -------
+    predictions : list
+        Predicted kcat values (float) or None for invalid rows.
+    invalid_indices : list[int]
+        Indices of rows that could not be processed due to invalid substrate
+        or sequence format.
+
+    Raises
+    ------
+    PredictionError
+        On subprocess failure or any unrecoverable error.
     """
-    print("Running DLKCAT model...")
+    print("Running DLKcat model...")
 
-    # Get the Job object
     job = Job.objects.get(public_id=public_id)
-
-    # Initialize progress fields
     job.molecules_processed = 0
-    job.invalid_molecules = 0
+    job.invalid_rows = 0
     job.predictions_made = 0
-    job.save(
-        update_fields=["molecules_processed", "invalid_molecules", "predictions_made"]
-    )
+    job.total_molecules = len(sequences)
+    job.save(update_fields=[
+        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
+    ])
 
-    total_molecules = len(sequences)
-    job.total_molecules = total_molecules
-    job.save(update_fields=["total_molecules"])
+    python_path = PYTHON_PATHS.get("DLKcat", "")
+    prediction_script = PREDICTION_SCRIPTS.get("DLKcat", "")
+    job_dir = os.path.join(MEDIA_ROOT, "jobs", str(public_id))
+    input_file = os.path.join(job_dir, f"input_{public_id}.tsv")
+    output_file = os.path.join(job_dir, f"output_{public_id}.tsv")
 
-    # Define paths
-    python_path = PYTHON_PATHS["DLKcat"]
-    prediction_script = PREDICTION_SCRIPTS["DLKcat"]
-    job_dir = os.path.join(MEDIA_ROOT, "jobs/" + str(public_id))
-    input_temp_file = os.path.join(job_dir, f"input_{public_id}.tsv")
-    output_temp_file = os.path.join(job_dir, f"output_{public_id}.tsv")
-
-    # Set environment variables for the subprocess to use Docker-compatible paths
     env = os.environ.copy()
-    try:
-        from webKinPred.config_docker import DATA_PATHS
-
+    if DATA_PATHS.get("DLKcat"):
         env["DLKCAT_DATA_PATH"] = DATA_PATHS["DLKcat"]
+    if DATA_PATHS.get("DLKcat_Results"):
         env["DLKCAT_RESULTS_PATH"] = DATA_PATHS["DLKcat_Results"]
-    except (ImportError, KeyError):
-        # If not using Docker config, don't set environment variables
-        pass
 
-    valid_indices = []
-    invalid_indices = []
-    smiles_list = []
-    valid_sequences = []
-    alphabet = set("ACDEFGHIKLMNPQRSTVWY")
+    valid_indices: list[int] = []
+    invalid_indices: list[int] = []
+    valid_smiles: list[str] = []
+    valid_sequences: list[str] = []
+    predictions: list = [None] * len(sequences)
 
-    predictions = [None] * total_molecules  # Initialize with None
-
-    # Process substrates and update progress
+    # ── Validate inputs molecule by molecule ──────────────────────────────────
     for idx, (seq, substrate) in enumerate(zip(sequences, substrates)):
         job.molecules_processed += 1
-
-        # Check sequence validity
-        seq_valid = all(c in alphabet for c in seq)
+        seq_valid = all(c in _AMINO_ACIDS for c in seq)
         mol = convert_to_mol(substrate) if seq_valid else None
-        # Validate molecule and generate SMILES
+
         if mol and seq_valid:
-            mol = Chem.AddHs(mol)
-            smiles = Chem.MolToSmiles(mol)
+            mol_with_h = Chem.AddHs(mol)
+            smiles = Chem.MolToSmiles(mol_with_h)
             if "." not in smiles:
-                smiles_list.append(smiles)
+                valid_smiles.append(smiles)
                 valid_sequences.append(seq)
                 valid_indices.append(idx)
-                job.save(update_fields=["molecules_processed", "invalid_molecules"])
+                job.save(update_fields=["molecules_processed", "invalid_rows"])
                 continue
-        # Handle invalid cases
+
         print(
-            f"Invalid {'sequence' if not seq_valid else 'substrate'} at row {idx + 1}: {substrate if seq_valid else seq}"
+            f"  Row {idx + 1}: invalid "
+            f"{'sequence' if not seq_valid else 'substrate'}"
         )
         invalid_indices.append(idx)
-        job.invalid_molecules += 1
-        job.save(update_fields=["molecules_processed", "invalid_molecules"])
+        job.invalid_rows += 1
+        job.save(update_fields=["molecules_processed", "invalid_rows"])
 
-    # Update total predictions
     job.total_predictions = len(valid_indices)
     job.save(update_fields=["total_predictions"])
 
-    # Prepare input file for valid entries
-    if valid_indices:
-        with open(input_temp_file, "w") as f:
+    if not valid_indices:
+        return predictions, invalid_indices
+
+    # ── Write TSV input file ──────────────────────────────────────────────────
+    try:
+        with open(input_file, "w") as f:
             f.write("Substrate Name\tSubstrate SMILES\tProtein Sequence\n")
-            for i in range(len(valid_indices)):
-                name = "noname"
-                f.write(f"{name}\t{smiles_list[i]}\t{valid_sequences[i]}\n")
+            for smiles, seq in zip(valid_smiles, valid_sequences):
+                f.write(f"noname\t{smiles}\t{seq}\n")
+    except OSError as e:
+        raise PredictionError(
+            "DLKcat could not write its input file. "
+            "Please contact support if this persists."
+        ) from e
 
-        # Run the prediction script using subprocess.Popen
-        try:
-            process = subprocess.Popen(
-                [python_path, prediction_script, input_temp_file, output_temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=env,  # Pass environment variables
-            )
+    # ── Run prediction subprocess ─────────────────────────────────────────────
+    try:
+        run_prediction_subprocess(
+            command=[python_path, prediction_script, input_file, output_file],
+            job=job,
+            env=env,
+            label="DLKcat",
+        )
+    except subprocess.CalledProcessError as e:
+        _cleanup(input_file, output_file)
+        if e.returncode in (-9, 137):
+            raise PredictionError(
+                "DLKcat ran out of memory. "
+                "Try reducing the number of rows or the sequence lengths."
+            ) from e
+        raise PredictionError(
+            "DLKcat encountered an internal error and could not complete. "
+            "Please verify your input and try again."
+        ) from e
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        if isinstance(e, PredictionError):
+            raise
+        raise PredictionError(
+            "DLKcat encountered an unexpected error. "
+            "Please verify your input and try again."
+        ) from e
 
-            # Read stdout line by line
-            for line in iter(process.stdout.readline, ""):
-                if not line:
-                    break
-                # Process the line
-                print("Subprocess output:", line.strip())
-                # Check if it's a progress update
-                if line.startswith("Progress:"):
-                    # Extract the number of predictions made
-                    # e.g., line = "Progress: 5/10 predictions made"
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        try:
-                            progress = parts[1]
-                            predictions_made, total_predictions = progress.split("/")
-                            predictions_made = int(predictions_made)
-                            total_predictions = int(total_predictions)
-                            # Update the job object
-                            job.predictions_made = predictions_made
-                            job.total_predictions = total_predictions
-                            job.save(
-                                update_fields=["predictions_made", "total_predictions"]
-                            )
-                        except Exception as e:
-                            print("Error parsing progress update:", e)
-                else:
-                    # Handle other output if needed
-                    pass
+    # ── Read output TSV ───────────────────────────────────────────────────────
+    try:
+        with open(output_file, "r") as f:
+            next(f)  # skip header
+            raw_values = []
+            for line in f:
+                parts = line.strip().split("\t")
+                try:
+                    raw_values.append(float(parts[3]))
+                except (IndexError, ValueError):
+                    raw_values.append(None)
+    except (OSError, StopIteration) as e:
+        _cleanup(input_file, output_file)
+        raise PredictionError(
+            "DLKcat completed but its output file could not be read. "
+            "Please contact support if this persists."
+        ) from e
 
-            # Wait for the subprocess to finish
-            process.wait()
+    for local_idx, pred in enumerate(raw_values):
+        global_idx = valid_indices[local_idx]
+        predictions[global_idx] = None if pred in (None, np.nan) else pred
 
-            if process.returncode != 0:
-                # An error occurred - check if it's memory-related
-                if (
-                    process.returncode == -9 or process.returncode == 137
-                ):  # SIGKILL (OOM killer)
-                    raise subprocess.CalledProcessError(
-                        process.returncode, process.args, "Process killed by OOM killer"
-                    )
-                else:
-                    raise subprocess.CalledProcessError(
-                        process.returncode, process.args
-                    )
-
-            # Read the output file
-            predicted_values = []
-            with open(output_temp_file, "r") as f:
-                next(f)  # Skip the header
-                for line in f:
-                    _, _, _, kcat_value = line.strip().split("\t")
-                    try:
-                        kcat_value = float(kcat_value)
-                    except ValueError:
-                        kcat_value = None
-                    predicted_values.append(kcat_value)
-
-            # Merge predictions back into the original order
-            for idx_in_valid_list, pred in enumerate(predicted_values):
-                idx = valid_indices[idx_in_valid_list]
-                if pred in ["None", "", np.nan, "nan"]:
-                    predictions[idx] = None
-                else:
-                    predictions[idx] = pred
-
-        except Exception as e:
-            print("An error occurred while running the DLKCAT subprocess:")
-            print(e)
-            # Clean up temporary files
-            if os.path.exists(input_temp_file):
-                os.remove(input_temp_file)
-            if os.path.exists(output_temp_file):
-                os.remove(output_temp_file)
-            raise e
-
-    # Clean up temporary files
-    if os.path.exists(input_temp_file):
-        os.remove(input_temp_file)
-    if os.path.exists(output_temp_file):
-        os.remove(output_temp_file)
-
-    # Return predictions and invalid indices
+    _cleanup(input_file, output_file)
     return predictions, invalid_indices
+
+
+def _cleanup(*paths: str) -> None:
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass

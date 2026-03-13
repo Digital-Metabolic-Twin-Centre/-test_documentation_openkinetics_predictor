@@ -3,11 +3,20 @@ import PropTypes from 'prop-types';
 import { Card, Row, Col, Form, Button } from 'react-bootstrap';
 import MethodDetails from './MethodDetails';
 import ExperimentalSwitch from './ExperimentalSwitch';
-import '../../../styles/components/PredictionTypeSelect.css'; // Import the same CSS
+import '../../../styles/components/PredictionTypeSelect.css';
 
+/**
+ * Method selection card shown after the user uploads a valid CSV file.
+ *
+ * Both the kcat method dropdown and the KM method dropdown are populated from
+ * the backend registry (passed down via `allowedKcatMethods`, `allowedKmMethods`,
+ * and `methods`).  No method names are hardcoded here.
+ */
 export default function MethodPicker({
   predictionType,
   allowedKcatMethods,
+  allowedKmMethods,
+  methods,
   kcatMethod,
   setKcatMethod,
   kmMethod,
@@ -20,6 +29,13 @@ export default function MethodPicker({
 }) {
   const showKcat = predictionType === 'kcat' || predictionType === 'both';
   const showKm = predictionType === 'Km' || predictionType === 'both';
+
+  /**
+   * Return the label shown in the dropdown for a given method key.
+   * Falls back to the key itself if the registry hasn't loaded yet.
+   */
+  const methodLabel = (key) =>
+    methods?.[key]?.displayName ?? key;
 
   return (
     <Card className="section-container section-method-selection mb-4">
@@ -41,15 +57,17 @@ export default function MethodPicker({
                     required
                   >
                     <option value="">Select kcat method...</option>
-                    {allowedKcatMethods.map((method) => (
-                      <option key={method} value={method}>
-                        {method === 'EITLEM' ? 'EITLEM-Kinetics' : method}
+                    {allowedKcatMethods.map((key) => (
+                      <option key={key} value={key}>
+                        {methodLabel(key)}
                       </option>
                     ))}
                   </Form.Control>
                 </Form.Group>
               </div>
-              {kcatMethod && <MethodDetails methodKey={kcatMethod} citationOnly />}
+              {kcatMethod && (
+                <MethodDetails methodKey={kcatMethod} methods={methods} citationOnly />
+              )}
             </Col>
           )}
 
@@ -66,13 +84,17 @@ export default function MethodPicker({
                     required
                   >
                     <option value="">Select KM method...</option>
-                    <option value="KinForm-H">KinForm-H</option>
-                    <option value="EITLEM">EITLEM-Kinetics</option>
-                    <option value="UniKP">UniKP</option>
+                    {allowedKmMethods.map((key) => (
+                      <option key={key} value={key}>
+                        {methodLabel(key)}
+                      </option>
+                    ))}
                   </Form.Control>
                 </Form.Group>
               </div>
-              {kmMethod && <MethodDetails methodKey={kmMethod} citationOnly />}
+              {kmMethod && (
+                <MethodDetails methodKey={kmMethod} methods={methods} citationOnly />
+              )}
             </Col>
           )}
         </Row>
@@ -97,6 +119,8 @@ export default function MethodPicker({
 MethodPicker.propTypes = {
   predictionType: PropTypes.string.isRequired,
   allowedKcatMethods: PropTypes.arrayOf(PropTypes.string).isRequired,
+  allowedKmMethods: PropTypes.arrayOf(PropTypes.string).isRequired,
+  methods: PropTypes.object,
   kcatMethod: PropTypes.string.isRequired,
   setKcatMethod: PropTypes.func.isRequired,
   kmMethod: PropTypes.string.isRequired,

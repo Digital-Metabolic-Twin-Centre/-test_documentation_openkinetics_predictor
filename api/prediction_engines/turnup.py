@@ -1,214 +1,197 @@
-# turnup.py
+# api/prediction_engines/turnup.py
+#
+# Prediction engine for the TurNup model.
+#
+# Wraps the TurNup prediction script in a subprocess call.  Handles
+# multi-substrate/multi-product molecule validation, InChI conversion,
+# progress reporting, and user-friendly error messages.
 
 import os
 import subprocess
+
+import numpy as np
 import pandas as pd
 from rdkit import Chem
+
+from api.methods.base import PredictionError
+from api.models import Job
+from api.prediction_engines.subprocess_runner import run_prediction_subprocess
 from api.utils.convert_to_mol import convert_to_mol
-from api.models import Job  # Import the Job model to update progress
 from webKinPred.settings import MEDIA_ROOT
-import numpy as np
 
 try:
-    from webKinPred.config_docker import PYTHON_PATHS, PREDICTION_SCRIPTS
+    from webKinPred.config_docker import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
 except ImportError:
     try:
-        from webKinPred.config_local import PYTHON_PATHS, PREDICTION_SCRIPTS
+        from webKinPred.config_local import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
     except ImportError:
         PYTHON_PATHS = {}
         PREDICTION_SCRIPTS = {}
+        DATA_PATHS = {}
+
+_AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
 
-def turnup_predictions(sequences, substrates, products, public_id, protein_ids=None):
+def turnup_predictions(
+    sequences: list[str],
+    public_id: str,
+    substrates: list[str],
+    products: list[str],
+    **kwargs,
+) -> tuple[list, list[int]]:
     """
-    Run TurNup model on the given sequences, substrates, and products.
+    Run the TurNup model on the given protein sequences, substrates, and
+    products.
 
-    Parameters:
-    sequences: list of strings
-        A list of protein sequences.
-    substrates: list of strings
-        A list of substrates; each element may contain multiple substrates separated by semicolons.
-    products: list of strings
-        A list of products; each element may contain multiple products separated by semicolons.
-    public_id: int
-        The job ID for tracking.
-    protein_ids: list of strings, optional
-        A list of protein accession numbers.
+    Parameters
+    ----------
+    sequences : list[str]
+        Pre-filtered protein sequences.
+    public_id : str
+        Job identifier for progress tracking.
+    substrates : list[str]
+        Semicolon-separated SMILES/InChI strings per row
+        (e.g. ``"CC(=O)O;OCC"``).
+    products : list[str]
+        Semicolon-separated SMILES/InChI strings per row.
 
-    Returns:
-    list of floats
-        A list of predicted kcat values. In the same order as the input sequences.
+    Returns
+    -------
+    predictions : list
+        Predicted kcat values (float) or None for invalid rows.
+    invalid_indices : list[int]
+        Indices of rows that could not be processed.
+
+    Raises
+    ------
+    PredictionError
+        On subprocess failure or any unrecoverable error.
     """
     print("Running TurNup model...")
 
-    # Get the Job object
     job = Job.objects.get(public_id=public_id)
-
-    # Initialize progress fields
     job.molecules_processed = 0
-    job.invalid_molecules = 0
+    job.invalid_rows = 0
     job.predictions_made = 0
-    job.save(
-        update_fields=["molecules_processed", "invalid_molecules", "predictions_made"]
-    )
+    job.total_molecules = len(sequences)
+    job.save(update_fields=[
+        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
+    ])
 
-    total_molecules = len(sequences)
-    job.total_molecules = total_molecules
-    job.save(update_fields=["total_molecules"])
+    python_path = PYTHON_PATHS.get("TurNup", "")
+    prediction_script = PREDICTION_SCRIPTS.get("TurNup", "")
+    job_dir = os.path.join(MEDIA_ROOT, "jobs", str(public_id))
+    input_file = os.path.join(job_dir, f"input_{public_id}.csv")
+    output_file = os.path.join(job_dir, f"output_{public_id}.csv")
 
-    # Define paths
-    python_path = PYTHON_PATHS["TurNup"]
-    prediction_script = PREDICTION_SCRIPTS["TurNup"]
-    job_dir = os.path.join(MEDIA_ROOT, "jobs/" + str(public_id))
-
-    input_temp_file = os.path.join(job_dir, f"input_{public_id}.csv")
-    output_temp_file = os.path.join(job_dir, f"output_{public_id}.csv")
-
-    # Set environment variables for the subprocess to use Docker-compatible paths
     env = os.environ.copy()
-    try:
-        from webKinPred.config_docker import DATA_PATHS
-
+    if DATA_PATHS.get("media"):
         env["TURNUP_MEDIA_PATH"] = DATA_PATHS["media"]
+    if DATA_PATHS.get("tools"):
         env["TURNUP_TOOLS_PATH"] = DATA_PATHS["tools"]
-    except (ImportError, KeyError):
-        # If not using Docker config, don't set environment variables
-        pass
 
-    valid_indices = []
-    invalid_indices = []
-    subs_inchis = []
-    prods_inchis = []
-    valid_sequences = []
-    alphabet = set("ACDEFGHIKLMNPQRSTVWY")
-    predictions = [None] * total_molecules  # Initialize with None
+    valid_indices: list[int] = []
+    invalid_indices: list[int] = []
+    valid_sub_inchis: list[str] = []
+    valid_prod_inchis: list[str] = []
+    valid_sequences: list[str] = []
+    predictions: list = [None] * len(sequences)
 
-    # Process reactions and update progress
-    for idx, (seq, sub, prod) in enumerate(zip(sequences, substrates, products)):
+    # ── Validate inputs reaction by reaction ──────────────────────────────────
+    for idx, (seq, sub_str, prod_str) in enumerate(zip(sequences, substrates, products)):
         job.molecules_processed += 1
 
-        sub_list = sub.split(";")
-        prod_list = prod.split(";")
-        sub_mols = [convert_to_mol(s.strip()) for s in sub_list]
-        prod_mols = [convert_to_mol(p.strip()) for p in prod_list]
-        seq_valid = all(c in alphabet for c in seq)
-        # Check for invalid molecules
-        if (None in sub_mols) or (None in prod_mols) or (not seq_valid):
+        sub_tokens = [s.strip() for s in str(sub_str).split(";") if s.strip()]
+        prod_tokens = [p.strip() for p in str(prod_str).split(";") if p.strip()]
+        sub_mols = [convert_to_mol(s) for s in sub_tokens]
+        prod_mols = [convert_to_mol(p) for p in prod_tokens]
+        seq_valid = all(c in _AMINO_ACIDS for c in seq)
+
+        if None in sub_mols or None in prod_mols or not seq_valid:
+            print(f"  Row {idx + 1}: invalid {'sequence' if not seq_valid else 'substrate/product'}")
             invalid_indices.append(idx)
-            job.invalid_molecules += 1
+            job.invalid_rows += 1
         else:
-            # Convert mols to InChIs
             sub_inchi = ";".join(Chem.MolToInchi(mol) for mol in sub_mols)
             prod_inchi = ";".join(Chem.MolToInchi(mol) for mol in prod_mols)
-
-            subs_inchis.append(sub_inchi)
-            prods_inchis.append(prod_inchi)
+            valid_sub_inchis.append(sub_inchi)
+            valid_prod_inchis.append(prod_inchi)
             valid_sequences.append(seq)
             valid_indices.append(idx)
 
-        # Save job progress after each molecule
-        job.save(update_fields=["molecules_processed", "invalid_molecules"])
+        job.save(update_fields=["molecules_processed", "invalid_rows"])
 
-    # Update total predictions
     job.total_predictions = len(valid_indices)
     job.save(update_fields=["total_predictions"])
 
-    # Prepare DataFrame for valid entries
-    if valid_indices:
-        df_input = pd.DataFrame(
-            {
-                "Substrates": subs_inchis,
-                "Products": prods_inchis,
-                "Protein Sequence": valid_sequences,
-            }
+    if not valid_indices:
+        return predictions, invalid_indices
+
+    # ── Write CSV input file ──────────────────────────────────────────────────
+    try:
+        df_input = pd.DataFrame({
+            "Substrates": valid_sub_inchis,
+            "Products": valid_prod_inchis,
+            "Protein Sequence": valid_sequences,
+        })
+        df_input.to_csv(input_file, index=False)
+    except OSError as e:
+        raise PredictionError(
+            "TurNup could not write its input file. "
+            "Please contact support if this persists."
+        ) from e
+
+    # ── Run prediction subprocess ─────────────────────────────────────────────
+    try:
+        run_prediction_subprocess(
+            command=[python_path, prediction_script, input_file, output_file],
+            job=job,
+            env=env,
+            label="TurNup",
         )
-        df_input.to_csv(input_temp_file, index=False)
-    else:
-        df_input = pd.DataFrame()
+    except subprocess.CalledProcessError as e:
+        _cleanup(input_file, output_file)
+        if e.returncode in (-9, 137):
+            raise PredictionError(
+                "TurNup ran out of memory. "
+                "Try reducing the number of rows or the sequence lengths."
+            ) from e
+        raise PredictionError(
+            "TurNup encountered an internal error and could not complete. "
+            "Please verify your input and try again."
+        ) from e
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        if isinstance(e, PredictionError):
+            raise
+        raise PredictionError(
+            "TurNup encountered an unexpected error. "
+            "Please verify your input and try again."
+        ) from e
 
-    # Run the prediction script if we have valid data
-    if not df_input.empty:
-        try:
-            process = subprocess.Popen(
-                [python_path, prediction_script, input_temp_file, output_temp_file],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                env=env,  # Pass environment variables
-            )
+    # ── Read output CSV ───────────────────────────────────────────────────────
+    try:
+        df_output = pd.read_csv(output_file)
+        raw_values = df_output["kcat [s^(-1)]"].tolist()
+    except Exception as e:
+        _cleanup(input_file, output_file)
+        raise PredictionError(
+            "TurNup completed but its output file could not be read. "
+            "Please contact support if this persists."
+        ) from e
 
-            # Read stdout line by line
-            for line in iter(process.stdout.readline, ""):
-                if not line:
-                    break
-                # Process the line
-                print("TurNup subprocess output:", line.strip())
-                # Check if it's a progress update
-                if line.startswith("Progress:"):
-                    # Extract the number of predictions made
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        try:
-                            progress = parts[1]
-                            predictions_made, total_predictions = progress.split("/")
-                            predictions_made = int(predictions_made)
-                            total_predictions = int(total_predictions)
-                            # Update the job object
-                            job.predictions_made = predictions_made
-                            job.total_predictions = total_predictions
-                            job.save(
-                                update_fields=["predictions_made", "total_predictions"]
-                            )
-                        except Exception as e:
-                            print("Error parsing progress update:", e)
-                else:
-                    # Handle other output if needed
-                    pass
+    for local_idx, pred in enumerate(raw_values):
+        global_idx = valid_indices[local_idx]
+        predictions[global_idx] = None if pred in ("None", "", np.nan, "nan") else pred
 
-            # Wait for the subprocess to finish
-            process.wait()
-
-            if process.returncode != 0:
-                # An error occurred - check if it's memory-related
-                if (
-                    process.returncode == -9 or process.returncode == 137
-                ):  # SIGKILL (OOM killer)
-                    raise subprocess.CalledProcessError(
-                        process.returncode, process.args, "Process killed by OOM killer"
-                    )
-                else:
-                    raise subprocess.CalledProcessError(
-                        process.returncode, process.args
-                    )
-
-            # Read the output file
-            df_output = pd.read_csv(output_temp_file)
-            predicted_values = df_output["kcat [s^(-1)]"].tolist()
-
-            # Merge predictions back into the original order
-            for idx_in_valid_list, pred in enumerate(predicted_values):
-                idx = valid_indices[idx_in_valid_list]
-                if pred in ["None", "", np.nan, "nan"]:
-                    predictions[idx] = None
-                else:
-                    predictions[idx] = pred
-
-        except Exception as e:
-            print("An error occurred while running the TurNup subprocess:")
-            print(e)
-            # Clean up temporary files
-            if os.path.exists(input_temp_file):
-                os.remove(input_temp_file)
-            if os.path.exists(output_temp_file):
-                os.remove(output_temp_file)
-            raise e
-
-    # Clean up temporary files
-    if os.path.exists(input_temp_file):
-        os.remove(input_temp_file)
-    if os.path.exists(output_temp_file):
-        os.remove(output_temp_file)
-
-    # Return predictions and invalid indices
+    _cleanup(input_file, output_file)
     return predictions, invalid_indices
+
+
+def _cleanup(*paths: str) -> None:
+    for path in paths:
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass

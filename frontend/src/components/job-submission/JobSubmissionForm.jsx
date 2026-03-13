@@ -52,6 +52,8 @@ export default function JobSubmissionForm() {
             <MethodPicker
               predictionType={state.predictionType}
               allowedKcatMethods={state.allowedKcatMethods}
+              allowedKmMethods={state.allowedKmMethods}
+              methods={state.methods}
               kcatMethod={state.kcatMethod}
               setKcatMethod={state.setKcatMethod}
               kmMethod={state.kmMethod}
