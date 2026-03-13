@@ -293,4 +293,4 @@ For questions or collaboration: open an issue or reach out to the authors of the
 
 ## Funding
 
-... todo ...
+This work was supported by the European Union’s Horizon Europe Framework Programme (#101080997), the Swiss State Secretariat for Education, Research and Innovation (#23.00232), and United Kingdom Research and Innovation (#10083717 and #10080153).
