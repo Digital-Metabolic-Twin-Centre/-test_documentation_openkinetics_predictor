@@ -5,6 +5,7 @@ import JobSubmissionForm from './components/job-submission/JobSubmissionForm';
 import JobStatus from './components/JobStatus';
 import About from './components/About';
 import ApiDocs from './components/ApiDocs/ApiDocs';
+import Contribute from './components/Contribute';
 import Header from './components/Header';
 import ProteinBackground from './components/ProteinBackground';
 import Footer from './components/Footer';
@@ -23,6 +24,7 @@ function App() {
             <Route path="/track-job" element={<JobStatus />} />
             <Route path="/about" element={<About />} />
             <Route path="/api-docs" element={<ApiDocs />} />
+            <Route path="/contribute" element={<Contribute />} />
             {/* <Route path="/evaluation" element={<Evaluation />} /> */}
           </Routes>
         </main>

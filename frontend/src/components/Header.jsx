@@ -14,6 +14,7 @@ function Header() {
           <Nav className="ml-auto">
             <Nav.Link as={Link} to="/track-job">Track Job</Nav.Link>
             <Nav.Link as={Link} to="/api-docs">API</Nav.Link>
+            <Nav.Link as={Link} to="/contribute">Contribute</Nav.Link>
             <Nav.Link as={Link} to="/about">About</Nav.Link>
           </Nav>
         </Navbar.Collapse>
