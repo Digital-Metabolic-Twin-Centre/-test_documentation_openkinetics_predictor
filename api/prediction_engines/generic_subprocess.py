@@ -17,19 +17,14 @@ from typing import Any
 
 from api.methods.base import MethodDescriptor, PredictionError
 from api.models import Job
+from api.prediction_engines.runtime_paths import (
+    DATA_PATHS,
+    PREDICTION_SCRIPTS,
+    PYTHON_PATHS,
+)
 from api.prediction_engines.subprocess_runner import run_prediction_subprocess
 from api.utils.convert_to_mol import convert_to_mol
 from webKinPred.settings import MEDIA_ROOT
-
-try:
-    from webKinPred.config_docker import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
-except ImportError:
-    try:
-        from webKinPred.config_local import DATA_PATHS, PREDICTION_SCRIPTS, PYTHON_PATHS
-    except ImportError:
-        PYTHON_PATHS = {}
-        PREDICTION_SCRIPTS = {}
-        DATA_PATHS = {}
 
 
 def run_generic_subprocess_prediction(
