@@ -90,7 +90,7 @@ export default function JobSubmissionForm() {
       {/* New Live Progress Overlay */}
       <LiveLogOverlay
         show={state.showLogOverlay}
-        done={!state.isValidating}
+        done={state.validationDone}
         logs={state.liveLogs}
         connected={state.streamConnected}
         autoScroll={state.autoScroll}

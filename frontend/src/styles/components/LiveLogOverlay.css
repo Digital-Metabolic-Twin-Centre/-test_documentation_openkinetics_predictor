@@ -90,6 +90,14 @@
   border-color: transparent;
   background: transparent;
 }
+.wkp-btn-primary {
+  border-color: rgba(120,255,179,0.4);
+  background: rgba(120,255,179,0.12);
+  color: #78ffb3;
+}
+.wkp-btn-primary:hover {
+  background: rgba(120,255,179,0.22);
+}
 
 .wkp-pill {
   font-size: 12px;
@@ -98,8 +106,9 @@
   border: 1px solid rgba(255,255,255,0.16);
   background: rgba(255,255,255,0.06);
 }
-.wkp-pill.ok { color: #78ffb3; }
+.wkp-pill.ok   { color: #78ffb3; }
 .wkp-pill.warn { color: #ffd78e; }
+.wkp-pill.done { color: #78ffb3; border-color: rgba(120,255,179,0.35); }
 
 .wkp-progress {
   height: 3px;
@@ -111,6 +120,12 @@
   width: 30%;
   background: linear-gradient(90deg, #7da2ff, #a077ff, #7da2ff);
   animation: wkp-progress 1.8s ease-in-out infinite;
+}
+.wkp-progress-bar.wkp-progress-done {
+  width: 100%;
+  animation: none;
+  background: #78ffb3;
+  opacity: 0.6;
 }
 @keyframes wkp-progress {
   0% { transform: translateX(-100%); }

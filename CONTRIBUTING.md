@@ -182,9 +182,25 @@ If your method uses PLM embeddings, read:
 
 It explains how to use the interface cache for fast inference on repeated sequences.
 
-## 5. Test Your Integration End-to-End
+## 5. Add MMseqs Similarity Dataset (Optional)
 
-Use:
+If you want to include your method's training data in the sequence-similarity validation, read:
+- [MMSEQS_SIMILARITY_DATASETS.md](MMSEQS_SIMILARITY_DATASETS.md)
+
+This includes:
+- reusing an existing dataset by extending its label (for example `DLKcat/UniKP/YourMethod`)
+- adding a new FASTA + DB dataset
+
+## 6. Test Your Integration End-to-End
+
+Setup:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+```
+
+Run:
 
 ```bash
 python tools/test_method_integration.py --method YourMethod
@@ -198,31 +214,6 @@ What it tests:
 - all targets your method supports (`kcat`, `Km`, and `both` when applicable)
 - optional DLKcat sanity check first
 
-Useful flags:
-
-```bash
-python tools/test_method_integration.py --method YourMethod --skip-dlkcat-sanity
-python tools/test_method_integration.py --method YourMethod --allow-empty-predictions
-python tools/test_method_integration.py --method YourMethod --keep-artifacts
-```
-
-## 6. Local Run Setup for Testing
-
-Use two Python runtimes:
-- Runner runtime: the Python you use for `manage.py` and `tools/test_method_integration.py`.
-- Method runtime: the interpreter referenced by `PYTHON_PATHS["YourMethod"]` in `webKinPred/config_local.py` (used by Path 1 subprocess methods).
-
-Runner runtime setup:
-
-```bash
-pip install -r requirements.txt
-python manage.py migrate
-```
-
-Then run:
-
-```bash
-python tools/test_method_integration.py --method YourMethod
-```
-
-If you use Path 1 (`subprocess=SubprocessEngineConfig(...)`), make sure `PYTHON_PATHS["YourMethod"]` points to a real env with your method dependencies installed.
+If you use Path 1 (`subprocess=SubprocessEngineConfig(...)`), do this before testing:
+- create/install your method environment
+- set `PYTHON_PATHS["YourMethod"]` in `webKinPred/config_local.py` to that environment's Python executable

@@ -17,11 +17,7 @@ from api.utils.similarity_utils import (
     cleanup_temporary_files,
 )
 from api.services.progress_service import push_line
-
-try:
-    from webKinPred.config_docker import TARGET_DBS
-except ImportError:
-    from webKinPred.config_local import TARGET_DBS
+from api.utils.similarity_config import SIMILARITY_DATASETS, TARGET_DBS
 
 
 def analyze_sequence_similarity(csv_file, session_id: str = "default") -> Dict[str, Any]:
@@ -56,17 +52,37 @@ def analyze_sequence_similarity(csv_file, session_id: str = "default") -> Dict[s
         
         # Process each target database
         method_histograms = {}
-        
-        for method, target_db in TARGET_DBS.items():
-            push_line(session_id, f"==> Processing DB: {method}")
+
+        datasets = SIMILARITY_DATASETS or {
+            label: {"label": label, "target_db": path}
+            for label, path in TARGET_DBS.items()
+        }
+
+        for _dataset_key, dataset in datasets.items():
+            label = dataset.get("label") or _dataset_key
+            target_db = dataset.get("target_db")
+            if not target_db:
+                push_line(session_id, f"[WARN] Skipping dataset '{label}' (missing target_db path)")
+                continue
+            if not (os.path.exists(target_db) or os.path.exists(f"{target_db}.dbtype")):
+                push_line(session_id, f"[WARN] Skipping dataset '{label}' (DB files not found)")
+                continue
+
+            push_line(session_id, f"==> Processing DB: {label}")
             
-            # Run similarity analysis for this method
+            # Run similarity analysis for this dataset
             method_result = analyze_similarity_for_method(
-                query_db, target_db, query_file_path, method, 
+                query_db, target_db, query_file_path, label,
                 input_sequences, seq_to_unique_id, session_id
             )
             
-            method_histograms[method] = method_result
+            method_histograms[label] = method_result
+
+        if not method_histograms:
+            raise ValueError(
+                "No similarity datasets are available. "
+                "Add a dataset in similarity config and build its MMseqs DB."
+            )
         
         return method_histograms
         

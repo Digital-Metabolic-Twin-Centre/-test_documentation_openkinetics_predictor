@@ -1,4 +1,5 @@
 import os
+from webKinPred.similarity_dataset_registry import SIMILARITY_DATASET_REGISTRY
 
 # Base paths for Docker container
 BASE_PATH = '/app'
@@ -38,12 +39,19 @@ PREDICTION_SCRIPTS = {
     'KinForm': '/app/api/KinForm/code/main.py',
 }
 
-# Target databases (adapted for Docker container)
-TARGET_DBS = {
-    "DLKcat/UniKP": "/app/fastas/dbs/targetdb_dlkcat",
-    "EITLEM/KinForm": "/app/fastas/dbs/targetdb_EITLEM", 
-    "TurNup": "/app/fastas/dbs/targetdb_turnup"
+# MMseqs similarity datasets (adapted for Docker container)
+FASTAS_DIR = "/app/fastas"
+SIMILARITY_DATASETS = {
+    label: {
+        "label": label,
+        "fasta": f"{FASTAS_DIR}/{meta['fasta_filename']}",
+        "target_db": f"{FASTAS_DIR}/dbs/{meta['db_name']}",
+    }
+    for label, meta in SIMILARITY_DATASET_REGISTRY.items()
 }
+
+# Backward-compatible shape used by existing similarity code paths.
+TARGET_DBS = {label: item["target_db"] for label, item in SIMILARITY_DATASETS.items()}
 
 # Other config variables
 # Set to None if mmseqs2 is installed directly on PATH (e.g. in Dockerfile.web).

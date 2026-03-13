@@ -44,6 +44,8 @@ export default function useJobSubmission() {
   const userCancelledRef = useRef(false);
   const [liveLogs, setLiveLogs] = useState([]);
   const [streamConnected, setStreamConnected] = useState(false);
+  const [showLogOverlay, setShowLogOverlay] = useState(false);
+  const [validationDone, setValidationDone] = useState(false);
   const eventSourceRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
@@ -161,11 +163,19 @@ export default function useJobSubmission() {
     return () => closeStream();
   }, []);
 
+  const closeLogOverlay = () => {
+    setShowLogOverlay(false);
+    setValidationDone(false);
+    closeStream();
+  };
+
   const runValidation = async () => {
     if (!csvFile) return;
     const sid = makeSessionId();
     setValidationSessionId(sid);
     userCancelledRef.current = false;
+    setValidationDone(false);
+    setShowLogOverlay(true);
     openStream(sid);
     setIsValidating(true);
 
@@ -192,14 +202,16 @@ export default function useJobSubmission() {
         alert('Validation failed. Please try again. ' + (err?.message || ''));
       }
     } finally {
-      setTimeout(() => closeStream(), 3500);
       setIsValidating(false);
+      setValidationDone(true);
+      setTimeout(() => closeStream(), 5000);
     }
   };
 
   const cancelValidation = async () => {
     if (!validationSessionId) {
       setIsValidating(false);
+      setShowLogOverlay(false);
       closeStream();
       return;
     }
@@ -208,6 +220,8 @@ export default function useJobSubmission() {
       await cancelValidationApi(validationSessionId);
     } catch { /* swallow */ }
     setIsValidating(false);
+    setValidationDone(false);
+    setShowLogOverlay(false);
     closeStream();
   };
 
@@ -275,6 +289,8 @@ export default function useJobSubmission() {
     // logs
     liveLogs,
     streamConnected,
+    showLogOverlay,
+    validationDone,
     autoScroll,
     setAutoScroll,
 
@@ -283,5 +299,6 @@ export default function useJobSubmission() {
     runValidation,
     submitJob,
     cancelValidation,
+    closeLogOverlay,
   };
 }

@@ -1,14 +1,6 @@
 import subprocess
 import os
-
-try:
-    from webKinPred.config_docker import (
-        TARGET_DBS,
-    )
-except ImportError:
-    from webKinPred.config_local import (
-        TARGET_DBS,
-    )
+from api.utils.similarity_config import TARGET_DBS
 from api.services.progress_service import (
     push_line,
     is_cancelled,

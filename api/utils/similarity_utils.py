@@ -8,11 +8,7 @@ import shutil
 from typing import List, Dict, Tuple, Any
 import pandas as pd
 from api.utils.run_and_stream import run_and_stream
-
-try:
-    from webKinPred.config_docker import CONDA_PATH, TARGET_DBS
-except ImportError:
-    from webKinPred.config_local import CONDA_PATH, TARGET_DBS
+from api.utils.similarity_config import CONDA_PATH
 
 TMP_DIR = os.environ.get("MMSEQS_TMP_DIR", "/tmp")
 
