@@ -1,17 +1,23 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import '../../../styles/components/LiveLogOverlay.css';
 
 export default function LiveLogOverlay({
   show,
+  done = false,
   logs = [],
   connected = false,
   autoScroll = true,
   setAutoScroll = () => {},
   onClose = null,
-  onCancel = null,      // NEW
+  onCancel = null,
   title = 'Validating Inputs and Running MMseqs2…',
 }) {
   const panelRef = useRef(null);
+  const logsRef = useRef(logs);
+  const [copyLabel, setCopyLabel] = useState('Copy');
+
+  // Keep logsRef current so the copy button always reads the latest logs.
+  logsRef.current = logs;
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -19,8 +25,19 @@ export default function LiveLogOverlay({
     if (el) el.scrollTop = el.scrollHeight;
   }, [logs, autoScroll]);
 
+  // Scroll to bottom when done so the last lines are visible.
+  useEffect(() => {
+    if (!done) return;
+    const el = panelRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [done]);
+
   const copyAll = async () => {
-    try { await navigator.clipboard.writeText(logs.join('\n')); } catch {}
+    try {
+      await navigator.clipboard.writeText(logsRef.current.join('\n'));
+      setCopyLabel('Copied!');
+      setTimeout(() => setCopyLabel('Copy'), 2000);
+    } catch {}
   };
 
   if (!show) return null;
@@ -40,24 +57,26 @@ export default function LiveLogOverlay({
             />
           </div>
 
-          <div className="wkp-title">{title}</div>
+          <div className="wkp-title">{done ? 'Done' : title}</div>
 
           <div className="wkp-actions">
-            <span className={`wkp-pill ${connected ? 'ok' : 'warn'}`}>
-              {connected ? 'Live' : 'Reconnecting…'}
+            <span className={`wkp-pill ${done ? 'done' : connected ? 'ok' : 'warn'}`}>
+              {done ? 'Done' : connected ? 'Live' : 'Reconnecting…'}
             </span>
-            <button className="wkp-btn" onClick={() => setAutoScroll(!autoScroll)}>
-              {autoScroll ? 'Pause Scroll' : 'Auto-scroll'}
-            </button>
-            <button className="wkp-btn" onClick={copyAll}>Copy</button>
-            {onClose && (
-              <button className="wkp-btn wkp-btn-ghost" onClick={onClose}>Hide</button>
+            {!done && (
+              <button className="wkp-btn" onClick={() => setAutoScroll(!autoScroll)}>
+                {autoScroll ? 'Pause Scroll' : 'Auto-scroll'}
+              </button>
+            )}
+            <button className="wkp-btn" onClick={copyAll}>{copyLabel}</button>
+            {done && onClose && (
+              <button className="wkp-btn wkp-btn-primary" onClick={onClose}>Close</button>
             )}
           </div>
         </div>
 
         <div className="wkp-progress">
-          <div className="wkp-progress-bar" />
+          <div className={`wkp-progress-bar${done ? ' wkp-progress-done' : ''}`} />
         </div>
 
         <div className="wkp-terminal" ref={panelRef} aria-live="polite">
@@ -78,7 +97,9 @@ export default function LiveLogOverlay({
 
         <div className="wkp-footer">
           <div className="wkp-note">
-            Please keep this tab open. This may take a few minutes for large inputs.
+            {done
+              ? 'Validation complete. Copy logs if needed, then close.'
+              : 'Please keep this tab open. This may take a few minutes for large inputs.'}
           </div>
         </div>
       </div>
