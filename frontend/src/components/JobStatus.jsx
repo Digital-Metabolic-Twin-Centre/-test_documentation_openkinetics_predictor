@@ -252,6 +252,29 @@ function JobStatus() {
     return parts.join('\n\n');
   }, [jobStatus]);
 
+  const failedMessage = useMemo(() => {
+    if (jobStatus?.status !== 'Failed') return null;
+
+    const candidates = [
+      jobStatus?.error_message,
+      jobStatus?.error,
+      jobStatus?.message,
+      jobStatus?.detail,
+      jobStatus?.failure_reason,
+    ];
+
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim()) {
+        return sanitiseErrorForUser(value.trim());
+      }
+      if (Array.isArray(value) && value.length > 0) {
+        return sanitiseErrorForUser(value.map(String).join('\n'));
+      }
+    }
+
+    return sanitiseErrorForUser('');
+  }, [jobStatus]);
+
   return (
     <Container className="mt-5 pb-5">
       <Row className="justify-content-center">
