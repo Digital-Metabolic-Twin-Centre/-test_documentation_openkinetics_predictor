@@ -68,6 +68,14 @@ CONFIG_MAP = {
     "UniKP":     CONFIG_UniKP,
 }
 
+
+def _first_present(mapping: dict, *keys: str):
+    """Return the first present/non-empty value from mapping for any key in keys."""
+    for key in keys:
+        if key in mapping and mapping[key] not in (None, ""):
+            return mapping[key]
+    return None
+
 def compute_embeddings(sequences: List[str]) -> Tuple[Dict[str, bool], Dict[str, str]]:
     """
     Input:
@@ -135,12 +143,30 @@ def load_kcat(data_path: Path | None = None) -> Tuple[np.ndarray, np.ndarray, np
     if "value" not in raw[0]: # no target values provided
         for entry in raw:
             entry["value"] = None
-        valid = [(r["sequence"], r["smiles"]) for r in raw if len(r["sequence"]) <= 1499]
+        valid = []
+        for r in raw:
+            seq = _first_present(r, "sequence", "Sequence", "Protein Sequence")
+            smi = _first_present(r, "smiles", "Smiles", "Substrate")
+            if seq is None or smi is None:
+                continue
+            if len(seq) <= 1499:
+                valid.append((seq, smi))
+        if not valid:
+            raise ValueError("No valid kcat rows found in input data.")
         seqs, smis = zip(*valid)
         y = None
     else:
-        valid = [(r["sequence"], r["smiles"], float(r["value"]))
-                for r in raw if len(r["sequence"]) <= 1499 and float(r["value"]) > 0]
+        valid = []
+        for r in raw:
+            seq = _first_present(r, "sequence", "Sequence", "Protein Sequence")
+            smi = _first_present(r, "smiles", "Smiles", "Substrate")
+            val = _first_present(r, "value", "kcat", "kcat_value")
+            if seq is None or smi is None or val is None:
+                continue
+            if len(seq) <= 1499 and float(val) > 0:
+                valid.append((seq, smi, float(val)))
+        if not valid:
+            raise ValueError("No valid kcat rows with positive target values found in input data.")
         seqs, smis, y = zip(*valid) 
         y = np.array([math.log(v, 10) for v in y], dtype=np.float32) 
     emb_computed, reasons = compute_embeddings(list(seqs))
@@ -163,12 +189,30 @@ def load_km(data_path: Path | None = None) -> Tuple[np.ndarray, np.ndarray, np.n
     if "log10_KM" not in raw[0]:
         for entry in raw:
             entry["log10_KM"] = None
-        valid = [(r["Sequence"], r["smiles"]) for r in raw if len(r["Sequence"]) <= 1499]
+        valid = []
+        for r in raw:
+            seq = _first_present(r, "Sequence", "sequence", "Protein Sequence")
+            smi = _first_present(r, "smiles", "Smiles", "Substrate")
+            if seq is None or smi is None:
+                continue
+            if len(seq) <= 1499:
+                valid.append((seq, smi))
+        if not valid:
+            raise ValueError("No valid KM rows found in input data.")
         seqs, smis = zip(*valid)
         y = None
     else:
-        valid = [(r["Sequence"], r["smiles"], float(r["log10_KM"]))
-                for r in raw if len(r["Sequence"]) <= 1499 and "." not in r["smiles"]]
+        valid = []
+        for r in raw:
+            seq = _first_present(r, "Sequence", "sequence", "Protein Sequence")
+            smi = _first_present(r, "smiles", "Smiles", "Substrate")
+            log10_km = _first_present(r, "log10_KM", "log10_km", "KM", "km_value")
+            if seq is None or smi is None or log10_km is None:
+                continue
+            if len(seq) <= 1499 and "." not in smi:
+                valid.append((seq, smi, float(log10_km)))
+        if not valid:
+            raise ValueError("No valid KM rows with target values found in input data.")
         seqs, smis, y = zip(*valid)
         y = np.array(y, dtype=np.float32)
     emb_computed, reasons = compute_embeddings(list(seqs))

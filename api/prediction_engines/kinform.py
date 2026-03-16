@@ -136,7 +136,7 @@ def kinform_predictions(
     # ── Write JSON input file (KinForm expects JSON, not CSV) ─────────────────
     try:
         json_input = [
-            {"smiles": smiles, "sequence": seq}
+            {"smiles": smiles, "sequence": seq, "Sequence": seq}
             for smiles, seq in zip(valid_smiles, valid_sequences)
         ]
         with open(input_file, "w") as f:
