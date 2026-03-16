@@ -6,6 +6,7 @@ import numpy as np
 import re
 import pickle
 import gc
+import warnings
 from build_vocab import WordVocab
 from pretrain_trfm import TrfmSeq2seq
 from utils import split
@@ -14,6 +15,11 @@ from transformers.utils import logging
 import subprocess
 
 logging.set_verbosity_error()
+warnings.filterwarnings(
+    "ignore",
+    message=r"Trying to unpickle estimator .*",
+    category=UserWarning,
+)
 
 # Use environment variables to determine paths
 if os.environ.get("UNIKP_MEDIA_PATH"):
