@@ -68,9 +68,10 @@ services:
       start_period: 60s
 
   celery:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
+    image: webkinpred-worker:latest
     volumes:
       - ./media:/app/media
       - ./db.sqlite3:/app/db.sqlite3
