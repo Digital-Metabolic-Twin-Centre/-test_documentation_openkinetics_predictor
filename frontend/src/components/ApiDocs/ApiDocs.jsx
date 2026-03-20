@@ -19,7 +19,7 @@ import EndpointCard from './EndpointCard';
 import TabbedCode from './TabbedCode';
 import ApiKeyManager from './ApiKeyManager';
 
-const BASE = 'https://kineticxpredictor.humanmetabolism.org/api/v1';
+const BASE = 'https://predictor.openkinetics.org/api/v1';
 
 // ---------------------------------------------------------------------------
 // Per-endpoint request examples

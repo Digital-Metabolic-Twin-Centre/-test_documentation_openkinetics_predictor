@@ -57,12 +57,18 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://kineticxpredictor.humanmetabolism.org",
+    "https://predictor.openkinetics.org",
+    "https://www.kineticxpredictor.humanmetabolism.org",
+    "https://www.predictor.openkinetics.org"
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173", 
     "https://kineticxpredictor.humanmetabolism.org",
+    "https://predictor.openkinetics.org",
+    "https://www.kineticxpredictor.humanmetabolism.org",
+    "https://www.predictor.openkinetics.org"
 ]
 
 CORS_ALLOW_CREDENTIALS = True

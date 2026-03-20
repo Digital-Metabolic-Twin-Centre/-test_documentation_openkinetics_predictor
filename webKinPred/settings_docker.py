@@ -16,6 +16,8 @@ STATIC_ROOT = '/app/staticfiles'
 ALLOWED_HOSTS = [
     "kineticxpredictor.humanmetabolism.org", 
     "www.kineticxpredictor.humanmetabolism.org",  # Add www subdomain
+    "predictor.openkinetics.org",
+    "www.predictor.openkinetics.org",  # Add www subdomain
     "127.0.0.1", 
     "localhost",
     "backend",  # Docker service name
@@ -38,6 +40,9 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000", 
     "http://127.0.0.1:3000",
     "https://kineticxpredictor.humanmetabolism.org",
+    "https://predictor.openkinetics.org"
+    "https://www.kineticxpredictor.humanmetabolism.org",
+    "https://www.predictor.openkinetics.org"
 ]
 
 # Redis configuration for Docker
