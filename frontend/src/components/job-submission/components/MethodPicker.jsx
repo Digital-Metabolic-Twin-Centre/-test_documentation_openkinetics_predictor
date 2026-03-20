@@ -39,18 +39,18 @@ export default function MethodPicker({
         <Row>
           {visibleTargets.map((target) => (
             <Col key={target} md={visibleTargets.length > 1 ? 6 : 12} className="mb-3">
-              <div className={`kave-select-wrapper ${targetMethods[target] ? 'is-selected' : ''}`}>
-                <Form.Group controlId={`method-${target.replace('/', '-')}`} className="h-100">
-                  <Form.Label className="mb-2">
-                    Method for {TARGET_LABELS[target]}
-                  </Form.Label>
-                  <Form.Control
-                    as="select"
+              <Form.Group controlId={`method-${target.replace('/', '-')}`} className="method-picker-group">
+                <Form.Label className="method-picker-label">
+                  Method for {TARGET_LABELS[target]}
+                </Form.Label>
+                <div className={`kave-select-wrapper ${targetMethods[target] ? 'is-selected' : ''}`}>
+                  <Form.Select
                     disabled={!csvFormatInfo?.csv_type}
                     value={targetMethods[target] || ''}
                     onChange={(e) => setTargetMethod(target, e.target.value)}
-                    className="kave-select h-100"
+                    className="kave-select"
                     required
+                    aria-label={`Method for ${TARGET_LABELS[target]}`}
                   >
                     <option value="">Select method...</option>
                     {(allowedMethodsByTarget[target] || []).map((key) => (
@@ -58,9 +58,9 @@ export default function MethodPicker({
                         {methodLabel(key)}
                       </option>
                     ))}
-                  </Form.Control>
-                </Form.Group>
-              </div>
+                  </Form.Select>
+                </div>
+              </Form.Group>
               {targetMethods[target] && (
                 <MethodDetails methodKey={targetMethods[target]} methods={methods} citationOnly />
               )}
