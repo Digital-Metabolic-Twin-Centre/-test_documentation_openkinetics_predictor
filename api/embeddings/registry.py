@@ -66,10 +66,10 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
         "implemented": True,
         "conda_env": "prot_t5",
         "python_path_key": "t5",
-        "used_by": ["KinForm-H", "KinForm-L"],
+        "used_by": ["KinForm-H", "KinForm-L", "CataPro"],
         "notes": (
             "Invoked as a subprocess by KinForm via KINFORM_T5_PATH.  "
-            "UniKP also uses ProtT5 internally within its own conda env."
+            "UniKP and CataPro also use ProtT5 internally."
         ),
     },
 

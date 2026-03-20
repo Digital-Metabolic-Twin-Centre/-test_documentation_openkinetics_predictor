@@ -14,7 +14,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
-from api.models import ApiKey
+from api.models import ApiKey, generate_api_key
 from api.utils.quotas import get_client_ip, get_or_create_user
 
 
@@ -70,7 +70,16 @@ def api_key_generate(request):
             status=409,
         )
 
-    api_key = ApiKey.objects.create(user=user, label="Self-service (web)")
+    # OneToOneField means only one row per user can ever exist. If a revoked key
+    # exists, reactivate it with a fresh token rather than trying to create a new row.
+    try:
+        api_key = ApiKey.objects.get(user=user)
+        api_key.key = generate_api_key()
+        api_key.is_active = True
+        api_key.label = "Self-service (web)"
+        api_key.save(update_fields=["key", "is_active", "label"])
+    except ApiKey.DoesNotExist:
+        api_key = ApiKey.objects.create(user=user, label="Self-service (web)")
 
     return JsonResponse({
         "key": api_key.key,

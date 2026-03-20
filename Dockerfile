@@ -108,6 +108,15 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     && conda run -n unikp pip install accelerate \
     && conda clean -afy
 
+# ── CataPro ───────────────────────────────────────────────────────────────────
+COPY docker-requirements/catapro_requirements.txt ./docker-requirements/
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    --mount=type=cache,id=webkinpred-pip-worker-py310,target=/root/.cache/pip,sharing=locked \
+    mamba create -n catapro_env python=3.10.15 -c conda-forge -y \
+    && mamba install -n catapro_env -c conda-forge rdkit=2024.03.6 -y \
+    && conda run -n catapro_env pip install -r docker-requirements/catapro_requirements.txt \
+    && conda clean -afy
+
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     --mount=type=cache,id=webkinpred-pip-worker-py37,target=/root/.cache/pip,sharing=locked \
     mamba create -n pseq2sites python=3.7.12 -c conda-forge -y \

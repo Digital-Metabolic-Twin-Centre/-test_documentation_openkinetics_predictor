@@ -10,6 +10,9 @@ import {
   cancelValidationApi
 } from '../services/api';
 
+const TARGET_ORDER = ['kcat', 'Km', 'kcat/Km'];
+const makeEmptyMethods = () => ({ kcat: '', Km: '', 'kcat/Km': '' });
+
 function makeSessionId() {
   return 'vs_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
@@ -23,9 +26,8 @@ export default function useJobSubmission() {
   const [showValidationResults, setShowValidationResults] = useState(false);
 
   // Domain state
-  const [predictionType, setPredictionType] = useState('');
-  const [kcatMethod, setKcatMethod] = useState('');
-  const [kmMethod, setKmMethod] = useState('');
+  const [selectedTargets, setSelectedTargets] = useState([]);
+  const [targetMethods, setTargetMethods] = useState(makeEmptyMethods());
   const [csvFile, setCsvFile] = useState(null);
   const [fileName, setFileName] = useState('No file chosen');
   const [useExperimental, setUseExperimental] = useState(false);
@@ -49,9 +51,7 @@ export default function useJobSubmission() {
   const eventSourceRef = useRef(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // ── Method registry (fetched once from the backend) ────────────────────────
-  // `methods` is a plain object keyed by method key, e.g.:
-  //   { DLKcat: { supports: ["kcat"], inputFormat: "single", ... }, ... }
+  // Method registry (fetched once from the backend)
   const [methods, setMethods] = useState(null);
 
   useEffect(() => {
@@ -62,34 +62,64 @@ export default function useJobSubmission() {
       });
   }, []);
 
-  // ── Allowed methods derived from CSV format and registry ──────────────────
+  const orderedTargets = useMemo(
+    () => TARGET_ORDER.filter((target) => selectedTargets.includes(target)),
+    [selectedTargets]
+  );
 
-  /** Methods that support kcat and match the detected CSV input format. */
-  const allowedKcatMethods = useMemo(() => {
-    if (!csvFormatInfo?.csv_type || !methods) return [];
-    return Object.entries(methods)
-      .filter(([, m]) => m.supports.includes('kcat') && m.inputFormat === csvFormatInfo.csv_type)
-      .map(([key]) => key);
+  const selectedMethodsPayload = useMemo(() => {
+    const out = {};
+    for (const target of orderedTargets) {
+      if (targetMethods[target]) out[target] = targetMethods[target];
+    }
+    return out;
+  }, [orderedTargets, targetMethods]);
+
+  const allSelectedTargetsHaveMethods = useMemo(
+    () => orderedTargets.every((target) => Boolean(targetMethods[target])),
+    [orderedTargets, targetMethods]
+  );
+
+  // Allowed methods derived from CSV format and registry.
+  // For multi-substrate CSV we allow both multi and single input-format methods
+  // because backend bridge mode can explode "Substrates" for single-substrate methods.
+  const allowedMethodsByTarget = useMemo(() => {
+    const out = { kcat: [], Km: [], 'kcat/Km': [] };
+    if (!methods || !csvFormatInfo?.csv_type) return out;
+
+    const isSingleCsv = csvFormatInfo.csv_type === 'single';
+    const canUseMethod = (methodMeta) => (isSingleCsv ? methodMeta.inputFormat === 'single' : true);
+
+    for (const target of TARGET_ORDER) {
+      out[target] = Object.entries(methods)
+        .filter(([, meta]) => meta.supports.includes(target) && canUseMethod(meta))
+        .map(([key]) => key);
+    }
+    return out;
   }, [csvFormatInfo, methods]);
 
-  /** Methods that support Km (always single-substrate). */
-  const allowedKmMethods = useMemo(() => {
-    if (!methods) return [];
-    return Object.entries(methods)
-      .filter(([, m]) => m.supports.includes('Km'))
-      .map(([key]) => key);
-  }, [methods]);
-
-  // ── Event handlers ────────────────────────────────────────────────────────
-
+  // Event handlers
   const resetMethods = () => {
-    setKcatMethod('');
-    setKmMethod('');
+    setTargetMethods(makeEmptyMethods());
   };
 
-  const onChangePredictionType = (val) => {
-    setPredictionType(val);
-    resetMethods();
+  const onChangeTargets = (nextTargets) => {
+    const ordered = TARGET_ORDER.filter((target) => nextTargets.includes(target));
+    setSelectedTargets(ordered);
+    setTargetMethods((prev) => {
+      const next = { ...prev };
+      for (const target of TARGET_ORDER) {
+        if (!ordered.includes(target)) next[target] = '';
+      }
+      return next;
+    });
+    setSimilarityData(null);
+    setSubmissionResult(null);
+    setShowValidationResults(false);
+  };
+
+  const onMethodChange = (target, methodKey) => {
+    setTargetMethods((prev) => ({ ...prev, [target]: methodKey }));
     setSimilarityData(null);
     setSubmissionResult(null);
     setShowValidationResults(false);
@@ -147,8 +177,6 @@ export default function useJobSubmission() {
       setLiveLogs((prev) => [...prev, evt.data]);
     };
     es.addEventListener('done', () => {
-      // Server signals the session is complete — close immediately so the
-      // browser does not auto-reconnect and replay the log list again.
       es.close();
       eventSourceRef.current = null;
       setStreamConnected(false);
@@ -189,9 +217,8 @@ export default function useJobSubmission() {
     try {
       const validation = await validateCsv({
         file: csvFile,
-        predictionType,
-        kcatMethod,
-        kmMethod,
+        targets: orderedTargets,
+        methods: selectedMethodsPayload,
       });
       const { invalid_substrates, invalid_proteins, length_violations } = validation;
       const simPromise = fetchSequenceSimilaritySummary({
@@ -234,13 +261,17 @@ export default function useJobSubmission() {
   };
 
   const submitJob = async () => {
-    if (!csvFile) return;
+    if (!csvFile || orderedTargets.length === 0) return;
+    if (!allSelectedTargetsHaveMethods) {
+      alert('Please select one method for each chosen target before submitting.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const data = await submitJobApi({
-        predictionType,
-        kcatMethod,
-        kmMethod,
+        targets: orderedTargets,
+        methods: selectedMethodsPayload,
         file: csvFile,
         handleLongSequences: handleLongSeqs,
         useExperimental,
@@ -270,12 +301,11 @@ export default function useJobSubmission() {
     showValidationResults,
     setShowValidationResults,
 
-    predictionType,
-    setPredictionType: onChangePredictionType,
-    kcatMethod,
-    setKcatMethod,
-    kmMethod,
-    setKmMethod,
+    selectedTargets,
+    setSelectedTargets: onChangeTargets,
+    targetMethods,
+    setTargetMethod: onMethodChange,
+    allSelectedTargetsHaveMethods,
     csvFile,
     fileName,
     csvFormatInfo,
@@ -291,8 +321,7 @@ export default function useJobSubmission() {
 
     // registry-derived method lists
     methods,
-    allowedKcatMethods,
-    allowedKmMethods,
+    allowedMethodsByTarget,
 
     // logs
     liveLogs,

@@ -30,6 +30,7 @@ PYTHON_PATHS = {
     "EITLEM": _env_python("eitlem_env"),
     "TurNup": _env_python("turnup_env"),
     "UniKP": _env_python("unikp"),
+    "CataPro": _env_python("catapro_env"),
     "KinForm": _env_python("kinform_env"),
     "esm2": _env_python("esm"),
     "esmc": _env_python("esmc"),

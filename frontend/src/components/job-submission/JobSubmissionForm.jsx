@@ -22,11 +22,11 @@ export default function JobSubmissionForm() {
           <HowToUseCard methods={state.methods || {}} />
 
           <PredictionTypeSelect
-            value={state.predictionType}
-            onChange={state.setPredictionType}
+            value={state.selectedTargets}
+            onChange={state.setSelectedTargets}
           />
 
-          {state.predictionType && (
+          {state.selectedTargets.length > 0 && (
             <CsvUpload
               csvFormatValid={state.csvFormatValid}
               csvFormatInfo={state.csvFormatInfo}
@@ -49,21 +49,19 @@ export default function JobSubmissionForm() {
             />
           )}
 
-          {state.predictionType && state.csvFile && state.csvFormatValid && (
+          {state.selectedTargets.length > 0 && state.csvFile && state.csvFormatValid && (
             <MethodPicker
-              predictionType={state.predictionType}
-              allowedKcatMethods={state.allowedKcatMethods}
-              allowedKmMethods={state.allowedKmMethods}
+              selectedTargets={state.selectedTargets}
+              allowedMethodsByTarget={state.allowedMethodsByTarget}
               methods={state.methods}
-              kcatMethod={state.kcatMethod}
-              setKcatMethod={state.setKcatMethod}
-              kmMethod={state.kmMethod}
-              setKmMethod={state.setKmMethod}
+              targetMethods={state.targetMethods}
+              setTargetMethod={state.setTargetMethod}
               csvFormatInfo={state.csvFormatInfo}
               useExperimental={state.useExperimental}
               setUseExperimental={state.setUseExperimental}
               onSubmit={state.submitJob}
               isSubmitting={state.isSubmitting}
+              allSelectedTargetsHaveMethods={state.allSelectedTargetsHaveMethods}
             />
           )}
 

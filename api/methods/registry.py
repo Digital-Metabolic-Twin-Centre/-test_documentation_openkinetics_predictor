@@ -87,7 +87,7 @@ def methods_supporting(target: str) -> list["MethodDescriptor"]:
     Parameters
     ----------
     target : str
-        ``"kcat"`` or ``"Km"``.
+        ``"kcat"``, ``"Km"``, or ``"kcat/Km"``.
     """
     _load()
     return [desc for desc in _REGISTRY.values() if target in desc.supports]

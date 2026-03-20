@@ -20,7 +20,7 @@ descriptor = MethodDescriptor(
     citation_url="https://doi.org/...",
     repo_url="https://github.com/...",
 
-    supports=["kcat"],                 # ["kcat"], ["Km"], or ["kcat", "Km"]
+    supports=["kcat"],                 # e.g. ["kcat"], ["Km"], ["kcat/Km"], or combinations
     input_format="single",             # "single" or "multi"
     output_cols={"kcat": "kcat (1/s)"},
     max_seq_len=1024,
@@ -212,7 +212,7 @@ What it tests:
 - descriptor validity (runnable config checks)
 - direct prediction execution through backend task helpers
 - output CSV generation and output-shape checks
-- all targets your method supports (`kcat`, `Km`, and `both` when applicable)
+- all targets your method supports (`kcat`, `Km`, and/or `kcat/Km`)
 - optional DLKcat sanity check first
 
 If you use Path 1 (`subprocess=SubprocessEngineConfig(...)`), do this before testing:

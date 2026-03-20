@@ -5,37 +5,30 @@ import MethodDetails from './MethodDetails';
 import ExperimentalSwitch from './ExperimentalSwitch';
 import '../../../styles/components/PredictionTypeSelect.css';
 
-/**
- * Method selection card shown after the user uploads a valid CSV file.
- *
- * Both the kcat method dropdown and the KM method dropdown are populated from
- * the backend registry (passed down via `allowedKcatMethods`, `allowedKmMethods`,
- * and `methods`).  No method names are hardcoded here.
- */
+const TARGET_ORDER = ['kcat', 'Km', 'kcat/Km'];
+
+const TARGET_LABELS = {
+  kcat: 'kcat',
+  Km: 'KM',
+  'kcat/Km': 'kcat/Km',
+};
+
 export default function MethodPicker({
-  predictionType,
-  allowedKcatMethods,
-  allowedKmMethods,
+  selectedTargets,
+  allowedMethodsByTarget,
   methods,
-  kcatMethod,
-  setKcatMethod,
-  kmMethod,
-  setKmMethod,
+  targetMethods,
+  setTargetMethod,
   csvFormatInfo,
   useExperimental,
   setUseExperimental,
   onSubmit,
   isSubmitting,
+  allSelectedTargetsHaveMethods,
 }) {
-  const showKcat = predictionType === 'kcat' || predictionType === 'both';
-  const showKm = predictionType === 'Km' || predictionType === 'both';
+  const visibleTargets = TARGET_ORDER.filter((target) => selectedTargets.includes(target));
 
-  /**
-   * Return the label shown in the dropdown for a given method key.
-   * Falls back to the key itself if the registry hasn't loaded yet.
-   */
-  const methodLabel = (key) =>
-    methods?.[key]?.displayName ?? key;
+  const methodLabel = (key) => methods?.[key]?.displayName ?? key;
 
   return (
     <Card className="section-container section-method-selection mb-4">
@@ -44,20 +37,23 @@ export default function MethodPicker({
       </Card.Header>
       <Card.Body>
         <Row>
-          {showKcat && (
-            <Col md={showKm ? 6 : 12} className="mb-3 mb-md-0">
-              <div className={`kave-select-wrapper ${kcatMethod ? 'is-selected' : ''}`}>
-                <Form.Group controlId="kcatMethod" className="h-100">
+          {visibleTargets.map((target) => (
+            <Col key={target} md={visibleTargets.length > 1 ? 6 : 12} className="mb-3">
+              <div className={`kave-select-wrapper ${targetMethods[target] ? 'is-selected' : ''}`}>
+                <Form.Group controlId={`method-${target.replace('/', '-')}`} className="h-100">
+                  <Form.Label className="mb-2">
+                    Method for {TARGET_LABELS[target]}
+                  </Form.Label>
                   <Form.Control
                     as="select"
                     disabled={!csvFormatInfo?.csv_type}
-                    value={kcatMethod}
-                    onChange={(e) => setKcatMethod(e.target.value)}
+                    value={targetMethods[target] || ''}
+                    onChange={(e) => setTargetMethod(target, e.target.value)}
                     className="kave-select h-100"
                     required
                   >
-                    <option value="">Select kcat method...</option>
-                    {allowedKcatMethods.map((key) => (
+                    <option value="">Select method...</option>
+                    {(allowedMethodsByTarget[target] || []).map((key) => (
                       <option key={key} value={key}>
                         {methodLabel(key)}
                       </option>
@@ -65,48 +61,21 @@ export default function MethodPicker({
                   </Form.Control>
                 </Form.Group>
               </div>
-              {kcatMethod && (
-                <MethodDetails methodKey={kcatMethod} methods={methods} citationOnly />
+              {targetMethods[target] && (
+                <MethodDetails methodKey={targetMethods[target]} methods={methods} citationOnly />
               )}
             </Col>
-          )}
-
-          {showKm && (
-            <Col md={showKcat ? 6 : 12}>
-              <div className={`kave-select-wrapper ${kmMethod ? 'is-selected' : ''}`}>
-                <Form.Group controlId="kmMethod" className="h-100">
-                  <Form.Control
-                    as="select"
-                    value={kmMethod}
-                    disabled={!csvFormatInfo?.csv_type}
-                    onChange={(e) => setKmMethod(e.target.value)}
-                    className="kave-select h-100"
-                    required
-                  >
-                    <option value="">Select KM method...</option>
-                    {allowedKmMethods.map((key) => (
-                      <option key={key} value={key}>
-                        {methodLabel(key)}
-                      </option>
-                    ))}
-                  </Form.Control>
-                </Form.Group>
-              </div>
-              {kmMethod && (
-                <MethodDetails methodKey={kmMethod} methods={methods} citationOnly />
-              )}
-            </Col>
-          )}
+          ))}
         </Row>
       </Card.Body>
 
-      {(kcatMethod || kmMethod) && (
+      {visibleTargets.length > 0 && (
         <Card.Footer className="d-flex justify-content-end align-items-center">
           <ExperimentalSwitch checked={useExperimental} onChange={setUseExperimental} />
           <Button
             className="kave-btn ms-3"
             onClick={onSubmit}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !allSelectedTargetsHaveMethods}
           >
             {isSubmitting ? 'Submitting…' : 'Submit Job'}
           </Button>
@@ -117,17 +86,15 @@ export default function MethodPicker({
 }
 
 MethodPicker.propTypes = {
-  predictionType: PropTypes.string.isRequired,
-  allowedKcatMethods: PropTypes.arrayOf(PropTypes.string).isRequired,
-  allowedKmMethods: PropTypes.arrayOf(PropTypes.string).isRequired,
+  selectedTargets: PropTypes.arrayOf(PropTypes.string).isRequired,
+  allowedMethodsByTarget: PropTypes.object.isRequired,
   methods: PropTypes.object,
-  kcatMethod: PropTypes.string.isRequired,
-  setKcatMethod: PropTypes.func.isRequired,
-  kmMethod: PropTypes.string.isRequired,
-  setKmMethod: PropTypes.func.isRequired,
+  targetMethods: PropTypes.object.isRequired,
+  setTargetMethod: PropTypes.func.isRequired,
   csvFormatInfo: PropTypes.object,
   useExperimental: PropTypes.bool.isRequired,
   setUseExperimental: PropTypes.func.isRequired,
   onSubmit: PropTypes.func.isRequired,
   isSubmitting: PropTypes.bool.isRequired,
+  allSelectedTargetsHaveMethods: PropTypes.bool.isRequired,
 };

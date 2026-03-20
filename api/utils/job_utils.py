@@ -1,6 +1,7 @@
 """
 Job-specific utility functions for job submission and management.
 """
+import json
 import os
 import pandas as pd
 from typing import Dict, List, Optional, Any
@@ -8,40 +9,80 @@ from django.conf import settings
 from django.utils import timezone
 from api.utils import get_experimental
 
+TARGET_ORDER = ["kcat", "Km", "kcat/Km"]
+VALID_TARGETS = set(TARGET_ORDER)
+
+
+def canonicalise_targets(targets: List[str]) -> List[str]:
+    """
+    Return deduplicated targets in canonical display/execution order.
+    """
+    out: List[str] = []
+    for target in TARGET_ORDER:
+        if target in targets and target not in out:
+            out.append(target)
+    return out
+
+
+def canonical_prediction_type(targets: List[str]) -> str:
+    """
+    Build a compact, human-readable prediction_type label for persisted jobs.
+    """
+    ordered = canonicalise_targets(targets)
+    return "+".join(ordered)
+
 
 def validate_prediction_parameters(
-    prediction_type: str,
-    kcat_method: Optional[str] = None,
-    km_method: Optional[str] = None,
+    targets: List[str],
+    methods: Dict[str, str],
 ) -> Optional[str]:
     """
-    Validate prediction type and method parameters against the registry.
+    Validate target and method parameters against the method registry.
 
     Returns an error message if validation fails, None if valid.
     """
     from api.methods.registry import all_methods
 
-    if prediction_type not in ("kcat", "Km", "both"):
-        return 'Invalid prediction type. Expected "kcat", "Km", or "both".'
+    if not isinstance(targets, list) or not targets:
+        return (
+            'Invalid targets. Expected a non-empty list with values from '
+            '"kcat", "Km", "kcat/Km".'
+        )
+
+    if not isinstance(methods, dict):
+        return (
+            'Invalid methods payload. Expected an object mapping target names '
+            "to method keys."
+        )
+
+    invalid_targets = [t for t in targets if t not in VALID_TARGETS]
+    if invalid_targets:
+        return (
+            "Invalid target(s): "
+            + ", ".join(map(str, invalid_targets))
+            + '. Allowed targets: "kcat", "Km", "kcat/Km".'
+        )
+
+    extra_method_keys = [k for k in methods.keys() if k not in VALID_TARGETS]
+    if extra_method_keys:
+        return (
+            "Invalid method mapping keys: "
+            + ", ".join(map(str, extra_method_keys))
+            + '. Allowed keys: "kcat", "Km", "kcat/Km".'
+        )
 
     registry = all_methods()
+    for target in canonicalise_targets(targets):
+        method_key = methods.get(target)
+        if not isinstance(method_key, str) or not method_key.strip():
+            return f"Missing method selection for target '{target}'."
 
-    if prediction_type in ("kcat", "both"):
-        desc = registry.get(kcat_method)
-        if desc is None or "kcat" not in desc.supports:
-            valid = sorted(k for k, d in registry.items() if "kcat" in d.supports)
+        desc = registry.get(method_key)
+        if desc is None or target not in desc.supports:
+            valid = sorted(k for k, d in registry.items() if target in d.supports)
             return (
-                f"Invalid kcat method '{kcat_method}'. "
-                f"Available kcat methods: {', '.join(valid)}."
-            )
-
-    if prediction_type in ("Km", "both"):
-        desc = registry.get(km_method)
-        if desc is None or "Km" not in desc.supports:
-            valid = sorted(k for k, d in registry.items() if "Km" in d.supports)
-            return (
-                f"Invalid KM method '{km_method}'. "
-                f"Available KM methods: {', '.join(valid)}."
+                f"Invalid method '{method_key}' for target '{target}'. "
+                f"Available {target} methods: {', '.join(valid)}."
             )
 
     return None
@@ -59,35 +100,83 @@ def validate_sequence_handling_option(handle_long_seq: str) -> Optional[str]:
 
 
 def determine_required_columns(
-    prediction_type: str,
-    kcat_method: Optional[str],
-    km_method: Optional[str],
+    targets: List[str],
+    methods: Dict[str, str],
 ) -> List[str]:
     """
-    Determine the CSV columns required for the given prediction parameters.
+    Determine strict required columns for the selected target/method set.
 
     The result always includes "Protein Sequence".  Additional columns are
-    derived from each method descriptor's col_to_kwarg mapping.
+    derived from each selected descriptor's col_to_kwarg mapping.
     """
     from api.methods.registry import get
 
     required: set[str] = {"Protein Sequence"}
 
-    if prediction_type in ("kcat", "both") and kcat_method:
+    for target in canonicalise_targets(targets):
+        method_key = methods.get(target)
+        if not method_key:
+            continue
         try:
-            desc = get(kcat_method)
-            required.update(desc.col_to_kwarg.keys())
-        except KeyError:
-            pass
-
-    if prediction_type in ("Km", "both") and km_method:
-        try:
-            desc = get(km_method)
+            desc = get(method_key)
             required.update(desc.col_to_kwarg.keys())
         except KeyError:
             pass
 
     return list(required)
+
+
+def validate_required_columns_for_methods(
+    dataframe: pd.DataFrame,
+    targets: List[str],
+    methods: Dict[str, str],
+) -> Optional[str]:
+    """
+    Validate CSV columns for selected methods with multi-substrate bridge support.
+
+    Methods requiring "Substrate" are considered valid when either:
+    - "Substrate" exists, or
+    - both "Substrates" and "Products" exist (bridge path).
+    """
+    from api.methods.registry import get
+
+    missing: set[str] = set()
+    if "Protein Sequence" not in dataframe.columns:
+        missing.add("Protein Sequence")
+
+    has_substrate = "Substrate" in dataframe.columns
+    has_multi = {"Substrates", "Products"}.issubset(set(dataframe.columns))
+    needs_single_substrate = False
+
+    for target in canonicalise_targets(targets):
+        method_key = methods.get(target)
+        if not method_key:
+            continue
+        try:
+            desc = get(method_key)
+        except KeyError:
+            continue
+
+        for col in desc.col_to_kwarg.keys():
+            if col == "Substrate":
+                needs_single_substrate = True
+                continue
+            if col not in dataframe.columns:
+                missing.add(col)
+
+    if needs_single_substrate and not (has_substrate or has_multi):
+        missing.add("Substrate")
+
+    if not missing:
+        return None
+
+    ordered = sorted(missing, key=lambda c: (c != "Protein Sequence", c))
+    if ordered == ["Substrate"]:
+        return (
+            "Missing required columns: Substrate (or provide both Substrates and "
+            "Products for multi-substrate bridge mode)."
+        )
+    return f'Missing required columns: {", ".join(ordered)}'
 
 
 def create_job_directory(public_id: str) -> str:
@@ -117,40 +206,51 @@ def save_job_input_file(file, job_dir: str) -> str:
 
 def get_experimental_results(
     use_experimental: bool,
-    kcat_method: Optional[str],
+    methods: Dict[str, str],
+    targets: List[str],
     dataframe: pd.DataFrame,
-    prediction_type: str,
-) -> Optional[list]:
+) -> Optional[Dict[str, list]]:
     """
     Look up experimental kinetic values when the user has opted in.
 
     Experimental lookup is skipped for multi-substrate methods (TurNup) since
     the experimental database is indexed by single substrates.
 
-    Returns a list of experimental result dicts, or None.
+    Returns a dict keyed by target ("kcat", "Km"), or None.
     """
     if not use_experimental:
         return None
 
-    # Skip for multi-substrate methods — the experimental DB only covers
-    # single-substrate reactions.
-    if kcat_method:
-        try:
-            from api.methods.registry import get
-            desc = get(kcat_method)
-            if desc.input_format == "multi":
-                return None
-        except KeyError:
-            pass
-
     if "Substrate" not in dataframe.columns:
         return None
 
-    return get_experimental.lookup_experimental(
-        dataframe["Protein Sequence"].tolist(),
-        dataframe["Substrate"].tolist(),
-        param_type=prediction_type,
-    )
+    selected = set(targets)
+    out: Dict[str, list] = {}
+
+    if "kcat" in selected:
+        kcat_method = methods.get("kcat")
+        if kcat_method:
+            try:
+                from api.methods.registry import get
+
+                desc = get(kcat_method)
+                if desc.input_format != "multi":
+                    out["kcat"] = get_experimental.lookup_experimental(
+                        dataframe["Protein Sequence"].tolist(),
+                        dataframe["Substrate"].tolist(),
+                        param_type="kcat",
+                    )
+            except KeyError:
+                pass
+
+    if "Km" in selected:
+        out["Km"] = get_experimental.lookup_experimental(
+            dataframe["Protein Sequence"].tolist(),
+            dataframe["Substrate"].tolist(),
+            param_type="Km",
+        )
+
+    return out or None
 
 
 def extract_job_parameters_from_request(request) -> Dict[str, Any]:
@@ -159,12 +259,36 @@ def extract_job_parameters_from_request(request) -> Dict[str, Any]:
 
     Returns a parameters dictionary used by process_job_submission_from_params.
     """
+    parse_error = ""
+    targets: Any = request.POST.get("targets", "[]")
+    methods: Any = request.POST.get("methods", "{}")
+
+    try:
+        if isinstance(targets, str):
+            targets = json.loads(targets) if targets.strip() else []
+    except json.JSONDecodeError:
+        parse_error = (
+            "Invalid 'targets' format. Expected a JSON array, for example: "
+            '["kcat", "Km"].'
+        )
+        targets = []
+
+    try:
+        if isinstance(methods, str):
+            methods = json.loads(methods) if methods.strip() else {}
+    except json.JSONDecodeError:
+        parse_error = (
+            "Invalid 'methods' format. Expected a JSON object, for example: "
+            '{"kcat":"DLKcat","Km":"UniKP"}.'
+        )
+        methods = {}
+
     return {
         "use_experimental": request.POST.get("useExperimental") == "true",
-        "prediction_type": request.POST.get("predictionType"),
-        "kcat_method": request.POST.get("kcatMethod"),
-        "km_method": request.POST.get("kmMethod"),
-        "handle_long_sequences": request.POST.get("handleLongSequences"),
+        "targets": targets if isinstance(targets, list) else [],
+        "methods": methods if isinstance(methods, dict) else {},
+        "handle_long_sequences": request.POST.get("handleLongSequences", "truncate"),
+        "_parse_error": parse_error,
     }
 
 

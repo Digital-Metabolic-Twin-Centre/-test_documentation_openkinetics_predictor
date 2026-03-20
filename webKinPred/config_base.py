@@ -15,6 +15,7 @@ _DATA_PATH_REL = {
     "EITLEM": "models/EITLEM",
     "TurNup": "models/TurNup/data",
     "UniKP": "models/UniKP-main",
+    "CataPro": "models/CataPro",
     "KinForm": "models/KinForm/results",
     "media": "media",
     "tools": "tools",
@@ -26,6 +27,7 @@ _PREDICTION_SCRIPT_REL = {
     "EITLEM": "models/EITLEM/Code/eitlem_prediction_script_batch.py",
     "TurNup": "models/TurNup/code/kcat_prediction_batch.py",
     "UniKP": "models/UniKP-main/run_unikp_batch.py",
+    "CataPro": "models/CataPro/inference/custom_predict.py",
     "KinForm": "models/KinForm/code/main.py",
 }
 

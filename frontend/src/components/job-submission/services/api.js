@@ -4,11 +4,13 @@ import apiClient from '../../appClient';
 /**
  * Fetch the full method registry from the backend.
  *
- * The API returns methods grouped by target: { kcat: [{id, ...}, ...], Km: [...] }.
+ * The API returns methods grouped by target:
+ * { kcat: [{id, ...}], Km: [{id, ...}], "kcat/Km": [{id, ...}] }.
  * This function flattens that into a plain object keyed by method id, e.g.:
  *   {
- *     "DLKcat": { id: "DLKcat", displayName, supports: ["kcat"], inputFormat: "single", ... },
- *     "UniKP":  { id: "UniKP",  supports: ["kcat", "Km"], ... },
+ *     "DLKcat":  { id: "DLKcat", displayName, supports: ["kcat"], ... },
+ *     "UniKP":   { id: "UniKP", supports: ["kcat", "Km"], ... },
+ *     "CataPro": { id: "CataPro", supports: ["kcat", "Km", "kcat/Km"], ... },
  *     ...
  *   }
  *
@@ -32,12 +34,11 @@ export async function detectCsvFormat(file) {
   return data;
 }
 
-export async function validateCsv({ file, predictionType, kcatMethod, kmMethod}) {
+export async function validateCsv({ file, targets, methods }) {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('predictionType', predictionType);
-  formData.append('kcatMethod', kcatMethod);
-  formData.append('kmMethod', kmMethod);
+  formData.append('targets', JSON.stringify(targets || []));
+  formData.append('methods', JSON.stringify(methods || {}));
   const { data } = await apiClient.post('/validate-input/', formData);
   return data;
 }
@@ -52,17 +53,15 @@ export async function fetchSequenceSimilaritySummary({ file, useExperimental, va
 }
 
 export async function submitJob({
-  predictionType,
-  kcatMethod,
-  kmMethod,
+  targets,
+  methods,
   file,
   handleLongSequences,
   useExperimental,
 }) {
   const formData = new FormData();
-  formData.append('predictionType', predictionType);
-  formData.append('kcatMethod', kcatMethod);
-  formData.append('kmMethod', kmMethod);
+  formData.append('targets', JSON.stringify(targets || []));
+  formData.append('methods', JSON.stringify(methods || {}));
   formData.append('file', file);
   formData.append('handleLongSequences', handleLongSequences);
   formData.append('useExperimental', useExperimental);

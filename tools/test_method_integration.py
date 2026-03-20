@@ -19,6 +19,7 @@ import argparse
 import os
 import shutil
 import sys
+import traceback
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ class Scenario:
     prediction_type: str
     kcat_method: str = ""
     km_method: str = ""
+    kcat_km_method: str = ""
 
 
 def _print_header(title: str) -> None:
@@ -97,7 +99,7 @@ def _assert_descriptor_is_runnable(desc) -> None:
         )
 
 
-def _build_scenarios(desc, include_both: bool) -> list[Scenario]:
+def _build_scenarios(desc) -> list[Scenario]:
     supports = set(desc.supports)
     scenarios: list[Scenario] = []
 
@@ -117,19 +119,18 @@ def _build_scenarios(desc, include_both: bool) -> list[Scenario]:
                 km_method=desc.key,
             )
         )
-    if include_both and {"kcat", "Km"}.issubset(supports):
+    if "kcat/Km" in supports:
         scenarios.append(
             Scenario(
-                name=f"{desc.key} / both",
-                prediction_type="both",
-                kcat_method=desc.key,
-                km_method=desc.key,
+                name=f"{desc.key} / kcat/Km",
+                prediction_type="kcat/Km",
+                kcat_km_method=desc.key,
             )
         )
 
     if not scenarios:
         raise IntegrationTestError(
-            f"Method '{desc.key}' supports neither kcat nor Km."
+            f"Method '{desc.key}' supports none of kcat/Km/kcat/Km."
         )
     return scenarios
 
@@ -138,6 +139,7 @@ def _make_job(
     prediction_type: str,
     kcat_method: str,
     km_method: str,
+    kcat_km_method: str,
     requested_rows: int,
 ):
     from api.models import Job
@@ -147,6 +149,7 @@ def _make_job(
         prediction_type=prediction_type,
         kcat_method=kcat_method or None,
         km_method=km_method or None,
+        kcat_km_method=kcat_km_method or None,
         status="Pending",
         handle_long_sequences="truncate",
         ip_address="127.0.0.1",
@@ -171,6 +174,7 @@ def _run_single_target_scenario(
         prediction_type=target,
         kcat_method=scenario.kcat_method,
         km_method=scenario.km_method,
+        kcat_km_method=scenario.kcat_km_method,
         requested_rows=len(input_df),
     )
 
@@ -186,44 +190,8 @@ def _run_single_target_scenario(
             experimental_results=[],
         )
     except Exception as e:
-        raise IntegrationTestError(
-            f"Execution failed for scenario [{scenario.name}]: {e}"
-        ) from e
-
-    output_path = job_dir / "output.csv"
-    if not output_path.exists():
-        raise IntegrationTestError(f"No output.csv produced for [{scenario.name}]")
-
-    return job, job_dir, pd.read_csv(output_path)
-
-
-def _run_both_scenario(
-    scenario: Scenario,
-    kcat_desc,
-    km_desc,
-    input_df: pd.DataFrame,
-):
-    from api.tasks import _execute_both_prediction
-
-    job, job_dir = _make_job(
-        prediction_type="both",
-        kcat_method=scenario.kcat_method,
-        km_method=scenario.km_method,
-        requested_rows=len(input_df),
-    )
-
-    input_path = job_dir / "input.csv"
-    input_df.to_csv(input_path, index=False)
-
-    try:
-        _execute_both_prediction(
-            job=job,
-            kcat_desc=kcat_desc,
-            km_desc=km_desc,
-            df=input_df.copy(),
-            experimental_results=[],
-        )
-    except Exception as e:
+        print(f"\n[ERROR] Full traceback for [{scenario.name}]:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
         raise IntegrationTestError(
             f"Execution failed for scenario [{scenario.name}]: {e}"
         ) from e
@@ -266,12 +234,15 @@ def _validate_output(
         if not km_cols:
             raise IntegrationTestError(f"Could not find Km column in [{scenario.name}]")
         target_cols = km_cols
-    elif scenario.prediction_type == "both":
-        if not kcat_cols or not km_cols:
+    elif scenario.prediction_type == "kcat/Km":
+        ratio_cols = [
+            c for c in output_df.columns if "kcat/km" in c.lower() or "kcat/ km" in c.lower()
+        ]
+        if not ratio_cols:
             raise IntegrationTestError(
-                f"Could not find both kcat and Km columns in [{scenario.name}]"
+                f"Could not find kcat/Km column in [{scenario.name}]"
             )
-        target_cols = [kcat_cols[0], km_cols[0]]
+        target_cols = ratio_cols
 
     if not allow_empty_predictions:
         non_empty = sum(_count_non_empty(output_df[col]) for col in target_cols)
@@ -301,11 +272,6 @@ def parse_args() -> argparse.Namespace:
         "--skip-dlkcat-sanity",
         action="store_true",
         help="Skip DLKcat sanity scenario.",
-    )
-    parser.add_argument(
-        "--skip-both-scenario",
-        action="store_true",
-        help="If method supports both, skip prediction_type='both' scenario.",
     )
     parser.add_argument(
         "--allow-empty-predictions",
@@ -365,9 +331,7 @@ def main() -> int:
         )
         print("Will run DLKcat sanity scenario first.")
 
-    for scenario in _build_scenarios(
-        method_desc, include_both=not args.skip_both_scenario
-    ):
+    for scenario in _build_scenarios(method_desc):
         scenarios.append((scenario, method_desc))
 
     _print_header("Running Scenarios")
@@ -377,19 +341,11 @@ def main() -> int:
             fixture_df = _build_fixture_df(desc, rows=args.rows)
             print(f"[START] {scenario.name}")
 
-            if scenario.prediction_type == "both":
-                job, job_dir, output_df = _run_both_scenario(
-                    scenario=scenario,
-                    kcat_desc=desc,
-                    km_desc=desc,
-                    input_df=fixture_df,
-                )
-            else:
-                job, job_dir, output_df = _run_single_target_scenario(
-                    scenario=scenario,
-                    desc=desc,
-                    input_df=fixture_df,
-                )
+            job, job_dir, output_df = _run_single_target_scenario(
+                scenario=scenario,
+                desc=desc,
+                input_df=fixture_df,
+            )
 
             created_jobs.append((job, job_dir))
             _validate_output(

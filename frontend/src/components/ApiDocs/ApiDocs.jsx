@@ -137,8 +137,8 @@ with open("input.csv", "rb") as f:
         headers=HEADERS,
         files={"file": f},
         data={
-            "predictionType":      "kcat",
-            "kcatMethod":          "DLKcat",
+            "targets":             '["kcat"]',
+            "methods":             '{"kcat":"DLKcat"}',
             "handleLongSequences": "truncate",
         },
     )
@@ -150,8 +150,8 @@ print(resp.json())`,
 `curl -X POST "${BASE}/submit/" \\
   -H "Authorization: Bearer ak_your_key_here" \\
   -F "file=@input.csv" \\
-  -F "predictionType=kcat" \\
-  -F "kcatMethod=DLKcat" \\
+  -F 'targets=["kcat"]' \\
+  -F 'methods={"kcat":"DLKcat"}' \\
   -F "handleLongSequences=truncate"`,
   },
 ];
@@ -228,8 +228,8 @@ with open("input.csv", "rb") as f:
         headers=HEADERS,
         files={"file": f},
         data={
-            "predictionType":      "kcat",
-            "kcatMethod":          "DLKcat",
+            "targets":             '["kcat"]',
+            "methods":             '{"kcat":"DLKcat"}',
             "handleLongSequences": "truncate",
             "useExperimental":     "true",
         },
@@ -273,8 +273,8 @@ BASE="${BASE}"
 JOB=$(curl -s -X POST "$BASE/submit/" \\
   -H "Authorization: Bearer $API_KEY" \\
   -F "file=@input.csv" \\
-  -F "predictionType=kcat" \\
-  -F "kcatMethod=DLKcat" \\
+  -F 'targets=["kcat"]' \\
+  -F 'methods={"kcat":"DLKcat"}' \\
   -F "handleLongSequences=truncate" \\
   -F "useExperimental=true")
 
@@ -310,8 +310,8 @@ response = requests.post(
     "${BASE}/submit/",
     headers=HEADERS,
     json={
-        "predictionType":      "kcat",
-        "kcatMethod":          "DLKcat",
+        "targets":             ["kcat"],
+        "methods":             {"kcat": "DLKcat"},
         "handleLongSequences": "truncate",
         "useExperimental":     True,
         "data": [
@@ -597,19 +597,14 @@ export default function ApiDocs() {
                     <td>A <code>.csv</code> file</td>
                   </tr>
                   <tr>
-                    <td><code>predictionType</code></td>
+                    <td><code>targets</code></td>
                     <td>Yes</td>
-                    <td><code>kcat</code> · <code>Km</code> · <code>both</code></td>
+                    <td>JSON array subset of <code>["kcat","Km","kcat/Km"]</code></td>
                   </tr>
                   <tr>
-                    <td><code>kcatMethod</code></td>
-                    <td>If predictionType is <code>kcat</code> or <code>both</code></td>
-                    <td><code>DLKcat</code> · <code>TurNup</code> · <code>EITLEM</code> · <code>UniKP</code> · <code>KinForm-H</code> · <code>KinForm-L</code></td>
-                  </tr>
-                  <tr>
-                    <td><code>kmMethod</code></td>
-                    <td>If predictionType is <code>Km</code> or <code>both</code></td>
-                    <td><code>EITLEM</code> · <code>UniKP</code> · <code>KinForm-H</code></td>
+                    <td><code>methods</code></td>
+                    <td>Yes</td>
+                    <td>JSON object mapping each selected target to a method key</td>
                   </tr>
                   <tr>
                     <td><code>handleLongSequences</code></td>

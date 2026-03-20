@@ -17,6 +17,7 @@ PYTHON_PATHS = {
     "EITLEM": "/opt/conda/envs/eitlem_env/bin/python",
     "TurNup": "/opt/conda/envs/turnup_env/bin/python",
     "UniKP": "/opt/conda/envs/unikp/bin/python",
+    "CataPro": "/opt/conda/envs/catapro_env/bin/python",
     "KinForm": "/opt/conda/envs/kinform_env/bin/python",
     "esm2": "/opt/conda/envs/esm/bin/python",
     "esmc": "/opt/conda/envs/esmc/bin/python",

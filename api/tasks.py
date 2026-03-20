@@ -8,7 +8,11 @@
 #       Used for single-target jobs (prediction_type = "kcat" or "Km").
 #
 #   run_both_prediction(public_id, kcat_key, km_key, experimental_results)
-#       Used for dual-target jobs (prediction_type = "both").
+#       Legacy dual-target helper kept for compatibility with internal tools.
+#       New submissions use run_multi_prediction.
+#
+#   run_multi_prediction(public_id, targets, methods, experimental_results)
+#       Used by the current submission flow for one or more selected targets.
 #
 # Both tasks delegate to internal helpers (_execute_prediction /
 # _execute_both_prediction) that contain the shared prediction logic.
@@ -31,6 +35,7 @@ from api.models import Job
 from api.prediction_engines.generic_subprocess import run_generic_subprocess_prediction
 from api.utils.extra_info import _source, build_extra_info
 from api.utils.handle_long import get_valid_indices, truncate_sequences
+from api.utils.job_utils import canonicalise_targets
 from api.utils.quotas import credit_back
 from api.utils.safe_read import safe_read_csv
 
@@ -149,6 +154,88 @@ def run_both_prediction(
 
     except Exception as e:
         label = f"{kcat_desc.display_name}/{km_desc.display_name}"
+        Job.objects.filter(pk=job.pk).update(
+            status="Failed",
+            error_message=_sanitise_unexpected(e, label),
+            completion_time=timezone.now(),
+        )
+
+
+@shared_task
+def run_multi_prediction(
+    public_id: str,
+    targets: list[str],
+    methods: dict[str, str],
+    experimental_results: dict | None = None,
+) -> None:
+    """
+    Run a multi-target prediction job.
+
+    Parameters
+    ----------
+    public_id : str
+        The job's public identifier.
+    targets : list[str]
+        Selected targets, subset of ``["kcat", "Km", "kcat/Km"]``.
+    methods : dict[str, str]
+        Mapping target -> method key.
+    experimental_results : dict | None
+        Optional pre-fetched experimental rows keyed by target.
+    """
+    job = Job.objects.get(public_id=public_id)
+    job.status = "Processing"
+    job.predictions_made = 0
+    job.total_predictions = 0
+    job.save(update_fields=["status", "predictions_made", "total_predictions"])
+
+    ordered_targets = canonicalise_targets(targets)
+    if not ordered_targets:
+        Job.objects.filter(pk=job.pk).update(
+            status="Failed",
+            error_message="No prediction targets were provided.",
+            completion_time=timezone.now(),
+        )
+        return
+
+    try:
+        desc_by_target = {
+            target: get_method(methods[target]) for target in ordered_targets
+        }
+    except Exception as e:
+        Job.objects.filter(pk=job.pk).update(
+            status="Failed",
+            error_message=f"Invalid method selection: {e}",
+            completion_time=timezone.now(),
+        )
+        return
+
+    try:
+        df = _load_input(job)
+        _execute_multi_prediction(
+            job=job,
+            targets=ordered_targets,
+            desc_by_target=desc_by_target,
+            df=df,
+            experimental_results=experimental_results or {},
+        )
+        Job.objects.filter(pk=job.pk).update(
+            status="Completed",
+            completion_time=timezone.now(),
+        )
+
+    except PredictionError as e:
+        Job.objects.filter(pk=job.pk).update(
+            status="Failed",
+            error_message=str(e),
+            completion_time=timezone.now(),
+        )
+
+    except MemoryError:
+        label = "/".join(desc.display_name for desc in desc_by_target.values())
+        _handle_oom(job, label)
+
+    except Exception as e:
+        label = "/".join(desc.display_name for desc in desc_by_target.values())
         Job.objects.filter(pk=job.pk).update(
             status="Failed",
             error_message=_sanitise_unexpected(e, label),
@@ -432,6 +519,214 @@ def _execute_both_prediction(
         & (results_df["KM (mM)"] != "")
         & results_df["KM (mM)"].notna()
     )
+    processed = int(fully_predicted.sum())
+    to_refund = max(0, int(job.requested_rows) - processed)
+    if to_refund > 0:
+        credit_back(job.ip_address, to_refund)
+
+    invalid_sorted = sorted(invalid_indices)
+    Job.objects.filter(pk=job.pk).update(
+        output_file=os.path.relpath(out_path, settings.MEDIA_ROOT),
+        error_message=(
+            f"Predictions could not be made for {len(invalid_sorted)} row(s): "
+            + ", ".join(map(str, invalid_sorted))
+            if invalid_sorted else ""
+        ),
+    )
+
+
+def _execute_multi_prediction(
+    job: Job,
+    targets: list[str],
+    desc_by_target: dict,
+    df: pd.DataFrame,
+    experimental_results: dict[str, list],
+) -> None:
+    """
+    Run one or more prediction targets and write a combined output.csv.
+
+    Targets are executed in canonical order and each contributes a column bundle:
+    prediction values + source + extra info.
+    """
+    sequences = df["Protein Sequence"].tolist()
+    n_rows = len(sequences)
+
+    limits = [min(SERVER_LIMIT, desc.max_seq_len) for desc in desc_by_target.values()]
+    limit = min(limits) if limits else SERVER_LIMIT
+
+    if job.handle_long_sequences == "truncate":
+        sequences_proc, valid_idx = truncate_sequences(sequences, limit)
+    else:
+        valid_idx = get_valid_indices(sequences, limit, mode="skip")
+        sequences_proc = [sequences[i] for i in valid_idx]
+
+    valid_idx_to_pos: dict[int, int] = {
+        global_i: pos for pos, global_i in enumerate(valid_idx)
+    }
+    invalid_indices: set[int] = set(range(n_rows)) - set(valid_idx)
+
+    target_results: dict[str, dict] = {}
+    for target in targets:
+        desc = desc_by_target[target]
+        target_results[target] = {
+            "desc": desc,
+            "preds": [""] * n_rows,
+            "sources": [""] * n_rows,
+            "extra": [""] * n_rows,
+            "output_col": desc.output_cols[target],
+        }
+
+    for target in targets:
+        desc = desc_by_target[target]
+        results = target_results[target]
+
+        if not valid_idx:
+            continue
+
+        is_multisub_bridge = (
+            "Substrate" in desc.col_to_kwarg
+            and "Substrate" not in df.columns
+            and "Substrates" in df.columns
+            and "Products" in df.columns
+        )
+
+        if is_multisub_bridge:
+            aug_rows: list[dict] = []
+            for global_i in valid_idx:
+                row = df.iloc[global_i]
+                pos = valid_idx_to_pos[global_i]
+                substrates = [
+                    s.strip()
+                    for s in str(row["Substrates"]).split(";")
+                    if s.strip()
+                ]
+                for substrate in substrates:
+                    aug_row = {
+                        "original_idx": global_i,
+                        "sequence": sequences_proc[pos],
+                        "substrate": substrate,
+                    }
+                    for col, kwarg_name in desc.col_to_kwarg.items():
+                        if col == "Substrate":
+                            continue
+                        aug_row[kwarg_name] = row[col]
+                    aug_rows.append(aug_row)
+
+            if not aug_rows:
+                continue
+
+            aug_df = pd.DataFrame(aug_rows)
+            call_kwargs: dict = {}
+            for col, kwarg_name in desc.col_to_kwarg.items():
+                if col == "Substrate":
+                    call_kwargs[kwarg_name] = aug_df["substrate"].tolist()
+                else:
+                    call_kwargs[kwarg_name] = aug_df[kwarg_name].tolist()
+            call_kwargs.update(desc.target_kwargs.get(target, {}))
+
+            pred_subset, invalid_subset = _invoke_method_prediction(
+                desc=desc,
+                sequences=aug_df["sequence"].tolist(),
+                public_id=job.public_id,
+                target=target,
+                **call_kwargs,
+            )
+
+            pred_map: dict[int, list[str]] = defaultdict(list)
+            for original_i, pred in zip(aug_df["original_idx"], pred_subset):
+                pred_map[int(original_i)].append("" if pred is None else str(pred))
+
+            for global_i in valid_idx:
+                if global_i in pred_map:
+                    results["preds"][global_i] = ";".join(pred_map[global_i])
+                    results["sources"][global_i] = f"Prediction from {desc.display_name}"
+
+            invalid_indices.update(
+                _map_subset_invalid_indices(aug_df["original_idx"].tolist(), invalid_subset)
+            )
+            continue
+
+        call_kwargs = {}
+        for col, kwarg_name in desc.col_to_kwarg.items():
+            call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
+        call_kwargs.update(desc.target_kwargs.get(target, {}))
+
+        pred_subset, invalid_subset = _invoke_method_prediction(
+            desc=desc,
+            sequences=sequences_proc,
+            public_id=job.public_id,
+            target=target,
+            **call_kwargs,
+        )
+
+        for global_i, pred in zip(valid_idx, pred_subset):
+            results["preds"][global_i] = pred if pred is not None else ""
+            results["sources"][global_i] = f"Prediction from {desc.display_name}"
+        invalid_indices.update(_map_subset_invalid_indices(valid_idx, invalid_subset))
+
+    # Experimental overrides are only available for kcat and Km.
+    for target, exp_key in (("kcat", "kcat_value"), ("Km", "km_value")):
+        if target not in target_results:
+            continue
+
+        for exp in experimental_results.get(target, []):
+            if not exp.get("found"):
+                continue
+
+            idx = exp.get("idx")
+            if not isinstance(idx, int) or idx < 0 or idx >= n_rows:
+                continue
+
+            if exp.get("protein_sequence") != sequences[idx]:
+                print(
+                    f"  Protein sequence mismatch at index {idx}, "
+                    "skipping experimental overwrite."
+                )
+                continue
+
+            if exp_key not in exp:
+                continue
+
+            prev = target_results[target]["preds"][idx]
+            target_results[target]["preds"][idx] = exp[exp_key]
+            target_results[target]["sources"][idx] = _source(exp)
+            target_results[target]["extra"][idx] = build_extra_info(
+                exp,
+                target,
+                prev,
+                target_results[target]["desc"].display_name,
+            )
+
+    results_df = df.copy()
+    preferred_cols: list[str] = []
+
+    for target in targets:
+        result = target_results[target]
+        pred_col = result["output_col"]
+        source_col = f"Source {target}"
+        extra_col = f"Extra Info {target}"
+
+        results_df[pred_col] = result["preds"]
+        results_df[source_col] = result["sources"]
+        results_df[extra_col] = result["extra"]
+        preferred_cols.extend([pred_col, source_col, extra_col])
+
+    results_df = results_df[
+        preferred_cols + [c for c in results_df.columns if c not in preferred_cols]
+    ]
+
+    out_path = _output_path(job.public_id)
+    results_df.to_csv(out_path, index=False)
+
+    fully_predicted = pd.Series(True, index=results_df.index)
+    for target in targets:
+        pred_col = target_results[target]["output_col"]
+        fully_predicted = (
+            fully_predicted
+            & (results_df[pred_col] != "")
+            & results_df[pred_col].notna()
+        )
+
     processed = int(fully_predicted.sum())
     to_refund = max(0, int(job.requested_rows) - processed)
     if to_refund > 0:

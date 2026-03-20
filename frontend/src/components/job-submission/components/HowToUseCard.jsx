@@ -14,7 +14,7 @@ export default function HowToUseCard({ methods = {} }) {
       </Card.Header>
       <Card.Body>
         <p className="lead text-center mb-4">
-          Predict kinetic parameters (k<sub>cat</sub> and/or K<sub>M</sub>) for enzyme-catalysed reactions using various machine learning models.
+          Predict kinetic parameters (k<sub>cat</sub>, K<sub>M</sub>, and k<sub>cat</sub>/K<sub>M</sub>) for enzyme-catalysed reactions using various machine learning models.
         </p>
         <Alert variant="info" className="d-flex align-items-center">
           <Bullseye size={24} className="me-3" />
@@ -27,7 +27,7 @@ export default function HowToUseCard({ methods = {} }) {
           <Col md={4} className="step-col">
             <div className="step-icon"><Bullseye size={30} /></div>
             <h5>Step 1: Select Prediction</h5>
-            <p>Choose what you want to predict: k<sub>cat</sub>, K<sub>M</sub>, or both.</p>
+            <p>Choose one or more targets: k<sub>cat</sub>, K<sub>M</sub>, and/or k<sub>cat</sub>/K<sub>M</sub>.</p>
           </Col>
           <Col md={4} className="step-col">
             <div className="step-icon"><CloudUpload size={30} /></div>
@@ -50,7 +50,7 @@ export default function HowToUseCard({ methods = {} }) {
               <Card.Body>
                 <Card.Title>Single-Substrate Models</Card.Title>
                 <Card.Subtitle className="mb-2 text-white-70">
-                  DLKcat, EITLEM, UniKP, KinForm-H, KinForm-L
+                  DLKcat, EITLEM, UniKP, KinForm-H, KinForm-L, CataPro
                 </Card.Subtitle>
                 <ListGroup variant="flush">
                   <ListGroup.Item>

@@ -106,7 +106,7 @@ def api_list_methods(request):
           "citationUrl":       str,
           "repoUrl":           str,
           "moreInfo":          str,
-          "supports":          list[str],   // e.g. ["kcat", "Km"]
+          "supports":          list[str],   // e.g. ["kcat", "Km", "kcat/Km"]
           "inputFormat":       str,         // "single" or "multi"
           "maxSeqLen":         int | null,  // null means no limit
           "requiredColumns":   list[str],   // includes "Protein Sequence"
@@ -114,7 +114,7 @@ def api_list_methods(request):
         },
         ...
       },
-      "predictionTypes": ["kcat", "Km", "both"],
+      "predictionTypes": ["kcat", "Km", "kcat/Km"],
       "longSequenceOptions": { "truncate": "...", "skip": "..." },
       "notes": { ... }
     }
@@ -149,27 +149,29 @@ def api_list_methods(request):
         }
 
     # Group methods by the prediction targets they support.
-    methods_payload = {"kcat": [], "Km": []}
+    methods_payload = {"kcat": [], "Km": [], "kcat/Km": []}
     for key, desc in registry.items():
         obj = _method_obj(key, desc)
         if "kcat" in desc.supports:
             methods_payload["kcat"].append(obj)
         if "Km" in desc.supports:
             methods_payload["Km"].append(obj)
+        if "kcat/Km" in desc.supports:
+            methods_payload["kcat/Km"].append(obj)
 
     return JsonResponse(
         {
             "methods": methods_payload,
-            "predictionTypes": ["kcat", "Km", "both"],
+            "predictionTypes": ["kcat", "Km", "kcat/Km"],
             "longSequenceOptions": {
                 "truncate": "Shorten sequences that exceed the model's maximum length.",
                 "skip": "Omit rows where the sequence exceeds the model's maximum length.",
             },
             "notes": {
-                "both": (
-                    "When predictionType is 'both', you must specify both kcatMethod "
-                    "and kmMethod.  Not all methods support KM — check the 'supports' "
-                    "field of each method."
+                "targets": (
+                    "Submit target selection via 'targets' (list) and method "
+                    "selection via 'methods' (object mapping each selected target "
+                    "to a method key)."
                 ),
                 "quota": "Each row in your CSV counts as one prediction against your daily quota.",
             },
@@ -206,16 +208,17 @@ def api_submit_job(request):
 
     1. multipart/form-data — upload a CSV file plus form fields:
          file                  (required) — the CSV file
-         predictionType        (required) — "kcat", "Km", or "both"
-         kcatMethod            (required if predictionType is "kcat" or "both")
-         kmMethod              (required if predictionType is "Km" or "both")
+         targets               (required) — JSON array from
+                                             ["kcat", "Km", "kcat/Km"]
+         methods               (required) — JSON object mapping selected target
+                                             to method key
          handleLongSequences   (optional, default "truncate") — "truncate" or "skip"
          useExperimental       (optional, default "false")   — "true" or "false"
 
     2. application/json — send data directly as a JSON body:
          {
-           "predictionType": "kcat",
-           "kcatMethod": "DLKcat",
+           "targets": ["kcat"],
+           "methods": {"kcat": "DLKcat"},
            "handleLongSequences": "truncate",
            "useExperimental": false,
            "data": [
@@ -284,12 +287,29 @@ def _parse_multipart_body(request):
         return None, None, _json_error("The uploaded file must have a .csv extension.")
 
     params = {
-        "prediction_type": request.POST.get("predictionType"),
-        "kcat_method": request.POST.get("kcatMethod"),
-        "km_method": request.POST.get("kmMethod"),
+        "targets": [],
+        "methods": {},
         "handle_long_sequences": request.POST.get("handleLongSequences", "truncate"),
         "use_experimental": request.POST.get("useExperimental", "false").lower() == "true",
     }
+
+    targets_raw = request.POST.get("targets", "")
+    methods_raw = request.POST.get("methods", "")
+    try:
+        params["targets"] = json.loads(targets_raw) if targets_raw else []
+    except json.JSONDecodeError:
+        return None, None, _json_error(
+            "Invalid 'targets' value. Expected a JSON array, for example: "
+            '["kcat", "Km"].'
+        )
+
+    try:
+        params["methods"] = json.loads(methods_raw) if methods_raw else {}
+    except json.JSONDecodeError:
+        return None, None, _json_error(
+            "Invalid 'methods' value. Expected a JSON object, for example: "
+            '{"kcat":"DLKcat","Km":"UniKP"}.'
+        )
 
     return csv_file, params, None
 
@@ -336,9 +356,8 @@ def _parse_json_body(request):
         return None, None, _json_error(f"Could not convert 'data' to CSV: {e}")
 
     params = {
-        "prediction_type": body.get("predictionType"),
-        "kcat_method": body.get("kcatMethod"),
-        "km_method": body.get("kmMethod"),
+        "targets": body.get("targets", []),
+        "methods": body.get("methods", {}),
         "handle_long_sequences": body.get("handleLongSequences", "truncate"),
         "use_experimental": bool(body.get("useExperimental", False)),
     }

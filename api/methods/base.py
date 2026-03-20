@@ -12,7 +12,7 @@ from typing import Callable, Literal
 # Prediction target type aliases
 # ---------------------------------------------------------------------------
 
-PredictionTarget = Literal["kcat", "Km"]
+PredictionTarget = Literal["kcat", "Km", "kcat/Km"]
 """A kinetic parameter that a method can predict."""
 
 InputFormat = Literal["single", "multi"]

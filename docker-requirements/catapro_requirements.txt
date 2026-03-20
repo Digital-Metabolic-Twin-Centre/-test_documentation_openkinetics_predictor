@@ -1,6 +1,7 @@
-# Requirements for catapro (Python 3.10)
-numpy
-pandas
-rdkit
-transformers
-torch==2.1 
+# Requirements for CataPro (Python 3.10)
+torch==2.1.2
+transformers==4.46.3
+sentencepiece==0.2.0
+accelerate==1.1.1
+numpy==1.26.4
+pandas==2.2.2

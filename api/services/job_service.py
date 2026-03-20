@@ -6,14 +6,15 @@ from typing import Any, Dict, Optional, Tuple
 from django.http import JsonResponse
 
 from api.models import Job
-from api.tasks import run_both_prediction, run_prediction
+from api.tasks import run_multi_prediction
 from api.utils.job_utils import (
+    canonical_prediction_type,
     create_job_directory,
     create_job_status_response_data,
     create_rate_limit_headers,
-    determine_required_columns,
     get_experimental_results,
     save_job_input_file,
+    validate_required_columns_for_methods,
     validate_prediction_parameters,
     validate_sequence_handling_option,
 )
@@ -26,7 +27,6 @@ from api.utils.quotas import (
 from api.utils.validation_utils import (
     parse_csv_file,
     validate_column_emptiness,
-    validate_required_columns,
 )
 
 
@@ -51,6 +51,9 @@ def process_job_submission(
     from api.utils.job_utils import extract_job_parameters_from_request
 
     params = extract_job_parameters_from_request(request)
+    if params.get("_parse_error"):
+        return JsonResponse({"error": params["_parse_error"]}, status=400), None
+
     ip_address = get_client_ip(request)
     return process_job_submission_from_params(params, file, ip_address)
 
@@ -68,9 +71,8 @@ def process_job_submission_from_params(
 
     Args:
         params:     Dict with keys:
-                      prediction_type      – "kcat", "Km", or "both"
-                      kcat_method          – e.g. "DLKcat", "EITLEM", …
-                      km_method            – e.g. "EITLEM", "UniKP", …
+                      targets              – e.g. ["kcat"], ["Km", "kcat/Km"]
+                      methods              – e.g. {"kcat":"DLKcat","Km":"UniKP"}
                       handle_long_sequences– "truncate" or "skip"
                       use_experimental     – bool
         file:       A file-like object (Django InMemoryUploadedFile or
@@ -85,9 +87,8 @@ def process_job_submission_from_params(
     # --- Validate parameters ---------------------------------------------------
 
     param_error = validate_prediction_parameters(
-        params["prediction_type"],
-        params["kcat_method"],
-        params["km_method"],
+        params["targets"],
+        params["methods"],
     )
     if param_error:
         return JsonResponse({"error": param_error}, status=400), None
@@ -105,20 +106,17 @@ def process_job_submission_from_params(
     except Exception as e:
         return JsonResponse({"error": f"Could not read CSV file: {e}"}, status=400), None
 
-    required_columns = determine_required_columns(
-        params["prediction_type"],
-        params["kcat_method"],
-        params["km_method"],
+    required_columns_error = validate_required_columns_for_methods(
+        dataframe,
+        params["targets"],
+        params["methods"],
     )
-
-    column_error = validate_required_columns(dataframe, required_columns)
-    if column_error:
-        return JsonResponse({"error": column_error}, status=400), None
+    if required_columns_error:
+        return JsonResponse({"error": required_columns_error}, status=400), None
 
     # Ensure key columns are not mostly empty.
-    substrate_col = "Substrate" if "Substrate" in dataframe.columns else None
-    if substrate_col:
-        emptiness_error = validate_column_emptiness(dataframe, substrate_col)
+    if "Substrate" in dataframe.columns:
+        emptiness_error = validate_column_emptiness(dataframe, "Substrate")
         if emptiness_error:
             return JsonResponse({"error": emptiness_error}, status=400), None
 
@@ -142,9 +140,9 @@ def process_job_submission_from_params(
 
     experimental_results = get_experimental_results(
         params["use_experimental"],
-        params["kcat_method"],
+        params["methods"],
+        params["targets"],
         dataframe,
-        params["prediction_type"],
     )
 
     job = create_job_record(params, ip_address, len(dataframe), user)
@@ -207,9 +205,10 @@ def create_job_record(
         Created Job instance
     """
     job = Job(
-        prediction_type=params["prediction_type"],
-        kcat_method=params["kcat_method"],
-        km_method=params["km_method"],
+        prediction_type=canonical_prediction_type(params["targets"]),
+        kcat_method=params["methods"].get("kcat"),
+        km_method=params["methods"].get("Km"),
+        kcat_km_method=params["methods"].get("kcat/Km"),
         status="Pending",
         handle_long_sequences=params["handle_long_sequences"],
         ip_address=ip_address,
@@ -224,36 +223,25 @@ def create_job_record(
 def dispatch_prediction_task(
     public_id: str,
     params: Dict[str, Any],
-    experimental_results: Optional[list],
+    experimental_results: Optional[dict],
 ) -> None:
     """
     Dispatch the appropriate Celery prediction task based on job parameters.
 
-    Uses the two generic tasks (run_prediction, run_both_prediction) which
-    look up the method at runtime via the registry.  No per-method task
-    functions are needed.
+    Uses one generic multi-target task that resolves each method at runtime.
 
     Args:
         public_id: Job public ID
         params: Job parameters
         experimental_results: Pre-fetched experimental results or None
     """
-    prediction_type = params["prediction_type"]
-    kcat_method = params["kcat_method"]
-    km_method = params["km_method"]
+    targets = params["targets"]
+    methods = params["methods"]
 
-    print(f"Dispatching task: type={prediction_type}, kcat={kcat_method}, km={km_method}")
-
-    if prediction_type == "both":
-        run_both_prediction.delay(
-            public_id, kcat_method, km_method, experimental_results
-        )
-    elif prediction_type == "kcat":
-        run_prediction.delay(public_id, kcat_method, "kcat", experimental_results)
-    elif prediction_type == "Km":
-        run_prediction.delay(public_id, km_method, "Km", experimental_results)
-    else:
-        print(f"Unknown prediction_type '{prediction_type}' — no task dispatched.")
+    print(
+        f"Dispatching multi-target task: targets={targets}, methods={methods}"
+    )
+    run_multi_prediction.delay(public_id, targets, methods, experimental_results or {})
 
 
 def get_job_status_data(job: Job) -> Dict[str, Any]:

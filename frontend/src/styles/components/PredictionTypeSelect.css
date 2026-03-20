@@ -74,3 +74,36 @@
   background: var(--primary-color); /* Dark background */
   color: var(--text-color); /* Light text */
 }
+
+/* Multi-target selector (checkbox chips) */
+.kave-target-wrapper {
+  border: 1px dashed rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  padding: 10px 14px;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.kave-target-wrapper.is-selected {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.85);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.kave-target-wrapper:hover,
+.kave-target-wrapper:focus-within {
+  border-color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
+}
+
+.kave-target-wrapper .form-check {
+  margin: 0;
+}
+
+.kave-target-wrapper .form-check-input {
+  cursor: pointer;
+}
+
+.kave-target-wrapper .form-check-label {
+  cursor: pointer;
+  color: var(--text-color);
+}

@@ -31,11 +31,15 @@ DEFAULT_KEY  = "ak_17f90e7c1f6ac3f5fc861d8cec4667a2b888c358a333bb81f75b631a9b500
 # ---------------------------------------------------------------------------
 
 # kcat-capable methods
-KCAT_METHOD_IDS = ["DLKcat", "TurNup", "EITLEM", "UniKP", "KinForm-H", "KinForm-L"]
+KCAT_METHOD_IDS = ["DLKcat", "TurNup", "EITLEM", "UniKP", "KinForm-H", "KinForm-L", "CataPro"]
 # Km-capable methods
-KM_METHOD_IDS   = ["EITLEM", "UniKP", "KinForm-H"]
+KM_METHOD_IDS   = ["EITLEM", "UniKP", "KinForm-H", "CataPro"]
+# kcat/Km-capable methods
+KCAT_KM_METHOD_IDS = ["CataPro"]
 # All recognised method IDs (de-duplicated, lowercase)
-ALL_METHOD_IDS  = sorted({m.lower() for m in KCAT_METHOD_IDS + KM_METHOD_IDS})
+ALL_METHOD_IDS  = sorted(
+    {m.lower() for m in KCAT_METHOD_IDS + KM_METHOD_IDS + KCAT_KM_METHOD_IDS}
+)
 
 
 def sel(methods: set, *names: str) -> bool:
@@ -51,6 +55,11 @@ def selected_kcat_methods(methods: set) -> list[str]:
 def selected_km_methods(methods: set) -> list[str]:
     """Return selected Km-capable methods in canonical order."""
     return [m for m in KM_METHOD_IDS if m.lower() in methods]
+
+
+def selected_kcat_km_methods(methods: set) -> list[str]:
+    """Return selected kcat/Km-capable methods in canonical order."""
+    return [m for m in KCAT_KM_METHOD_IDS if m.lower() in methods]
 
 
 # ---------------------------------------------------------------------------
@@ -121,18 +130,30 @@ def csv_file(content: str, filename: str = "input.csv"):
 
 def submit(base: str, headers: dict, csv_content: str,
            prediction_type: str, kcat_method: str = None,
-           km_method: str = None, handle_long: str = "truncate",
+           km_method: str = None, kcat_km_method: str = None,
+           handle_long: str = "truncate",
            use_experimental: str = "false") -> requests.Response:
     """Helper: POST to /submit/ and return the response."""
+    targets = []
+    methods = {}
+    if prediction_type == "kcat":
+        targets = ["kcat"]
+        if kcat_method:
+            methods["kcat"] = kcat_method
+    elif prediction_type == "Km":
+        targets = ["Km"]
+        if km_method:
+            methods["Km"] = km_method
+    elif prediction_type == "kcat/Km":
+        targets = ["kcat/Km"]
+        if kcat_km_method:
+            methods["kcat/Km"] = kcat_km_method
     data = {
-        "predictionType":      prediction_type,
+        "targets":             json.dumps(targets),
+        "methods":             json.dumps(methods),
         "handleLongSequences": handle_long,
         "useExperimental":     use_experimental,
     }
-    if kcat_method:
-        data["kcatMethod"] = kcat_method
-    if km_method:
-        data["kmMethod"] = km_method
 
     return requests.post(
         f"{base}/submit/",
@@ -165,9 +186,13 @@ def test_methods(base: str, methods: set) -> None:
     check("has predictionTypes",     "predictionTypes" in j)
     check("kcat in predictionTypes", "kcat" in j.get("predictionTypes", []))
     check("Km in predictionTypes",   "Km"   in j.get("predictionTypes", []))
-    check("both in predictionTypes", "both" in j.get("predictionTypes", []))
+    check(
+        "kcat/Km in predictionTypes",
+        "kcat/Km" in j.get("predictionTypes", []),
+    )
     check("has methods.kcat",        isinstance(j.get("methods", {}).get("kcat"), list))
     check("has methods.Km",          isinstance(j.get("methods", {}).get("Km"), list))
+    check("has methods.kcat/Km",     isinstance(j.get("methods", {}).get("kcat/Km"), list))
     kcat_ids = {m["id"] for m in j.get("methods", {}).get("kcat", [])}
     if sel(methods, "DLKcat"):   check("DLKcat in kcat methods",  "DLKcat"    in kcat_ids)
     if sel(methods, "TurNup"):   check("TurNup in kcat methods",  "TurNup"    in kcat_ids)
@@ -179,6 +204,8 @@ def test_methods(base: str, methods: set) -> None:
     if sel(methods, "EITLEM"):   check("EITLEM in Km methods",    "EITLEM"    in km_ids)
     if sel(methods, "UniKP"):    check("UniKP in Km methods",     "UniKP"     in km_ids)
     if sel(methods, "KinForm-H"): check("KinForm-H in Km methods", "KinForm-H" in km_ids)
+    ratio_ids = {m["id"] for m in j.get("methods", {}).get("kcat/Km", [])}
+    if sel(methods, "CataPro"):  check("CataPro in kcat/Km methods", "CataPro" in ratio_ids)
     check("has longSequenceOptions", "longSequenceOptions" in j)
 
 
@@ -219,9 +246,10 @@ def test_quota(base: str, headers: dict) -> None:
 
 def build_selected_method_jobs(methods: set) -> list[dict]:
     """
-    Build one submit job per selected method/prediction type:
-      - all selected kcat-capable methods as predictionType=kcat
-      - all selected Km-capable methods as predictionType=Km
+    Build one submit job per selected method/target:
+      - all selected kcat-capable methods as prediction_type=kcat
+      - all selected Km-capable methods as prediction_type=Km
+      - all selected kcat/Km-capable methods as prediction_type=kcat/Km
     """
     jobs: list[dict] = []
     for kcat_method in selected_kcat_methods(methods):
@@ -229,6 +257,7 @@ def build_selected_method_jobs(methods: set) -> list[dict]:
             "prediction_type": "kcat",
             "kcat_method": kcat_method,
             "km_method": None,
+            "kcat_km_method": None,
             "csv_content": MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV,
             "label": f"kcat/{kcat_method}",
         })
@@ -237,8 +266,18 @@ def build_selected_method_jobs(methods: set) -> list[dict]:
             "prediction_type": "Km",
             "kcat_method": None,
             "km_method": km_method,
+            "kcat_km_method": None,
             "csv_content": SINGLE_SUBSTRATE_CSV,
             "label": f"Km/{km_method}",
+        })
+    for ratio_method in selected_kcat_km_methods(methods):
+        jobs.append({
+            "prediction_type": "kcat/Km",
+            "kcat_method": None,
+            "km_method": None,
+            "kcat_km_method": ratio_method,
+            "csv_content": SINGLE_SUBSTRATE_CSV,
+            "label": f"kcat/Km/{ratio_method}",
         })
     return jobs
 
@@ -264,6 +303,7 @@ def test_submit_selected_methods(base: str, headers: dict, methods: set) -> list
             spec["prediction_type"],
             kcat_method=spec["kcat_method"],
             km_method=spec["km_method"],
+            kcat_km_method=spec.get("kcat_km_method"),
         )
         ok = check(f"[{label}] status 201", r.status_code == 201, f"got {r.status_code}")
         if not ok:
@@ -285,37 +325,6 @@ def test_submit_selected_methods(base: str, headers: dict, methods: set) -> list
     return submitted_jobs
 
 
-def test_submit_both(base: str, headers: dict, methods: set) -> dict | None:
-    kcat_methods = selected_kcat_methods(methods)
-    km_methods = selected_km_methods(methods)
-    if not kcat_methods or not km_methods:
-        print("\n  (skipping 'both' submit test — need at least one kcat and one Km method selected)")
-        return None
-    kcat_method = kcat_methods[0]
-    km_method = km_methods[0]
-    label = f"both/{kcat_method}+{km_method}"
-    section(f"POST /submit/ — valid CSV file upload (both / {kcat_method} + {km_method})")
-    csv_content = MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV
-    r = submit(base, headers, csv_content, "both",
-               kcat_method=kcat_method, km_method=km_method)
-    if not check(f"[{label}] status 201", r.status_code == 201, f"got {r.status_code}"):
-        return None
-    j = r.json()
-    check(f"[{label}] has jobId", "jobId" in j)
-    check(f"[{label}] status=Pending", j.get("status") == "Pending")
-    if "jobId" not in j:
-        return None
-    print(f"         → Submitted {label}: jobId={j['jobId']}")
-    return {
-        "prediction_type": "both",
-        "kcat_method": kcat_method,
-        "km_method": km_method,
-        "label": label,
-        "job": j,
-        "job_id": j["jobId"],
-    }
-
-
 def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None:
     kcat_method = next(
         (m for m in KCAT_METHOD_IDS if m.lower() in methods and m != "TurNup"), None
@@ -327,8 +336,8 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
     section(f"POST /submit/ — JSON body (inline data, no CSV file) [{kcat_method}]")
     json_headers = {**headers, "Content-Type": "application/json"}
     payload = {
-        "predictionType":      "kcat",
-        "kcatMethod":          kcat_method,
+        "targets":             ["kcat"],
+        "methods":             {"kcat": kcat_method},
         "handleLongSequences": "truncate",
         "useExperimental":     False,
         "data": [
@@ -367,6 +376,7 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
         "prediction_type": "kcat",
         "kcat_method": kcat_method,
         "km_method": None,
+        "kcat_km_method": None,
         "label": label,
         "job": j,
         "job_id": j["jobId"],
@@ -378,7 +388,7 @@ def test_submit_errors(base: str, headers: dict) -> None:
 
     # No file attached
     r = requests.post(f"{base}/submit/", headers=headers, data={
-        "predictionType": "kcat", "kcatMethod": "DLKcat",
+        "targets": '["kcat"]', "methods": '{"kcat":"DLKcat"}',
         "handleLongSequences": "truncate",
     })
     check("no file → 400",              r.status_code == 400, f"got {r.status_code}")
@@ -387,17 +397,17 @@ def test_submit_errors(base: str, headers: dict) -> None:
     # File with wrong extension (.txt instead of .csv)
     r = requests.post(f"{base}/submit/", headers=headers,
                       files={"file": ("input.txt", io.BytesIO(NOT_A_CSV_BYTES), "text/plain")},
-                      data={"predictionType": "kcat", "kcatMethod": "DLKcat",
+                      data={"targets": '["kcat"]', "methods": '{"kcat":"DLKcat"}',
                             "handleLongSequences": "truncate"})
     check("non-.csv extension → 400",   r.status_code == 400, f"got {r.status_code}")
 
-    # Invalid predictionType
+    # Invalid target selection
     r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "invalid_type")
-    check("bad predictionType → 400",   r.status_code == 400, f"got {r.status_code}")
+    check("bad target list → 400",      r.status_code == 400, f"got {r.status_code}")
 
-    # Missing kcatMethod when predictionType=kcat
+    # Invalid kcat method for target
     r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "kcat", kcat_method="NOTAMETHOD")
-    check("bad kcatMethod → 400",       r.status_code == 400, f"got {r.status_code}")
+    check("bad kcat method → 400",      r.status_code == 400, f"got {r.status_code}")
 
     # Valid predictionType but wrong method for it (KinForm-L is not a Km method)
     r = submit(base, headers, SINGLE_SUBSTRATE_CSV, "Km", km_method="KinForm-L")
@@ -420,7 +430,7 @@ def test_submit_errors(base: str, headers: dict) -> None:
     r = requests.post(
         f"{base}/submit/",
         headers={**headers, "Content-Type": "application/json"},
-        json={"predictionType": "kcat", "kcatMethod": "DLKcat",
+        json={"targets": ["kcat"], "methods": {"kcat": "DLKcat"},
               "handleLongSequences": "truncate", "data": []},
     )
     check("empty JSON data → 400",      r.status_code == 400, f"got {r.status_code}")
@@ -430,7 +440,7 @@ def test_submit_errors(base: str, headers: dict) -> None:
     r = requests.post(
         f"{base}/submit/",
         headers={**headers, "Content-Type": "application/json"},
-        json={"predictionType": "kcat", "kcatMethod": "DLKcat",
+        json={"targets": ["kcat"], "methods": {"kcat": "DLKcat"},
               "handleLongSequences": "truncate", "data": big_data},
     )
     check("10001-row JSON body → 400",  r.status_code == 400, f"got {r.status_code}")
@@ -763,8 +773,8 @@ def main():
         "--extra-submit-variants",
         action="store_true",
         help=(
-            "Also submit additional success-path variants (predictionType=both "
-            "and JSON-body submit). These jobs are fully waited/validated too. "
+            "Also submit an additional success-path variant (JSON-body submit). "
+            "This job is fully waited/validated too. "
             "Default is off for faster runs."
         ),
     )
@@ -816,9 +826,6 @@ def main():
     # Optional success-path submission variants. If enabled, their jobs are
     # included in full end-to-end status/result validation.
     if args.extra_submit_variants:
-        both_job = test_submit_both(base, headers, methods)
-        if both_job:
-            submitted_jobs.append(both_job)
         json_job = test_submit_json_body(base, headers, methods)
         if json_job:
             submitted_jobs.append(json_job)
