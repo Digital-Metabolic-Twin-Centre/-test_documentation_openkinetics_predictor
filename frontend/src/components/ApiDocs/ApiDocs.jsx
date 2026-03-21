@@ -420,7 +420,7 @@ export default function ApiDocs() {
               <p className="example-section-label">Response</p>
               <CodeBlock language="json" code={`{
   "status": "ok",
-  "service": "KineticXPredictor API",
+  "service": "OpenKineticsPredictor API",
   "version": "1",
   "timestamp": "2026-03-04T14:30:00.000000+00:00"
 }`} />
@@ -733,8 +733,7 @@ export default function ApiDocs() {
           <h2>JSON Body Submission</h2>
           <p style={{ opacity: 0.85, lineHeight: 1.7 }}>
             For small datasets (&le; 10,000 rows) you can send data directly as JSON
-            instead of uploading a file. This is convenient when you are generating
-            sequences programmatically and don't want to write a CSV first.
+            instead of uploading a file.
           </p>
           <CodeBlock language="python" code={JSON_BODY_EXAMPLE} />
           <div className="api-callout api-callout-info">
@@ -751,6 +750,19 @@ export default function ApiDocs() {
           <p style={{ marginBottom: '1rem', opacity: 0.85 }}>
             The required columns depend on the method you choose:
           </p>
+          <div className="api-callout api-callout-info" style={{ marginBottom: '1rem' }}>
+            <strong>Handling long protein sequences:</strong> Set <code>handleLongSequences</code> in
+            <code>/submit/</code> requests.
+            <ul style={{ marginTop: '0.5rem', marginBottom: 0 }}>
+              <li>
+                <code>truncate</code> (default): keeps over-limit rows and trims each long sequence to
+                the method limit by keeping the first and last halves.
+              </li>
+              <li>
+                <code>skip</code>: excludes rows where <code>Protein Sequence</code> exceeds the method limit.
+              </li>
+            </ul>
+          </div>
           <table className="api-table">
             <thead>
               <tr>
