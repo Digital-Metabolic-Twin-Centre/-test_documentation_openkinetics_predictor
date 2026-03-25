@@ -5,7 +5,7 @@ import { InfoCircleFill } from 'react-bootstrap-icons';
 
 const CanonTooltip = (
   <Tooltip id="canonicalization-tooltip" className="exp-tooltip">
-    Default on. Canonicalize substrate strings before prediction so equivalent
+    Canonicalize substrate strings before prediction so equivalent
     SMILES representations are normalized. Turn this off to skip
     canonicalization and follow each method&apos;s native preprocessing more
     closely.
