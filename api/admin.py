@@ -140,12 +140,22 @@ class JobAdmin(admin.ModelAdmin):
         "public_id",
         "user_ip",
         "prediction_type",
+        "kcat_method",
+        "km_method",
+        "canonicalize_substrates",
         "status",
         "submission_time",
         "requested_rows",
         "download_links",
     ]
-    list_filter = ["status", "prediction_type", "submission_time"]
+    list_filter = [
+        "status",
+        "prediction_type",
+        "kcat_method",
+        "km_method",
+        "canonicalize_substrates",
+        "submission_time",
+    ]
     search_fields = ["public_id", "ip_address", "user__ip_address"]
     readonly_fields = ["public_id", "submission_time", "download_links"]
 

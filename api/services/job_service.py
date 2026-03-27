@@ -210,6 +210,7 @@ def create_job_record(
         kcat_method=params["methods"].get("kcat"),
         km_method=params["methods"].get("Km"),
         kcat_km_method=params["methods"].get("kcat/Km"),
+        canonicalize_substrates=params.get("canonicalize_substrates", True),
         status="Pending",
         handle_long_sequences=params["handle_long_sequences"],
         ip_address=ip_address,

@@ -69,6 +69,7 @@ class Job(models.Model):
             ("skip", "skip"),
         ],
     )
+    canonicalize_substrates = models.BooleanField(default=True)
 
     total_molecules = models.IntegerField(default=0)
     molecules_processed = models.IntegerField(default=0)
