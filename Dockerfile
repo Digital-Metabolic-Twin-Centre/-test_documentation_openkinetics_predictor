@@ -106,6 +106,15 @@ RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
     && mamba install -n catapro_env -c conda-forge rdkit=2024.03.6 -y \
     && conda run -n catapro_env pip install -r docker-requirements/catapro_requirements.txt
 
+# ── CatPred ───────────────────────────────────────────────────────────────────
+FROM base AS env-catpred
+COPY docker-requirements/catpred_requirements.txt ./docker-requirements/
+RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
+    --mount=type=cache,id=webkinpred-pip-py310,target=/root/.cache/pip,sharing=locked \
+    mamba create -n catpred_env python=3.10.15 -c conda-forge -y \
+    && mamba install -n catpred_env -c conda-forge rdkit=2024.03.6 -y \
+    && conda run -n catpred_env pip install -r docker-requirements/catpred_requirements.txt
+
 # ── pseq2sites ────────────────────────────────────────────────────────────────
 FROM base AS env-pseq2sites
 RUN --mount=type=cache,target=/opt/conda/pkgs,sharing=locked \
@@ -155,6 +164,7 @@ COPY --from=env-eitlem    /opt/conda/envs/eitlem_env   /opt/conda/envs/eitlem_en
 COPY --from=env-turnup    /opt/conda/envs/turnup_env   /opt/conda/envs/turnup_env
 COPY --from=env-unikp     /opt/conda/envs/unikp        /opt/conda/envs/unikp
 COPY --from=env-catapro   /opt/conda/envs/catapro_env  /opt/conda/envs/catapro_env
+COPY --from=env-catpred   /opt/conda/envs/catpred_env  /opt/conda/envs/catpred_env
 COPY --from=env-pseq2sites /opt/conda/envs/pseq2sites  /opt/conda/envs/pseq2sites
 COPY --from=env-esm       /opt/conda/envs/esm          /opt/conda/envs/esm
 COPY --from=env-esmc      /opt/conda/envs/esmc         /opt/conda/envs/esmc
@@ -174,6 +184,7 @@ RUN find /opt/conda -name "*.pyc" -delete \
 COPY . .
 
 RUN mkdir -p /app/models/EITLEM/Weights \
+             /app/models/CatPred \
              /app/models/TurNup/data/saved_models \
              /app/models/UniKP-main/models \
              /app/media/sequence_info \

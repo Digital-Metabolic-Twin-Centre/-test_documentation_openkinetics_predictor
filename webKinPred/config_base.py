@@ -10,6 +10,7 @@ DEFAULT_ALLOWED_FRONTEND_IPS = ["127.0.0.1", "localhost"]
 
 
 _DATA_PATH_REL = {
+    "CatPred": "models/CatPred",
     "DLKcat": "models/DLKcat/DeeplearningApproach/Data",
     "DLKcat_Results": "models/DLKcat/DeeplearningApproach/Results",
     "EITLEM": "models/EITLEM",
@@ -23,6 +24,7 @@ _DATA_PATH_REL = {
 
 
 _PREDICTION_SCRIPT_REL = {
+    "CatPred": "models/CatPred/catpred/integration/webkinpred_adapter.py",
     "DLKcat": "models/DLKcat/DeeplearningApproach/Code/example/prediction_for_input.py",
     "EITLEM": "models/EITLEM/Code/eitlem_prediction_script_batch.py",
     "TurNup": "models/TurNup/code/kcat_prediction_batch.py",
