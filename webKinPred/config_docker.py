@@ -1,3 +1,5 @@
+import os
+
 from webKinPred.config_base import (
     DEFAULT_ALLOWED_FRONTEND_IPS,
     SERVER_LIMIT,
@@ -13,6 +15,7 @@ DATA_PATH = BASE_PATH
 FASTAS_DIR = f"{BASE_PATH}/fastas"
 
 PYTHON_PATHS = {
+    "CatPred": "/opt/conda/envs/catpred_env/bin/python",
     "DLKcat": "/opt/conda/envs/dlkcat_env/bin/python",
     "EITLEM": "/opt/conda/envs/eitlem_env/bin/python",
     "TurNup": "/opt/conda/envs/turnup_env/bin/python",
@@ -27,6 +30,11 @@ PYTHON_PATHS = {
 
 DATA_PATHS = build_data_paths(BASE_PATH)
 PREDICTION_SCRIPTS = build_prediction_scripts(BASE_PATH)
+
+CATPRED_ROOT = os.environ.get("WEBKINPRED_CATPRED_ROOT")
+if CATPRED_ROOT:
+    DATA_PATHS["CatPred"] = CATPRED_ROOT
+    PREDICTION_SCRIPTS["CatPred"] = f"{CATPRED_ROOT}/catpred/integration/webkinpred_adapter.py"
 
 SIMILARITY_DATASETS = build_similarity_datasets(FASTAS_DIR)
 TARGET_DBS = {label: item["target_db"] for label, item in SIMILARITY_DATASETS.items()}

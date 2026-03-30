@@ -26,6 +26,7 @@ def _env_python(env_name: str) -> str:
 
 
 PYTHON_PATHS = {
+    "CatPred": _env_python("catpred_env"),
     "DLKcat": _env_python("dlkcat_env"),
     "EITLEM": _env_python("eitlem_env"),
     "TurNup": _env_python("turnup_env"),
@@ -40,6 +41,16 @@ PYTHON_PATHS = {
 
 DATA_PATHS = build_data_paths(BASE_PATH)
 PREDICTION_SCRIPTS = build_prediction_scripts(BASE_PATH)
+
+CATPRED_ROOT = os.environ.get("WEBKINPRED_CATPRED_ROOT")
+if CATPRED_ROOT:
+    catpred_root = str(Path(CATPRED_ROOT).resolve())
+    DATA_PATHS["CatPred"] = catpred_root
+    PREDICTION_SCRIPTS["CatPred"] = str(Path(catpred_root) / "catpred" / "integration" / "webkinpred_adapter.py")
+    PYTHON_PATHS["CatPred"] = os.environ.get(
+        "WEBKINPRED_CATPRED_PYTHON",
+        _env_python("catpred_env"),
+    )
 
 SIMILARITY_DATASETS = build_similarity_datasets(FASTAS_DIR)
 TARGET_DBS = {label: item["target_db"] for label, item in SIMILARITY_DATASETS.items()}

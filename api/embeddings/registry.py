@@ -34,11 +34,13 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
         "implemented": True,
         "conda_env": "esm",
         "python_path_key": "esm2",   # key in config PYTHON_PATHS
-        "used_by": ["KinForm-H", "KinForm-L"],
+        "used_by": ["KinForm-H", "KinForm-L", "CatPred"],
         "notes": (
             "Invoked as a subprocess by KinForm.  The python path is passed via "
             "the KINFORM_ESM_PATH environment variable.  Multi-layer embeddings "
-            "are extracted in a single model-load pass."
+            "are extracted in a single model-load pass. CatPred uses per-residue "
+            "ESM2 features, so it bridges into a method-specific cache format "
+            "rather than reusing the shared mean-vector cache directly."
         ),
     },
 
