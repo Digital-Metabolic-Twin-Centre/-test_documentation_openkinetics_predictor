@@ -12,7 +12,6 @@ llen
 media/
 staticfiles/
 mmseqs_tmp/
-fastas/dbs/
 *.sqlite3
 
 # Vendored model runtime data (generated / large)
