@@ -246,10 +246,12 @@ contains `histogram_max`, `histogram_mean` (10-bin arrays, 0–100% identity),
 | TurNup | kcat | `Protein Sequence`, `Substrates`, `Products` | 1,024 residues |
 | EITLEM | kcat or Km | `Protein Sequence`, `Substrate` | 1,024 residues |
 | UniKP | kcat or Km | `Protein Sequence`, `Substrate` | 1,000 residues |
+| CataPro | kcat, Km, or kcat/Km | `Protein Sequence`, `Substrate` | 1,000 residues |
 | KinForm-H | kcat or Km | `Protein Sequence`, `Substrate` | 1,500 residues |
 | KinForm-L | kcat only | `Protein Sequence`, `Substrate` | 1,500 residues |
+| CatPred | kcat or Km | `Protein Sequence`, `Substrate` | 2,048 residues |
 
-Substrates must be SMILES or InChI strings. For TurNup, separate multiple
+Substrates must be SMILES or InChI strings. For multi-substrate/product models, separate multiple
 substrates/products with semicolons: `CC(=O)O;C1CCCCC1`.
 
 ---

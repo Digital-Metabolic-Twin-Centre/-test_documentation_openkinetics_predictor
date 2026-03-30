@@ -808,6 +808,12 @@ export default function ApiDocs() {
                 <td>1,000 residues</td>
               </tr>
               <tr>
+                <td><code>CataPro</code></td>
+                <td>kcat, Km, or kcat/Km</td>
+                <td><code>Protein Sequence</code>, <code>Substrate</code></td>
+                <td>1,000 residues</td>
+              </tr>
+              <tr>
                 <td><code>KinForm-H</code></td>
                 <td>kcat or Km</td>
                 <td><code>Protein Sequence</code>, <code>Substrate</code></td>
@@ -818,6 +824,12 @@ export default function ApiDocs() {
                 <td>kcat only</td>
                 <td><code>Protein Sequence</code>, <code>Substrate</code></td>
                 <td>1,500 residues</td>
+              </tr>
+              <tr>
+                <td><code>CatPred</code></td>
+                <td>kcat or Km</td>
+                <td><code>Protein Sequence</code>, <code>Substrate</code></td>
+                <td>2,048 residues</td>
               </tr>
             </tbody>
           </table>
