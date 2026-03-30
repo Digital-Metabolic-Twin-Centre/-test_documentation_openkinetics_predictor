@@ -1,5 +1,6 @@
 from typing import List, Union, Tuple
 import os
+from pathlib import Path
 
 import numpy as np
 from rdkit import Chem
@@ -18,6 +19,30 @@ from catpred.security import load_torch_artifact
 
 def exists(val):
     return val is not None
+
+
+_AA_TO_INDEX = {
+    "A": 0,
+    "R": 1,
+    "N": 2,
+    "D": 3,
+    "C": 4,
+    "Q": 5,
+    "E": 6,
+    "G": 7,
+    "H": 8,
+    "I": 9,
+    "L": 10,
+    "K": 11,
+    "M": 12,
+    "F": 13,
+    "P": 14,
+    "S": 15,
+    "T": 16,
+    "W": 17,
+    "Y": 18,
+    "V": 19,
+}
     
 class AttentivePooling(nn.Module):
     def __init__(self, input_size=1280, hidden_size=1280):
@@ -334,6 +359,73 @@ class MoleculeModel(nn.Module):
         else:
             raise ValueError(f"Unsupported fingerprint type {fingerprint_type}.")
 
+    def _sequence_to_tensor(self, sequence: str) -> torch.Tensor:
+        return torch.as_tensor([_AA_TO_INDEX[aa] for aa in sequence], device=self.device, dtype=torch.long)
+
+    def _checkpoint_cache_key(self) -> str | None:
+        explicit_key = getattr(self, "webkinpred_model_cache_key", None)
+        if explicit_key:
+            return str(explicit_key)
+
+        checkpoint_path = getattr(self, "webkinpred_loaded_checkpoint_path", None)
+        if not checkpoint_path:
+            return None
+
+        checkpoint = Path(str(checkpoint_path)).resolve()
+        parent = checkpoint.parent.name
+        grandparent = checkpoint.parent.parent.name
+        return f"{grandparent}__{parent}" if grandparent else parent
+
+    def _resolve_cached_seq_pooled(self, protein_record: dict) -> torch.Tensor | None:
+        cache_key = self._checkpoint_cache_key()
+        pooled_by_model = protein_record.get("seq_pooled_outs_by_model")
+
+        if isinstance(pooled_by_model, dict) and cache_key:
+            pooled = pooled_by_model.get(cache_key)
+            if pooled is not None:
+                if not isinstance(pooled, torch.Tensor):
+                    pooled = torch.as_tensor(pooled)
+                    pooled_by_model[cache_key] = pooled
+                return pooled
+
+        pooled_paths = protein_record.get("seq_pooled_outs_paths")
+        if isinstance(pooled_paths, dict) and cache_key:
+            pooled_path = pooled_paths.get(cache_key)
+            if pooled_path is not None:
+                pooled_path = Path(str(pooled_path)).resolve()
+                pooled = load_torch_artifact(
+                    pooled_path,
+                    purpose="CatPred pooled sequence cache entry",
+                    map_location="cpu",
+                    roots=[pooled_path.parent],
+                )
+                if not isinstance(pooled, torch.Tensor):
+                    pooled = torch.as_tensor(pooled)
+                if not isinstance(pooled_by_model, dict):
+                    pooled_by_model = {}
+                    protein_record["seq_pooled_outs_by_model"] = pooled_by_model
+                pooled_by_model[cache_key] = pooled
+                return pooled
+
+        pooled = protein_record.get("seq_pooled_outs")
+        if pooled is not None:
+            if not isinstance(pooled, torch.Tensor):
+                pooled = torch.as_tensor(pooled)
+                protein_record["seq_pooled_outs"] = pooled
+            return pooled
+
+        return None
+
+    def _collect_cached_seq_pooled(self, protein_records: list[dict]) -> torch.Tensor | None:
+        pooled_vectors: list[torch.Tensor] = []
+        for protein_record in protein_records:
+            pooled = self._resolve_cached_seq_pooled(protein_record)
+            if pooled is None:
+                return None
+            pooled = pooled.squeeze(0) if pooled.dim() > 1 else pooled
+            pooled_vectors.append(pooled.to(self.device))
+        return torch.stack(pooled_vectors)
+
     def forward(
         self,
         batch: Union[
@@ -366,15 +458,6 @@ class MoleculeModel(nn.Module):
         :param bond_types_batch: A list of PyTorch tensors storing bond types of each bond determined by RDKit molecules.
         :return: The output of the :class:`MoleculeModel`, containing a list of property predictions.
         """
-        def seq_to_tensor(seq):
-            letter_to_num = {'C': 4, 'D': 3, 'S': 15, 'Q': 5, 'K': 11, 'I': 9,
-                       'P': 14, 'T': 16, 'F': 13, 'A': 0, 'G': 7, 'H': 8,
-                       'E': 6, 'L': 10, 'R': 1, 'W': 17, 'V': 19, 
-                       'N': 2, 'Y': 18, 'M': 12}
-            seq = torch.as_tensor([letter_to_num[a] for a in seq],
-                                  device=self.device, dtype=torch.long)
-            return seq
-        
         if self.is_atom_bond_targets:
             encodings = self.encoder(
                 batch,
@@ -397,61 +480,54 @@ class MoleculeModel(nn.Module):
 
             if not self.args.skip_protein and not self.args.protein_records_path is None:
                 protein_records = batch[-1].protein_record_list
-                pretrained_egnn_arr = []
-                if self.args.add_pretrained_egnn_feats:
-                    for each in protein_records:
-                        name = each['name']
-                        if name in self.pretrained_egnn_feats_dict:
-                            pretrained_egnn_arr.append(self.pretrained_egnn_feats_dict[name])
-                        else:
-                            pretrained_egnn_arr.append(self.pretrained_egnn_feats_avg)
-                    pretrained_egnn_arr = torch.stack(pretrained_egnn_arr).to(self.device)
-                
-                seq_arr = [seq_to_tensor(each['seq']) for each in protein_records]
-                seq_arr = pad_sequence(seq_arr, batch_first=True,
-                                       padding_value=20).to(self.device)
-                
-                if self.args.add_esm_feats:
-                    esm_feature_arr = [each['esm2_feats'] for each in protein_records]
-                    esm_feature_arr = pad_sequence(esm_feature_arr,
-                                                   batch_first=True).to(self.device)
-                    if seq_arr.shape[1] != esm_feature_arr.shape[1]:
-                        common_len = min(seq_arr.shape[1], esm_feature_arr.shape[1])
-                        seq_arr = seq_arr[:, :common_len]
-                        esm_feature_arr = esm_feature_arr[:, :common_len]
+                seq_pooled_outs = self._collect_cached_seq_pooled(protein_records)
+                if seq_pooled_outs is None:
+                    pretrained_egnn_arr = []
+                    if self.args.add_pretrained_egnn_feats:
+                        for each in protein_records:
+                            name = each['name']
+                            if name in self.pretrained_egnn_feats_dict:
+                                pretrained_egnn_arr.append(self.pretrained_egnn_feats_dict[name])
+                            else:
+                                pretrained_egnn_arr.append(self.pretrained_egnn_feats_avg)
+                        pretrained_egnn_arr = torch.stack(pretrained_egnn_arr).to(self.device)
 
-                # project sequence to embed dim
-                seq_outs = self.seq_embedder(seq_arr)                    
-                # else:
-                # add rotary embeddings
-                q = self.rotary_embedder.rotate_queries_or_keys(seq_outs,
-                                                             seq_dim=1)
-                k = self.rotary_embedder.rotate_queries_or_keys(seq_outs,
-                                                            seq_dim=1)    
-                # attended seq features
-                seq_outs, _ = self.multihead_attn(q, k, seq_outs)
+                    seq_arr = [self._sequence_to_tensor(each['seq']) for each in protein_records]
+                    seq_arr = pad_sequence(seq_arr, batch_first=True, padding_value=20).to(self.device)
 
-                if self.args.add_esm_feats:
-                    seq_outs = torch.cat([esm_feature_arr, seq_outs], dim=-1)
-                    
-                # pool attentively
-                if not self.args.skip_attentive_pooling:
-                    seq_pooled_outs, seq_wts = self.attentive_pooler(seq_outs)
-                else:
-                    seq_pooled_outs = seq_outs.mean(dim=1)
-                # ipdb.set_trace()
-                if self.args.add_pretrained_egnn_feats:
-                    seq_pooled_outs = torch.cat([seq_pooled_outs, pretrained_egnn_arr],
-                                                dim=-1)
-                    
+                    if self.args.add_esm_feats:
+                        esm_feature_arr = [each['esm2_feats'] for each in protein_records]
+                        esm_feature_arr = pad_sequence(esm_feature_arr, batch_first=True).to(self.device)
+                        if seq_arr.shape[1] != esm_feature_arr.shape[1]:
+                            common_len = min(seq_arr.shape[1], esm_feature_arr.shape[1])
+                            seq_arr = seq_arr[:, :common_len]
+                            esm_feature_arr = esm_feature_arr[:, :common_len]
+
+                    # project sequence to embed dim
+                    seq_outs = self.seq_embedder(seq_arr)
+                    # add rotary embeddings
+                    q = self.rotary_embedder.rotate_queries_or_keys(seq_outs, seq_dim=1)
+                    k = self.rotary_embedder.rotate_queries_or_keys(seq_outs, seq_dim=1)
+                    # attended seq features
+                    seq_outs, _ = self.multihead_attn(q, k, seq_outs)
+
+                    if self.args.add_esm_feats:
+                        seq_outs = torch.cat([esm_feature_arr, seq_outs], dim=-1)
+
+                    # pool attentively
+                    if not self.args.skip_attentive_pooling:
+                        seq_pooled_outs, _ = self.attentive_pooler(seq_outs)
+                    else:
+                        seq_pooled_outs = seq_outs.mean(dim=1)
+                    if self.args.add_pretrained_egnn_feats:
+                        seq_pooled_outs = torch.cat([seq_pooled_outs, pretrained_egnn_arr], dim=-1)
+
                 if not self.args.skip_substrate:
-                    # ipdb.set_trace()
                     total_outs = torch.cat([seq_pooled_outs, encodings], dim=-1)
                 else:
                     total_outs = seq_pooled_outs
-                    
+
                 output = self.readout(total_outs)
-                
             else:
                 output = self.readout(encodings)
                 

@@ -4,6 +4,7 @@ from datetime import timedelta
 from functools import wraps
 import logging
 import os
+from pathlib import Path
 import pickle
 import re
 from time import time
@@ -163,6 +164,11 @@ def load_checkpoint(
     if args.cuda:
         debug("Moving model to cuda")
     model = model.to(args.device)
+    checkpoint = Path(path).resolve()
+    parent = checkpoint.parent.name
+    grandparent = checkpoint.parent.parent.name
+    model.webkinpred_loaded_checkpoint_path = str(checkpoint)
+    model.webkinpred_model_cache_key = f"{grandparent}__{parent}" if grandparent else parent
 
     return model
 def overwrite_state_dict(

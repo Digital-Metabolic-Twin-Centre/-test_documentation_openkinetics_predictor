@@ -560,7 +560,22 @@ def get_data(path: str,
                 if 'esm2_feats' in protein_record and not isinstance(protein_record['esm2_feats'], torch.Tensor):
                     protein_record['esm2_feats'] = torch.as_tensor(protein_record['esm2_feats'])
 
-                if 'esm2_feats' not in protein_record:
+                if 'seq_pooled_outs' in protein_record and not isinstance(protein_record['seq_pooled_outs'], torch.Tensor):
+                    protein_record['seq_pooled_outs'] = torch.as_tensor(protein_record['seq_pooled_outs'])
+
+                pooled_by_model = protein_record.get('seq_pooled_outs_by_model')
+                if isinstance(pooled_by_model, dict):
+                    for model_key, pooled in list(pooled_by_model.items()):
+                        if not isinstance(pooled, torch.Tensor):
+                            pooled_by_model[model_key] = torch.as_tensor(pooled)
+
+                has_cached_seq_pooled = (
+                    'seq_pooled_outs' in protein_record
+                    or ('seq_pooled_outs_by_model' in protein_record and bool(protein_record['seq_pooled_outs_by_model']))
+                    or ('seq_pooled_outs_paths' in protein_record and bool(protein_record['seq_pooled_outs_paths']))
+                )
+
+                if 'esm2_feats' not in protein_record and not has_cached_seq_pooled:
                     esm2_feats_path = protein_record.get('esm2_feats_path')
                     if esm2_feats_path:
                         esm2_feats_path = Path(esm2_feats_path).resolve()

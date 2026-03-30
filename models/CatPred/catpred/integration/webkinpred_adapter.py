@@ -20,7 +20,6 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from catpred.inference import PredictionRequest, run_prediction_pipeline
-from catpred.security import load_torch_artifact
 
 _VALID_AAS = set("ACDEFGHIKLMNPQRSTVWY")
 _TARGET_TO_PARAMETER = {
@@ -34,6 +33,28 @@ _PREDICTION_COLUMN = {
     "kcat": "Prediction_(s^(-1))",
     "km": "Prediction_(mM)",
     "ki": "Prediction_(mM)",
+}
+_AA_TO_INDEX = {
+    "A": 0,
+    "R": 1,
+    "N": 2,
+    "D": 3,
+    "C": 4,
+    "Q": 5,
+    "E": 6,
+    "G": 7,
+    "H": 8,
+    "I": 9,
+    "L": 10,
+    "K": 11,
+    "M": 12,
+    "F": 13,
+    "P": 14,
+    "S": 15,
+    "T": 16,
+    "W": 17,
+    "Y": 18,
+    "V": 19,
 }
 
 
@@ -112,23 +133,148 @@ def _resolve_seq_ids(sequences: list[str], tools_path: Path, media_path: Path) -
     return seq_ids
 
 
-def _load_or_compute_esm2_feature(sequence: str, cache_file: Path) -> Path:
-    cache_file.parent.mkdir(parents=True, exist_ok=True)
-    if cache_file.exists():
-        load_torch_artifact(
-            cache_file,
-            purpose="CatPred ESM2 cache entry",
-            map_location="cpu",
-            roots=[cache_file.parent],
-        )
-        return cache_file
+def _checkpoint_cache_key(checkpoint_path: Path) -> str:
+    checkpoint_path = checkpoint_path.resolve()
+    parent = checkpoint_path.parent.name
+    grandparent = checkpoint_path.parent.parent.name
+    return f"{grandparent}__{parent}" if grandparent else parent
+
+
+def _discover_checkpoint_models(checkpoint_dir: Path) -> list[tuple[str, Path]]:
+    checkpoint_files = sorted(checkpoint_dir.rglob("model.pt"))
+    if not checkpoint_files:
+        raise RuntimeError(f"No CatPred model checkpoints found under: {checkpoint_dir}")
+
+    entries: list[tuple[str, Path]] = []
+    seen_keys: set[str] = set()
+    for checkpoint_path in checkpoint_files:
+        key = _checkpoint_cache_key(checkpoint_path)
+        if key in seen_keys:
+            raise RuntimeError(f"Duplicate checkpoint cache key '{key}' under {checkpoint_dir}")
+        seen_keys.add(key)
+        entries.append((key, checkpoint_path.resolve()))
+    return entries
+
+
+def _cache_path_for_model_seq(
+    *,
+    cache_root: Path,
+    parameter: str,
+    model_key: str,
+    seq_id: str,
+) -> Path:
+    return (cache_root / parameter / model_key / f"{seq_id}.pt").resolve()
+
+
+def _sequence_to_tensor(sequence: str, device: torch.device) -> torch.Tensor:
+    return torch.as_tensor([_AA_TO_INDEX[aa] for aa in sequence], device=device, dtype=torch.long).unsqueeze(0)
+
+
+def _compute_seq_pooled_output(
+    model: Any,
+    sequence: str,
+    seq_id: str,
+    esm_feature: torch.Tensor,
+) -> torch.Tensor:
+    seq_arr = _sequence_to_tensor(sequence, model.device)
+    esm_feature_arr = esm_feature.to(model.device).unsqueeze(0)
+
+    if seq_arr.shape[1] != esm_feature_arr.shape[1]:
+        common_len = min(seq_arr.shape[1], esm_feature_arr.shape[1])
+        seq_arr = seq_arr[:, :common_len]
+        esm_feature_arr = esm_feature_arr[:, :common_len]
+
+    seq_outs = model.seq_embedder(seq_arr)
+    q = model.rotary_embedder.rotate_queries_or_keys(seq_outs, seq_dim=1)
+    k = model.rotary_embedder.rotate_queries_or_keys(seq_outs, seq_dim=1)
+    seq_outs, _ = model.multihead_attn(q, k, seq_outs)
+
+    if model.args.add_esm_feats:
+        seq_outs = torch.cat([esm_feature_arr, seq_outs], dim=-1)
+
+    if not model.args.skip_attentive_pooling:
+        seq_pooled_outs, _ = model.attentive_pooler(seq_outs)
+    else:
+        seq_pooled_outs = seq_outs.mean(dim=1)
+
+    if model.args.add_pretrained_egnn_feats:
+        if seq_id in model.pretrained_egnn_feats_dict:
+            pretrained_egnn = model.pretrained_egnn_feats_dict[seq_id].to(model.device).unsqueeze(0)
+        else:
+            pretrained_egnn = model.pretrained_egnn_feats_avg.to(model.device).unsqueeze(0)
+        seq_pooled_outs = torch.cat([seq_pooled_outs, pretrained_egnn], dim=-1)
+
+    return seq_pooled_outs.squeeze(0).detach().cpu()
+
+
+def _prepare_seq_pooled_cache(
+    *,
+    rows: list[dict[str, Any]],
+    seq_ids: list[str],
+    parameter: str,
+    media_path: Path,
+    checkpoint_dir: Path,
+) -> dict[str, dict[str, Path]]:
+    if parameter not in {"kcat", "km"}:
+        return {seq_id: {} for seq_id in seq_ids}
+
+    cache_root = media_path / "sequence_info" / "catpred_esm2"
+    checkpoint_models = _discover_checkpoint_models(checkpoint_dir)
+    sequence_by_id = {
+        seq_id: str(row.get("sequence", "")).strip()
+        for row, seq_id in zip(rows, seq_ids)
+    }
+
+    cache_paths: dict[str, dict[str, Path]] = {}
+    missing_by_model: dict[str, list[str]] = {}
+    any_missing = False
+    for seq_id in seq_ids:
+        seq_cache_paths: dict[str, Path] = {}
+        for model_key, _ in checkpoint_models:
+            path = _cache_path_for_model_seq(
+                cache_root=cache_root,
+                parameter=parameter,
+                model_key=model_key,
+                seq_id=seq_id,
+            )
+            seq_cache_paths[model_key] = path
+            if not path.exists():
+                any_missing = True
+                missing_by_model.setdefault(model_key, []).append(seq_id)
+        cache_paths[seq_id] = seq_cache_paths
+
+    if not any_missing:
+        return cache_paths
 
     os.environ.setdefault("PROTEIN_EMBED_USE_CPU", "1")
     from catpred.data.esm_utils import get_single_esm_repr
+    from catpred.utils import load_checkpoint
 
-    embedding = get_single_esm_repr(sequence).cpu()
-    torch.save(embedding, cache_file)
-    return cache_file
+    missing_seq_ids = sorted({seq_id for values in missing_by_model.values() for seq_id in values})
+    esm_by_seq_id: dict[str, torch.Tensor] = {}
+    for seq_id in missing_seq_ids:
+        esm_by_seq_id[seq_id] = get_single_esm_repr(sequence_by_id[seq_id]).cpu()
+
+    for model_key, checkpoint_path in checkpoint_models:
+        pending_seq_ids = sorted(set(missing_by_model.get(model_key, [])))
+        if not pending_seq_ids:
+            continue
+
+        model = load_checkpoint(str(checkpoint_path), device=torch.device("cpu"))
+        model.eval()
+        with torch.no_grad():
+            for seq_id in pending_seq_ids:
+                output_path = cache_paths[seq_id][model_key]
+                output_path.parent.mkdir(parents=True, exist_ok=True)
+                pooled = _compute_seq_pooled_output(
+                    model=model,
+                    sequence=sequence_by_id[seq_id],
+                    seq_id=seq_id,
+                    esm_feature=esm_by_seq_id[seq_id],
+                )
+                torch.save(pooled, output_path)
+
+    return cache_paths
 
 
 def _build_input_dataframe(rows: list[dict[str, Any]], seq_ids: list[str]) -> pd.DataFrame:
@@ -156,18 +302,26 @@ def _write_protein_records(
     seq_ids: list[str],
     parameter: str,
     media_path: Path,
+    checkpoint_dir: Path,
     out_path: Path,
 ) -> None:
     records: dict[str, dict[str, Any]] = {}
-    needs_esm = parameter in {"kcat", "km"}
-    esm_cache_dir = media_path / "sequence_info" / "esm2_last" / "per_residue"
+    pooled_cache_paths = _prepare_seq_pooled_cache(
+        rows=rows,
+        seq_ids=seq_ids,
+        parameter=parameter,
+        media_path=media_path,
+        checkpoint_dir=checkpoint_dir,
+    )
 
     for row, seq_id in zip(rows, seq_ids):
         sequence = str(row.get("sequence", "")).strip()
         record: dict[str, Any] = {"name": seq_id, "seq": sequence}
-        if needs_esm:
-            cache_file = _load_or_compute_esm2_feature(sequence, esm_cache_dir / f"{seq_id}.pt")
-            record["esm2_feats_path"] = str(cache_file.resolve())
+        if parameter in {"kcat", "km"}:
+            record["seq_pooled_outs_paths"] = {
+                key: str(path)
+                for key, path in pooled_cache_paths[seq_id].items()
+            }
         records[seq_id] = record
 
     with gzip.open(out_path, "wt", encoding="utf-8") as handle:
@@ -222,6 +376,7 @@ def run_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
             seq_ids=seq_ids,
             parameter=parameter,
             media_path=media_path,
+            checkpoint_dir=(checkpoint_root / parameter).resolve(),
             out_path=protein_records,
         )
 
