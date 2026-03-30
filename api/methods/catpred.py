@@ -38,9 +38,9 @@ descriptor = MethodDescriptor(
         script_key="CatPred",
         data_path_env={
             "CATPRED_REPO_ROOT": "CatPred",
+            "CATPRED_CHECKPOINT_ROOT": "CatPred_production_checkpoints",
             "CATPRED_MEDIA_PATH": "media",
             "CATPRED_TOOLS_PATH": "tools",
-            "PYTHONPATH": "CatPred",
         },
         extra_env={
             "PROTEIN_EMBED_USE_CPU": "1",

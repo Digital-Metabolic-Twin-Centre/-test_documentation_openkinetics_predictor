@@ -11,6 +11,7 @@ DEFAULT_ALLOWED_FRONTEND_IPS = ["127.0.0.1", "localhost"]
 
 _DATA_PATH_REL = {
     "CatPred": "models/CatPred",
+    "CatPred_production_checkpoints": "models/CatPred/data/pretrained/production",
     "DLKcat": "models/DLKcat/DeeplearningApproach/Data",
     "DLKcat_Results": "models/DLKcat/DeeplearningApproach/Results",
     "EITLEM": "models/EITLEM",

@@ -46,6 +46,9 @@ CATPRED_ROOT = os.environ.get("WEBKINPRED_CATPRED_ROOT")
 if CATPRED_ROOT:
     catpred_root = str(Path(CATPRED_ROOT).resolve())
     DATA_PATHS["CatPred"] = catpred_root
+    DATA_PATHS["CatPred_production_checkpoints"] = str(
+        Path(catpred_root) / "data" / "pretrained" / "production"
+    )
     PREDICTION_SCRIPTS["CatPred"] = str(Path(catpred_root) / "catpred" / "integration" / "webkinpred_adapter.py")
     PYTHON_PATHS["CatPred"] = os.environ.get(
         "WEBKINPRED_CATPRED_PYTHON",
