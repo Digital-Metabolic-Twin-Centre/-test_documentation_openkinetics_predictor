@@ -58,6 +58,7 @@ class Job(models.Model):
     kcat_km_method = models.CharField(max_length=50, null=True, blank=True)
     status = models.CharField(max_length=20)
     submission_time = models.DateTimeField(default=timezone.now)
+    start_time = models.DateTimeField(null=True, blank=True)
     completion_time = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(null=True, blank=True)
     output_file = models.FileField(upload_to="jobs/%Y/%m/%d/", null=True, blank=True)

@@ -74,7 +74,8 @@ def run_prediction(
     """
     job = Job.objects.get(public_id=public_id)
     job.status = "Processing"
-    job.save(update_fields=["status"])
+    job.start_time = timezone.now()
+    job.save(update_fields=["status", "start_time"])
 
     desc = get_method(method_key)
 
@@ -135,9 +136,10 @@ def run_both_prediction(
     """
     job = Job.objects.get(public_id=public_id)
     job.status = "Processing"
+    job.start_time = timezone.now()
     job.predictions_made = 0
     job.total_predictions = 0
-    job.save(update_fields=["status", "predictions_made", "total_predictions"])
+    job.save(update_fields=["status", "start_time", "predictions_made", "total_predictions"])
 
     kcat_desc = get_method(kcat_key)
     km_desc = get_method(km_key)
@@ -200,9 +202,10 @@ def run_multi_prediction(
     """
     job = Job.objects.get(public_id=public_id)
     job.status = "Processing"
+    job.start_time = timezone.now()
     job.predictions_made = 0
     job.total_predictions = 0
-    job.save(update_fields=["status", "predictions_made", "total_predictions"])
+    job.save(update_fields=["status", "start_time", "predictions_made", "total_predictions"])
 
     ordered_targets = canonicalise_targets(targets)
     if not ordered_targets:

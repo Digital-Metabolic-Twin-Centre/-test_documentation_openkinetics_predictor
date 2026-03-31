@@ -331,17 +331,32 @@ def create_job_status_response_data(job) -> Dict[str, Any]:
     """
     Create a response data dictionary for the job-status endpoint.
     """
+    now = timezone.now()
+
+    if job.completion_time:
+        elapsed_seconds = int(max(0, (job.completion_time - job.submission_time).total_seconds()))
+    else:
+        elapsed_seconds = int(max(0, (now - job.submission_time).total_seconds()))
+
+    if job.start_time:
+        queue_seconds = int(max(0, (job.start_time - job.submission_time).total_seconds()))
+        if job.completion_time:
+            compute_seconds = int(max(0, (job.completion_time - job.start_time).total_seconds()))
+        else:
+            compute_seconds = int(max(0, (now - job.start_time).total_seconds()))
+    else:
+        queue_seconds = elapsed_seconds if job.status == "Pending" else None
+        compute_seconds = None
+
     return {
         "public_id": job.public_id,
         "status": job.status,
         "submission_time": job.submission_time,
         "completion_time": job.completion_time,
-        "server_time": timezone.now(),
-        "elapsed_seconds": (
-            int(max(0, (job.completion_time - job.submission_time).total_seconds()))
-            if job.completion_time
-            else int(max(0, (timezone.now() - job.submission_time).total_seconds()))
-        ),
+        "server_time": now,
+        "elapsed_seconds": elapsed_seconds,
+        "queue_seconds": queue_seconds,
+        "compute_seconds": compute_seconds,
         "error_message": job.error_message,
         "total_molecules": job.total_molecules,
         "molecules_processed": job.molecules_processed,

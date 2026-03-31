@@ -35,9 +35,10 @@ function JobStatus() {
 
   const [jobStatus, setJobStatus] = useState(null);
   const [error, setError] = useState(null);
-  const [timeElapsed, setTimeElapsed] = useState('');
-  // server-provided elapsed seconds (integer). We'll increment locally while active.
-  const [elapsedSeconds, setElapsedSeconds] = useState(null);
+  const [queueTime, setQueueTime] = useState('');
+  const [computeTime, setComputeTime] = useState('');
+  const [queueSeconds, setQueueSeconds] = useState(null);
+  const [computeSeconds, setComputeSeconds] = useState(null);
   const [isCopying, setIsCopying] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -83,9 +84,11 @@ function JobStatus() {
         const response = await apiClient.get(`/job-status/${id}/`);
         const data = response.data;
 
-        // accept server-calculated elapsed seconds if provided
-        if (data.elapsed_seconds != null) {
-          setElapsedSeconds(Number(data.elapsed_seconds));
+        if (data.queue_seconds != null) {
+          setQueueSeconds(Number(data.queue_seconds));
+        }
+        if (data.compute_seconds != null) {
+          setComputeSeconds(Number(data.compute_seconds));
         }
 
         if (!isMounted.current) return;
@@ -135,6 +138,10 @@ function JobStatus() {
     clearTimer();
     setJobStatus(null);
     setError(null);
+    setQueueSeconds(null);
+    setComputeSeconds(null);
+    setQueueTime('');
+    setComputeTime('');
     // Reset sticky metrics for a new job
     setMetrics({
       moleculesProcessed: 0,
@@ -147,29 +154,35 @@ function JobStatus() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [publicId]);
 
-  // Elapsed time updater
+  // Queue time ticker — increments while job is Pending
   useEffect(() => {
-    if (!(jobStatus && jobStatus.submission_time)) return;
-
-    // Use server-provided elapsedSeconds to render initial value. While job is active
-    // increment locally for smooth UI updates between polls.
-    if (elapsedSeconds == null) return;
-
-    setTimeElapsed(formatDuration(moment.duration(elapsedSeconds * 1000)));
-
-    const active = jobStatus && (jobStatus.status === 'Processing' || jobStatus.status === 'Pending');
-    if (!active) return;
-
+    if (queueSeconds == null) return;
+    setQueueTime(formatDuration(moment.duration(queueSeconds * 1000)));
+    if (jobStatus?.status !== 'Pending') return;
     const id = setInterval(() => {
-      setElapsedSeconds((s) => {
+      setQueueSeconds((s) => {
         const next = (s || 0) + 1;
-        setTimeElapsed(formatDuration(moment.duration(next * 1000)));
+        setQueueTime(formatDuration(moment.duration(next * 1000)));
         return next;
       });
     }, 1000);
-
     return () => clearInterval(id);
-  }, [elapsedSeconds, jobStatus]);
+  }, [queueSeconds, jobStatus?.status]);
+
+  // Compute time ticker — increments while job is Processing
+  useEffect(() => {
+    if (computeSeconds == null) return;
+    setComputeTime(formatDuration(moment.duration(computeSeconds * 1000)));
+    if (jobStatus?.status !== 'Processing') return;
+    const id = setInterval(() => {
+      setComputeSeconds((s) => {
+        const next = (s || 0) + 1;
+        setComputeTime(formatDuration(moment.duration(next * 1000)));
+        return next;
+      });
+    }, 1000);
+    return () => clearInterval(id);
+  }, [computeSeconds, jobStatus?.status]);
 
   const handleCheckStatus = (e) => {
     e.preventDefault();
@@ -341,13 +354,19 @@ function JobStatus() {
                 <>
                   {/* Stats always show sticky x/y, even after completion */}
                   <Row className="mb-3 g-3 stats-grid">
-                    <Col sm={6} lg={3}>
+                    <Col xs={6} sm={6} lg>
                       <div className="stat-card">
-                        <div className="stat-label"><Stopwatch className="me-2" />Time Elapsed</div>
-                        <div className="stat-value">{timeElapsed || '—'}</div>
+                        <div className="stat-label"><Stopwatch className="me-2" />Queue Time</div>
+                        <div className="stat-value">{queueTime || '—'}</div>
                       </div>
                     </Col>
-                    <Col sm={6} lg={3}>
+                    <Col xs={6} sm={6} lg>
+                      <div className="stat-card">
+                        <div className="stat-label"><Stopwatch className="me-2" />Compute Time</div>
+                        <div className="stat-value">{computeTime || '—'}</div>
+                      </div>
+                    </Col>
+                    <Col xs={6} sm={6} lg>
                       <div className="stat-card">
                         <div className="stat-label">Preprocessed</div>
                         <div className="stat-value">
@@ -356,7 +375,7 @@ function JobStatus() {
                         </div>
                       </div>
                     </Col>
-                    <Col sm={6} lg={3}>
+                    <Col xs={6} sm={6} lg>
                       <div className="stat-card">
                         <div className="stat-label">Predictions</div>
                         <div className="stat-value">
@@ -365,7 +384,7 @@ function JobStatus() {
                         </div>
                       </div>
                     </Col>
-                    <Col sm={6} lg={3}>
+                    <Col xs={6} sm={6} lg>
                       <div className="stat-card">
                         <div className="stat-label">Invalid Rows</div>
                         <div className="stat-value">{metrics.invalidRows}</div>

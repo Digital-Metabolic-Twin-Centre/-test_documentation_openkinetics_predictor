@@ -403,17 +403,30 @@ def api_job_status(request, public_id):
     except Job.DoesNotExist:
         return _json_error(f"No job found with id '{public_id}'.", status=404)
 
+    now = timezone.now()
     elapsed = (
         int((job.completion_time - job.submission_time).total_seconds())
         if job.completion_time
-        else int((timezone.now() - job.submission_time).total_seconds())
+        else int((now - job.submission_time).total_seconds())
     )
+
+    if job.start_time:
+        queue_seconds = int(max(0, (job.start_time - job.submission_time).total_seconds()))
+        if job.completion_time:
+            compute_seconds = int(max(0, (job.completion_time - job.start_time).total_seconds()))
+        else:
+            compute_seconds = int(max(0, (now - job.start_time).total_seconds()))
+    else:
+        queue_seconds = max(0, elapsed) if job.status == "Pending" else None
+        compute_seconds = None
 
     data = {
         "jobId": job.public_id,
         "status": job.status,
         "submittedAt": job.submission_time.isoformat(),
         "elapsedSeconds": max(0, elapsed),
+        "queueSeconds": queue_seconds,
+        "computeSeconds": compute_seconds,
         "progress": {
             "moleculesTotal": job.total_molecules,
             "moleculesProcessed": job.molecules_processed,
