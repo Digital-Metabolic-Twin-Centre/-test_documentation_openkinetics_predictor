@@ -146,13 +146,20 @@
 
 /* Optional: match inputs to your aesthetic */
 .kave-input {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed rgba(255, 255, 255, 0.6);
-  color: var(--text-color);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  color: #ffffff;
+  caret-color: #ffffff;
+}
+.kave-input::placeholder {
+  color: rgba(255, 255, 255, 0.82);
+  opacity: 1;
 }
 .kave-input:focus {
-  border-style: solid;
+  border-color: #ffffff;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 0.2rem rgba(255, 255, 255, 0.25);
+}
+.kave-input:hover {
   border-color: rgba(255, 255, 255, 0.85);
-  background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.35);
 }
