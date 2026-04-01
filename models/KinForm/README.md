@@ -5,8 +5,8 @@ Code for the implementation and experiments of KinForm models for predicting enz
 If you just want to get predictions for your own data using our trained models, you can use the hosted web app (no setup required):
 https://predictor.openkinetics.org/
 
-For details on the models and experiments, see the preprint:
-https://arxiv.org/abs/2507.14639
+For details on the models and experiments, see the paper:
+[Alwer & Fleming, npj Systems Biology and Applications 2026](https://www.nature.com/articles/s41540-026-00692-5)
 
 
 Setup

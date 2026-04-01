@@ -8,8 +8,8 @@ Open Kinetics Predictor is a production web interface for predicting enzyme kine
 
 | Engine | Input needed | Output | Citation |
 |--------|--------------|--------|----------|
-| KinForm-H | Protein sequence + substrate SMILES | kcat or Km | [Alwer & Fleming, Arxiv](https://arxiv.org/abs/2507.14639) ([GitHub](https://github.com/Digital-Metabolic-Twin-Centre/KinForm)) |
-| KinForm-L | Protein sequence + substrate SMILES | kcat | [Alwer & Fleming, Arxiv](https://arxiv.org/abs/2507.14639) ([GitHub](https://github.com/Digital-Metabolic-Twin-Centre/KinForm)) |
+| KinForm-H | Protein sequence + substrate SMILES | kcat or Km | [Alwer & Fleming, npj Syst Biol Appl 2026](https://www.nature.com/articles/s41540-026-00692-5) ([GitHub](https://github.com/Digital-Metabolic-Twin-Centre/KinForm)) |
+| KinForm-L | Protein sequence + substrate SMILES | kcat | [Alwer & Fleming, npj Syst Biol Appl 2026](https://www.nature.com/articles/s41540-026-00692-5) ([GitHub](https://github.com/Digital-Metabolic-Twin-Centre/KinForm)) |
 | UniKP | Protein sequence + substrate SMILES | kcat or Km | [Yu et al., Nat Commun 2023](https://www.nature.com/articles/s41467-023-44113-1) ([GitHub](https://github.com/Luo-SynBioLab/UniKP)) |
 | DLKcat | Protein sequence + substrate SMILES | kcat | [Li et al., Nat Catal 2022](https://www.nature.com/articles/s41929-022-00798-z) ([GitHub](https://github.com/SysBioChalmers/DLKcat)) |
 | TurNup | Protein sequence + substrates list + products list | kcat | [Kroll et al., Nat Commun 2023](https://www.nature.com/articles/s41467-023-39840-4) ([GitHub](https://github.com/AlexanderKroll/Kcat_prediction)) |

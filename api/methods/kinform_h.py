@@ -19,7 +19,7 @@ descriptor = MethodDescriptor(
         "KinForm: Kinetics Informed Feature Optimised Representation "
         "Models for Enzyme kcat and KM Prediction"
     ),
-    citation_url="https://arxiv.org/abs/2507.14639",
+    citation_url="https://www.nature.com/articles/s41540-026-00692-5",
     repo_url="https://github.com/Digital-Metabolic-Twin-Centre/KinForm",
     more_info="Recommended for proteins with high sequence similarity to training data.",
 
