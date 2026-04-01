@@ -39,6 +39,7 @@ function JobStatus() {
   const [computeTime, setComputeTime] = useState('');
   const [queueSeconds, setQueueSeconds] = useState(null);
   const [computeSeconds, setComputeSeconds] = useState(null);
+  const [queuePosition, setQueuePosition] = useState(null);
   const [isCopying, setIsCopying] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -90,6 +91,7 @@ function JobStatus() {
         if (data.compute_seconds != null) {
           setComputeSeconds(Number(data.compute_seconds));
         }
+        setQueuePosition(data.queue_position ?? null);
 
         if (!isMounted.current) return;
 
@@ -142,6 +144,7 @@ function JobStatus() {
     setComputeSeconds(null);
     setQueueTime('');
     setComputeTime('');
+    setQueuePosition(null);
     // Reset sticky metrics for a new job
     setMetrics({
       moleculesProcessed: 0,
@@ -420,8 +423,13 @@ function JobStatus() {
                   )}
 
                   {jobStatus.status === 'Pending' && (
-                    <div className="mt-3 d-flex flex-column align-items-center">
-                      <div className="stat-label mb-2">Job is queued and waiting to start...</div>
+                    <div className="mt-3 d-flex flex-column align-items-center gap-2">
+                      {queuePosition != null && (
+                        <div className="queue-position-badge">
+                          Position <span className="queue-position-number">#{queuePosition}</span> in queue
+                        </div>
+                      )}
+                      <div className="stat-label">Job is queued and waiting to start...</div>
                       <Spinner animation="border" role="status" />
                     </div>
                   )}

@@ -420,6 +420,7 @@ def api_job_status(request, public_id):
         queue_seconds = max(0, elapsed) if job.status == "Pending" else None
         compute_seconds = None
 
+    from api.utils.job_utils import get_queue_position
     data = {
         "jobId": job.public_id,
         "status": job.status,
@@ -427,6 +428,7 @@ def api_job_status(request, public_id):
         "elapsedSeconds": max(0, elapsed),
         "queueSeconds": queue_seconds,
         "computeSeconds": compute_seconds,
+        "queuePosition": get_queue_position(job),
         "progress": {
             "moleculesTotal": job.total_molecules,
             "moleculesProcessed": job.molecules_processed,

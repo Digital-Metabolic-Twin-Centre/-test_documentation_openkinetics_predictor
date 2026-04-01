@@ -327,6 +327,21 @@ def create_rate_limit_headers(
     }
 
 
+def get_queue_position(job) -> Optional[int]:
+    """
+    Return the 1-based queue position for a Pending job.
+    Returns None if the job is not Pending.
+    """
+    from api.models import Job as JobModel
+    if job.status != "Pending":
+        return None
+    ahead = JobModel.objects.filter(
+        status="Pending",
+        submission_time__lt=job.submission_time,
+    ).count()
+    return ahead + 1
+
+
 def create_job_status_response_data(job) -> Dict[str, Any]:
     """
     Create a response data dictionary for the job-status endpoint.
@@ -357,6 +372,7 @@ def create_job_status_response_data(job) -> Dict[str, Any]:
         "elapsed_seconds": elapsed_seconds,
         "queue_seconds": queue_seconds,
         "compute_seconds": compute_seconds,
+        "queue_position": get_queue_position(job),
         "error_message": job.error_message,
         "total_molecules": job.total_molecules,
         "molecules_processed": job.molecules_processed,
