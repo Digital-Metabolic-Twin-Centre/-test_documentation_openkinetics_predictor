@@ -109,6 +109,132 @@
   text-align: center;
 }
 
+/* ── Timing Benchmark ── */
+.benchmark-section {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.benchmark-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 0.5rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.benchmark-toggle:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.benchmark-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.benchmark-toggle-icon {
+  opacity: 0.7;
+}
+
+.benchmark-content {
+  padding: 0.9rem 1rem 0.85rem;
+  background: rgba(15, 12, 41, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.benchmark-intro {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin-bottom: 0.45rem;
+  line-height: 1.5;
+}
+
+.benchmark-intro strong {
+  color: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+}
+
+.benchmark-conditions {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.38);
+  margin-bottom: 0.75rem;
+}
+
+.benchmark-cond-value {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 500;
+}
+
+.benchmark-table {
+  font-size: 0.78rem;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  --bs-table-bg: transparent;
+  --bs-table-striped-bg: transparent;
+  --bs-table-hover-bg: rgba(255, 255, 255, 0.04);
+  --bs-table-color: rgba(255, 255, 255, 0.75);
+  --bs-table-striped-color: rgba(255, 255, 255, 0.75);
+  --bs-table-hover-color: rgba(255, 255, 255, 0.75);
+  --bs-table-border-color: rgba(255, 255, 255, 0.08);
+}
+
+.benchmark-table thead tr th,
+.benchmark-table thead tr th * {
+  background: rgba(255, 255, 255, 0.05) !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  padding: 0.4rem 0.65rem;
+  white-space: nowrap;
+}
+
+.benchmark-table tbody tr {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  transition: background 0.12s ease;
+}
+
+.benchmark-table tbody tr td,
+.benchmark-table tbody tr td * {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  border-color: rgba(255, 255, 255, 0.06) !important;
+  padding: 0.35rem 0.65rem;
+  vertical-align: middle;
+}
+
+.benchmark-table tbody tr:hover td {
+  background: rgba(255, 255, 255, 0.04) !important;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.benchmark-method {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace !important;
+  font-size: 0.75rem !important;
+  font-weight: 600 !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.benchmark-empty {
+  color: rgba(255, 255, 255, 0.22) !important;
+  font-style: italic;
+}
+
 /* Method Cards Styling */
 .method-card {
   background-color: rgba(24, 22, 50, 0.74);
