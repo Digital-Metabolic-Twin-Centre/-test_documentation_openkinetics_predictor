@@ -8,6 +8,7 @@ from typing import Dict, List, Optional, Any
 from django.conf import settings
 from django.utils import timezone
 from api.utils import get_experimental
+from api.services.embedding_progress_service import get_embedding_progress
 
 TARGET_ORDER = ["kcat", "Km", "kcat/Km"]
 VALID_TARGETS = set(TARGET_ORDER)
@@ -367,7 +368,7 @@ def create_job_status_response_data(job) -> Dict[str, Any]:
         queue_seconds = elapsed_seconds if job.status == "Pending" else None
         compute_seconds = None
 
-    return {
+    data = {
         "public_id": job.public_id,
         "status": job.status,
         "submission_time": job.submission_time,
@@ -384,3 +385,7 @@ def create_job_status_response_data(job) -> Dict[str, Any]:
         "total_predictions": job.total_predictions,
         "predictions_made": job.predictions_made,
     }
+    embedding_progress = get_embedding_progress(job.public_id)
+    if embedding_progress:
+        data["embedding_progress"] = embedding_progress
+    return data

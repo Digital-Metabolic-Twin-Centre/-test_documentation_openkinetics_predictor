@@ -164,6 +164,9 @@ def turnup_predictions(
             job=job,
             env=env,
             label="TurNup",
+            method_key="TurNup",
+            target="kcat",
+            valid_sequences=valid_sequences,
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)

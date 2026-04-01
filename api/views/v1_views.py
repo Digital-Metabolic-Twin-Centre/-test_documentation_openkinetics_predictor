@@ -35,6 +35,7 @@ from api.models import Job
 from api.services.job_service import process_job_submission_from_params
 from api.services.validation_service import validate_input_file
 from api.services.similarity_service import analyze_sequence_similarity
+from api.services.embedding_progress_service import get_embedding_progress
 from api.utils.api_auth import require_api_key
 from api.utils.job_utils import coerce_bool_param
 from api.utils.quotas import get_quota_usage
@@ -447,6 +448,26 @@ def api_job_status(request, public_id):
             "invalidRows": job.invalid_rows,
         },
     }
+
+    embedding_progress = get_embedding_progress(job.public_id)
+    if embedding_progress:
+        data["progress"]["embedding"] = {
+            "enabled": bool(embedding_progress.get("enabled", True)),
+            "state": embedding_progress.get("state", "running"),
+            "methodKey": embedding_progress.get("methodKey")
+            or embedding_progress.get("method_key"),
+            "method_key": embedding_progress.get("method_key")
+            or embedding_progress.get("methodKey"),
+            "target": embedding_progress.get("target"),
+            "total": int(embedding_progress.get("total", 0) or 0),
+            "cachedAlready": int(embedding_progress.get("cachedAlready", 0) or 0),
+            "cached_already": int(embedding_progress.get("cached_already", 0) or 0),
+            "needComputation": int(embedding_progress.get("needComputation", 0) or 0),
+            "need_computation": int(embedding_progress.get("need_computation", 0) or 0),
+            "computed": int(embedding_progress.get("computed", 0) or 0),
+            "remaining": int(embedding_progress.get("remaining", 0) or 0),
+            "updatedAt": embedding_progress.get("updatedAt"),
+        }
 
     if job.status == "Completed":
         data["completedAt"] = job.completion_time.isoformat()

@@ -143,6 +143,9 @@ def eitlem_predictions(
             job=job,
             env=env,
             label="EITLEM",
+            method_key="EITLEM",
+            target="kcat" if kinetics_type.upper() == "KCAT" else "Km",
+            valid_sequences=valid_sequences,
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)

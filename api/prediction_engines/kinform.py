@@ -173,6 +173,9 @@ def kinform_predictions(
             job=job,
             env=env,
             label=model_key,
+            method_key=model_key,
+            target="kcat" if kinetics_type.upper() == "KCAT" else "Km",
+            valid_sequences=valid_sequences,
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)

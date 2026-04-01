@@ -50,6 +50,15 @@ function JobStatus() {
     predictionsMade: 0,
     totalPredictions: 0,
     invalidRows: 0,
+    embeddingEnabled: false,
+    embeddingState: '',
+    embeddingMethodKey: '',
+    embeddingTarget: '',
+    embeddingTotal: 0,
+    embeddingCachedAlready: 0,
+    embeddingNeedComputation: 0,
+    embeddingComputed: 0,
+    embeddingRemaining: 0,
   });
 
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api';
@@ -98,13 +107,31 @@ function JobStatus() {
         setJobStatus(data);
         setError(null);
 
-        setMetrics(() => ({
-          moleculesProcessed: data.molecules_processed,
-          totalMolecules: data.total_molecules,
-          predictionsMade: data.predictions_made,
-          totalPredictions: data.total_predictions,
-          invalidRows: data.invalid_rows,
-        }));
+        setMetrics((prev) => {
+          const embedding = data.embedding_progress;
+          return {
+            moleculesProcessed: data.molecules_processed,
+            totalMolecules: data.total_molecules,
+            predictionsMade: data.predictions_made,
+            totalPredictions: data.total_predictions,
+            invalidRows: data.invalid_rows,
+            embeddingEnabled: embedding ? Boolean(embedding.enabled) : prev.embeddingEnabled,
+            embeddingState: embedding ? (embedding.state || '') : prev.embeddingState,
+            embeddingMethodKey: embedding
+              ? (embedding.methodKey || embedding.method_key || '')
+              : prev.embeddingMethodKey,
+            embeddingTarget: embedding ? (embedding.target || '') : prev.embeddingTarget,
+            embeddingTotal: embedding ? Number(embedding.total || 0) : prev.embeddingTotal,
+            embeddingCachedAlready: embedding
+              ? Number(embedding.cachedAlready ?? embedding.cached_already ?? 0)
+              : prev.embeddingCachedAlready,
+            embeddingNeedComputation: embedding
+              ? Number(embedding.needComputation ?? embedding.need_computation ?? 0)
+              : prev.embeddingNeedComputation,
+            embeddingComputed: embedding ? Number(embedding.computed || 0) : prev.embeddingComputed,
+            embeddingRemaining: embedding ? Number(embedding.remaining || 0) : prev.embeddingRemaining,
+          };
+        });
 
         const nextDelay =
           data.status === 'Processing' ? 1000 :
@@ -152,6 +179,15 @@ function JobStatus() {
       predictionsMade: 0,
       totalPredictions: 0,
       invalidRows: 0,
+      embeddingEnabled: false,
+      embeddingState: '',
+      embeddingMethodKey: '',
+      embeddingTarget: '',
+      embeddingTotal: 0,
+      embeddingCachedAlready: 0,
+      embeddingNeedComputation: 0,
+      embeddingComputed: 0,
+      embeddingRemaining: 0,
     });
     if (publicId) fetchJobStatus(publicId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,6 +266,12 @@ function JobStatus() {
     const made = metrics.predictionsMade || 0;
     const total = metrics.totalPredictions || 0;
     return total > 0 ? Math.min(100, Math.round((made / total) * 100)) : 0;
+  }, [metrics]);
+
+  const embeddingPct = useMemo(() => {
+    const done = metrics.embeddingComputed || 0;
+    const total = metrics.embeddingNeedComputation || 0;
+    return total > 0 ? Math.min(100, Math.round((done / total) * 100)) : 0;
   }, [metrics]);
 
   // Build a nice expandable block for rows we couldn't predict (if the API returns any flavour of this)
@@ -393,10 +435,49 @@ function JobStatus() {
                         <div className="stat-value">{metrics.invalidRows}</div>
                       </div>
                     </Col>
+                    {metrics.embeddingEnabled && (
+                      <Col xs={6} sm={6} lg>
+                        <div className="stat-card">
+                          <div className="stat-label">Embeddings Cached Already</div>
+                          <div className="stat-value">{metrics.embeddingCachedAlready}</div>
+                        </div>
+                      </Col>
+                    )}
+                    {metrics.embeddingEnabled && (
+                      <Col xs={6} sm={6} lg>
+                        <div className="stat-card">
+                          <div className="stat-label">Embeddings Need Computation</div>
+                          <div className="stat-value">{metrics.embeddingNeedComputation}</div>
+                        </div>
+                      </Col>
+                    )}
+                    {metrics.embeddingEnabled && (
+                      <Col xs={6} sm={6} lg>
+                        <div className="stat-card">
+                          <div className="stat-label">Embeddings Computed</div>
+                          <div className="stat-value">
+                            {metrics.embeddingComputed}
+                            <span className="stat-sub"> / {metrics.embeddingNeedComputation}</span>
+                          </div>
+                        </div>
+                      </Col>
+                    )}
                   </Row>
 
                   {(jobStatus.status === 'Processing') && (
                     <>
+                      {metrics.embeddingEnabled && metrics.embeddingNeedComputation > 0 && (
+                        <div className="mb-3">
+                          <div className="progress-row">
+                            <div className="progress-title">Embeddings Computed</div>
+                            <div className="progress-count">
+                              {metrics.embeddingComputed} / {metrics.embeddingNeedComputation}
+                            </div>
+                          </div>
+                          <ProgressBar now={embeddingPct} className="kave-progress" />
+                        </div>
+                      )}
+
                       {metrics.totalMolecules > 0 && (
                         <div className="mb-3">
                           <div className="progress-row">

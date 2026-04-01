@@ -134,6 +134,9 @@ def run_generic_subprocess_prediction(
             job=job,
             env=env,
             label=desc.display_name,
+            method_key=desc.key,
+            target=target,
+            valid_sequences=[str(row.get("sequence", "")) for row in valid_rows],
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)

@@ -143,6 +143,9 @@ def unikp_predictions(
             job=job,
             env=env,
             label="UniKP",
+            method_key="UniKP",
+            target="kcat" if kinetics_type.upper() == "KCAT" else "Km",
+            valid_sequences=valid_sequences,
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)

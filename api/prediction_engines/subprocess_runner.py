@@ -7,6 +7,10 @@
 
 import subprocess
 from api.models import Job
+from api.services.embedding_progress_service import (
+    start_embedding_tracking,
+    stop_embedding_tracking,
+)
 
 
 def run_prediction_subprocess(
@@ -14,6 +18,9 @@ def run_prediction_subprocess(
     job: Job,
     env: dict | None = None,
     label: str = "subprocess",
+    method_key: str | None = None,
+    target: str | None = None,
+    valid_sequences: list[str] | None = None,
 ) -> None:
     """
     Run a prediction subprocess, stream its stdout line-by-line, and update
@@ -45,34 +52,50 @@ def run_prediction_subprocess(
     subprocess.CalledProcessError
         If the subprocess exits with a non-zero return code.
     """
-    process = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        env=env,
-    )
+    tracking_started = False
+    if method_key and target and valid_sequences:
+        tracking_started = start_embedding_tracking(
+            job_public_id=job.public_id,
+            method_key=method_key,
+            target=target,
+            valid_sequences=valid_sequences,
+            env=env,
+        )
 
-    for line in iter(process.stdout.readline, ""):
-        if not line:
-            break
+    process = None
+    try:
+        process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            env=env,
+        )
 
-        line = line.rstrip()
-        print(f"[{label}]", line)
+        for line in iter(process.stdout.readline, ""):
+            if not line:
+                break
 
-        if line.startswith("Progress:"):
-            parts = line.split()
-            if len(parts) >= 2:
-                try:
-                    done, total = parts[1].split("/")
-                    job.predictions_made = int(done)
-                    job.total_predictions = int(total)
-                    job.save(update_fields=["predictions_made", "total_predictions"])
-                except (ValueError, AttributeError):
-                    pass  # malformed progress line — ignore
+            line = line.rstrip()
+            print(f"[{label}]", line)
 
-    process.wait()
+            if line.startswith("Progress:"):
+                parts = line.split()
+                if len(parts) >= 2:
+                    try:
+                        done, total = parts[1].split("/")
+                        job.predictions_made = int(done)
+                        job.total_predictions = int(total)
+                        job.save(update_fields=["predictions_made", "total_predictions"])
+                    except (ValueError, AttributeError):
+                        pass  # malformed progress line — ignore
 
-    if process.returncode != 0:
-        raise subprocess.CalledProcessError(process.returncode, process.args)
+        process.wait()
+
+        if process.returncode != 0:
+            raise subprocess.CalledProcessError(process.returncode, process.args)
+    finally:
+        if tracking_started:
+            final_state = "done" if (process is not None and process.returncode == 0) else "error"
+            stop_embedding_tracking(job.public_id, final_state=final_state)

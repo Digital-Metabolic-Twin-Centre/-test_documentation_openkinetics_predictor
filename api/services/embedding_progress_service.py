@@ -1,0 +1,702 @@
+"""
+Embedding progress tracking service.
+
+Tracks per-job embedding cache progress in Redis without modifying the model
+embedding scripts themselves. The tracker is:
+
+- event-driven on Linux via inotify
+- resilient via periodic reconciliation sweeps
+- portable via polling fallback when inotify is unavailable
+"""
+
+from __future__ import annotations
+
+import ctypes
+import ctypes.util
+import json
+import os
+import select
+import struct
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Iterable
+
+from api.prediction_engines.runtime_paths import DATA_PATHS
+from api.services.progress_service import redis_conn
+
+_KEY_PREFIX = "job_embedding_progress:"
+_TTL_SECONDS = 7200
+_RECONCILE_SECS = 10.0
+_FALLBACK_POLL_SECS = 3.0
+_REDIS_WRITE_MIN_INTERVAL_SECS = 0.25
+
+_TRACKERS: dict[str, "_EmbeddingTracker"] = {}
+_TRACKERS_LOCK = threading.Lock()
+
+
+def _redis_key(job_public_id: str) -> str:
+    return f"{_KEY_PREFIX}{job_public_id}"
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def clear_embedding_progress(job_public_id: str) -> None:
+    redis_conn.delete(_redis_key(job_public_id))
+
+
+def get_embedding_progress(job_public_id: str) -> dict | None:
+    raw = redis_conn.get(_redis_key(job_public_id))
+    if not raw:
+        return None
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return None
+
+    for key in (
+        "total",
+        "cached_already",
+        "need_computation",
+        "computed",
+        "remaining",
+    ):
+        if key in data:
+            try:
+                data[key] = int(data[key])
+            except (TypeError, ValueError):
+                data[key] = 0
+
+    # convenience camelCase aliases for web UI compatibility
+    if "method_key" in data and "methodKey" not in data:
+        data["methodKey"] = data["method_key"]
+    if "cached_already" in data and "cachedAlready" not in data:
+        data["cachedAlready"] = data["cached_already"]
+    if "need_computation" in data and "needComputation" not in data:
+        data["needComputation"] = data["need_computation"]
+    return data
+
+
+@dataclass
+class _PreparedPlan:
+    method_key: str
+    target: str
+    total: int
+    cached_already: int
+    need_computation: int
+    missing_paths_by_seq: dict[str, set[str]]
+    path_to_seqs: dict[str, set[str]]
+    watch_dirs: set[Path]
+
+
+def start_embedding_tracking(
+    *,
+    job_public_id: str,
+    method_key: str,
+    target: str,
+    valid_sequences: list[str] | None,
+    env: dict | None = None,
+) -> bool:
+    """
+    Start embedding progress tracking for a job/method run.
+
+    Returns True when tracking was started or initialized (including immediate
+    done state), False when tracking is not applicable or setup failed.
+    """
+    if not valid_sequences:
+        clear_embedding_progress(job_public_id)
+        return False
+
+    if method_key == "DLKcat":
+        clear_embedding_progress(job_public_id)
+        return False
+
+    try:
+        plan = _prepare_plan(
+            method_key=method_key,
+            target=target,
+            sequences=valid_sequences,
+            env=env or {},
+        )
+    except Exception as exc:  # fail-open: prediction must continue
+        print(f"[embedding_progress] setup skipped for {job_public_id}/{method_key}: {exc}")
+        clear_embedding_progress(job_public_id)
+        return False
+
+    # Active-method-only semantics: one tracker per job.
+    with _TRACKERS_LOCK:
+        previous = _TRACKERS.pop(job_public_id, None)
+        if previous is not None:
+            previous.stop(final_state="done")
+
+        tracker = _EmbeddingTracker(job_public_id=job_public_id, plan=plan)
+        _TRACKERS[job_public_id] = tracker
+
+    tracker.start()
+    return True
+
+
+def stop_embedding_tracking(job_public_id: str, final_state: str = "done") -> None:
+    with _TRACKERS_LOCK:
+        tracker = _TRACKERS.pop(job_public_id, None)
+    if tracker is not None:
+        tracker.stop(final_state=final_state)
+
+
+def _method_env_keys(method_key: str) -> tuple[str | None, str | None]:
+    mapping = {
+        "UniKP": ("UNIKP_MEDIA_PATH", "UNIKP_TOOLS_PATH"),
+        "EITLEM": ("EITLEM_MEDIA_PATH", "EITLEM_TOOLS_PATH"),
+        "TurNup": ("TURNUP_MEDIA_PATH", "TURNUP_TOOLS_PATH"),
+        "CataPro": ("CATAPRO_MEDIA_PATH", "CATAPRO_TOOLS_PATH"),
+        "CatPred": ("CATPRED_MEDIA_PATH", "CATPRED_TOOLS_PATH"),
+        "KinForm-H": ("KINFORM_MEDIA_PATH", "KINFORM_TOOLS_PATH"),
+        "KinForm-L": ("KINFORM_MEDIA_PATH", "KINFORM_TOOLS_PATH"),
+    }
+    return mapping.get(method_key, (None, None))
+
+
+def _resolve_media_and_tools(method_key: str, env: dict) -> tuple[Path, Path]:
+    media_key, tools_key = _method_env_keys(method_key)
+
+    media_path = env.get(media_key) if media_key else None
+    tools_path = env.get(tools_key) if tools_key else None
+
+    if not media_path:
+        media_path = DATA_PATHS.get("media")
+    if not tools_path:
+        tools_path = DATA_PATHS.get("tools")
+
+    if not media_path or not tools_path:
+        raise RuntimeError("Could not resolve media/tools paths for embedding tracking.")
+
+    return Path(media_path).resolve(), Path(tools_path).resolve()
+
+
+def _normalise_sequences_for_method(method_key: str, sequences: Iterable[str]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+
+    for raw in sequences:
+        seq = str(raw).strip()
+        if not seq:
+            continue
+        if method_key == "TurNup":
+            # TurNup upper-cases and truncates to 1022 via preprocess_enzymes().
+            seq = seq.upper()[:1022]
+        if seq not in seen:
+            seen.add(seq)
+            out.append(seq)
+    return out
+
+
+def _resolve_seq_ids_via_cli(sequences: list[str], tools_path: Path, media_path: Path) -> list[str]:
+    seqmap_cli = tools_path / "seqmap" / "main.py"
+    seqmap_db = media_path / "sequence_info" / "seqmap.sqlite3"
+    if not seqmap_cli.exists():
+        raise RuntimeError(f"seqmap CLI not found: {seqmap_cli}")
+    if not seqmap_db.exists():
+        raise RuntimeError(f"seqmap DB not found: {seqmap_db}")
+
+    payload = "\n".join(sequences) + "\n"
+    cmd = [
+        sys.executable,
+        str(seqmap_cli),
+        "--db",
+        str(seqmap_db),
+        "batch-get-or-create",
+        "--stdin",
+    ]
+    proc = subprocess.run(
+        cmd,
+        input=payload,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"seqmap failed (rc={proc.returncode})\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
+    seq_ids = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
+    if len(seq_ids) != len(sequences):
+        raise RuntimeError(f"seqmap returned {len(seq_ids)} ids for {len(sequences)} sequences")
+    return seq_ids
+
+
+def _catpred_parameter(target: str) -> str | None:
+    if target == "kcat":
+        return "kcat"
+    if target == "Km":
+        return "km"
+    if target.lower() == "km":
+        return "km"
+    return None
+
+
+def _catpred_checkpoint_key(model_pt_path: Path) -> str:
+    parent = model_pt_path.parent.name
+    grandparent = model_pt_path.parent.parent.name
+    return f"{grandparent}__{parent}" if grandparent else parent
+
+
+def _discover_catpred_checkpoint_keys(checkpoint_root: Path, parameter: str) -> list[str]:
+    parameter_root = checkpoint_root / parameter
+    if not parameter_root.exists():
+        return []
+
+    keys: list[str] = []
+    seen: set[str] = set()
+    for model_file in sorted(parameter_root.rglob("model.pt")):
+        key = _catpred_checkpoint_key(model_file)
+        if key in seen:
+            continue
+        seen.add(key)
+        keys.append(key)
+    return keys
+
+
+def _expected_paths_by_seq(
+    *,
+    method_key: str,
+    target: str,
+    seq_ids: list[str],
+    media_path: Path,
+    env: dict,
+) -> dict[str, set[str]]:
+    out: dict[str, set[str]] = {}
+
+    if method_key in {"UniKP", "CataPro"}:
+        base = media_path / "sequence_info" / "prot_t5_last" / "mean_vecs"
+        for seq_id in seq_ids:
+            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
+        return out
+
+    if method_key == "EITLEM":
+        base = media_path / "sequence_info" / "esm1v"
+        for seq_id in seq_ids:
+            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
+        return out
+
+    if method_key == "TurNup":
+        base = media_path / "sequence_info" / "esm1b_turnup"
+        for seq_id in seq_ids:
+            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
+        return out
+
+    if method_key in {"KinForm-H", "KinForm-L"}:
+        base = media_path / "sequence_info"
+        roots = [
+            "esm2_layer_26",
+            "esm2_layer_29",
+            "esmc_layer_24",
+            "esmc_layer_32",
+            "prot_t5_layer_19",
+            "prot_t5_last",
+        ]
+        for seq_id in seq_ids:
+            paths: set[str] = set()
+            for root in roots:
+                paths.add(str((base / root / "mean_vecs" / f"{seq_id}.npy").resolve()))
+                paths.add(str((base / root / "weighted_vecs" / f"{seq_id}.npy").resolve()))
+            out[seq_id] = paths
+        return out
+
+    if method_key == "CatPred":
+        parameter = _catpred_parameter(target)
+        if parameter is None:
+            return {}
+
+        checkpoint_root = env.get("CATPRED_CHECKPOINT_ROOT") or DATA_PATHS.get(
+            "CatPred_production_checkpoints"
+        )
+        if not checkpoint_root:
+            return {}
+
+        model_keys = _discover_catpred_checkpoint_keys(Path(checkpoint_root).resolve(), parameter)
+        if not model_keys:
+            return {}
+
+        base = media_path / "sequence_info" / "catpred_esm2" / parameter
+        for seq_id in seq_ids:
+            out[seq_id] = {
+                str((base / model_key / f"{seq_id}.pt").resolve()) for model_key in model_keys
+            }
+        return out
+
+    return {}
+
+
+def _prepare_plan(
+    *,
+    method_key: str,
+    target: str,
+    sequences: list[str],
+    env: dict,
+) -> _PreparedPlan:
+    media_path, tools_path = _resolve_media_and_tools(method_key, env)
+    unique_sequences = _normalise_sequences_for_method(method_key, sequences)
+    if not unique_sequences:
+        raise RuntimeError("No valid sequences for embedding progress tracking.")
+
+    seq_ids = _resolve_seq_ids_via_cli(unique_sequences, tools_path, media_path)
+    expected = _expected_paths_by_seq(
+        method_key=method_key,
+        target=target,
+        seq_ids=seq_ids,
+        media_path=media_path,
+        env=env,
+    )
+    if not expected:
+        raise RuntimeError("No embedding cache profile for this method/target.")
+
+    missing_paths_by_seq: dict[str, set[str]] = {}
+    path_to_seqs: dict[str, set[str]] = {}
+    watch_dirs: set[Path] = set()
+
+    cached_already = 0
+    need_computation = 0
+
+    for seq_id, paths in expected.items():
+        missing = {p for p in paths if not Path(p).exists()}
+        if not missing:
+            cached_already += 1
+            continue
+
+        need_computation += 1
+        missing_paths_by_seq[seq_id] = missing
+        for path_str in missing:
+            path_to_seqs.setdefault(path_str, set()).add(seq_id)
+            watch_dirs.add(Path(path_str).parent)
+
+    total = len(expected)
+    return _PreparedPlan(
+        method_key=method_key,
+        target=target,
+        total=total,
+        cached_already=cached_already,
+        need_computation=need_computation,
+        missing_paths_by_seq=missing_paths_by_seq,
+        path_to_seqs=path_to_seqs,
+        watch_dirs=watch_dirs,
+    )
+
+
+# inotify constants (Linux)
+_IN_CLOSE_WRITE = 0x00000008
+_IN_MOVED_TO = 0x00000080
+_IN_CREATE = 0x00000100
+_IN_DELETE_SELF = 0x00000400
+_IN_MOVE_SELF = 0x00000800
+_IN_IGNORED = 0x00008000
+_IN_ISDIR = 0x40000000
+_IN_NONBLOCK = 0x00000800
+_IN_CLOEXEC = 0x00080000
+
+
+class _EmbeddingTracker:
+    def __init__(self, *, job_public_id: str, plan: _PreparedPlan):
+        self.job_public_id = job_public_id
+        self.method_key = plan.method_key
+        self.target = plan.target
+        self.total = plan.total
+        self.cached_already = plan.cached_already
+        self.need_computation = plan.need_computation
+        self.computed = 0
+        self.remaining = self.need_computation
+        self.state = "running" if self.need_computation > 0 else "done"
+
+        self._missing_paths_by_seq = plan.missing_paths_by_seq
+        self._path_to_seqs = plan.path_to_seqs
+        self._watch_dirs = plan.watch_dirs
+        self._stop_event = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._lock = threading.Lock()
+
+        self._last_payload_signature: tuple | None = None
+        self._last_write_monotonic = 0.0
+        self._dirty = False
+
+    def start(self) -> None:
+        self._write_snapshot(force=True)
+        if self.need_computation == 0:
+            return
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"embedding-progress-{self.job_public_id}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self, final_state: str = "done") -> None:
+        self._stop_event.set()
+        if self._thread is not None and self._thread.is_alive():
+            self._thread.join(timeout=3.0)
+        with self._lock:
+            if self.state != "done":
+                self.state = final_state
+            if self.remaining <= 0 and self.state != "error":
+                self.state = "done"
+        self._write_snapshot(force=True)
+
+    def _payload(self) -> dict:
+        return {
+            "enabled": True,
+            "state": self.state,
+            "method_key": self.method_key,
+            "methodKey": self.method_key,
+            "target": self.target,
+            "total": int(self.total),
+            "cached_already": int(self.cached_already),
+            "cachedAlready": int(self.cached_already),
+            "need_computation": int(self.need_computation),
+            "needComputation": int(self.need_computation),
+            "computed": int(self.computed),
+            "remaining": int(self.remaining),
+            "updatedAt": _now_iso(),
+        }
+
+    def _signature(self) -> tuple:
+        return (
+            self.state,
+            int(self.total),
+            int(self.cached_already),
+            int(self.need_computation),
+            int(self.computed),
+            int(self.remaining),
+        )
+
+    def _write_snapshot(self, force: bool = False) -> None:
+        signature = self._signature()
+        if not force and signature == self._last_payload_signature:
+            return
+        now = time.monotonic()
+        if not force and (now - self._last_write_monotonic) < _REDIS_WRITE_MIN_INTERVAL_SECS:
+            self._dirty = True
+            return
+
+        payload = self._payload()
+        redis_conn.set(_redis_key(self.job_public_id), json.dumps(payload), ex=_TTL_SECONDS)
+        self._last_payload_signature = signature
+        self._last_write_monotonic = now
+        self._dirty = False
+
+    def _flush_if_due(self) -> None:
+        if not self._dirty:
+            return
+        if (time.monotonic() - self._last_write_monotonic) < _REDIS_WRITE_MIN_INTERVAL_SECS:
+            return
+        self._write_snapshot(force=False)
+
+    def _mark_path_present(self, path_str: str) -> bool:
+        """
+        Returns True if overall computed/remaining counters changed.
+        """
+        seqs = self._path_to_seqs.pop(path_str, None)
+        if not seqs:
+            return False
+
+        progressed = False
+        for seq_id in seqs:
+            missing = self._missing_paths_by_seq.get(seq_id)
+            if not missing or path_str not in missing:
+                continue
+            missing.remove(path_str)
+            if not missing:
+                del self._missing_paths_by_seq[seq_id]
+                self.computed += 1
+                self.remaining = max(0, self.remaining - 1)
+                progressed = True
+
+        if self.remaining == 0:
+            self.state = "done"
+
+        return progressed
+
+    def _reconcile_pending(self) -> None:
+        progressed = False
+        # iterate over a copy because _mark_path_present mutates _path_to_seqs
+        for path_str in list(self._path_to_seqs.keys()):
+            if Path(path_str).exists():
+                progressed = self._mark_path_present(path_str) or progressed
+        if progressed:
+            self._write_snapshot(force=False)
+
+    def _run(self) -> None:
+        use_inotify = False
+        inotify_fd: int | None = None
+        wd_to_dir: dict[int, Path] = {}
+
+        try:
+            inotify_fd = _inotify_init()
+            if inotify_fd is not None:
+                use_inotify = True
+                for watch_dir in self._watch_dirs:
+                    _add_watch_if_exists(inotify_fd, watch_dir, wd_to_dir)
+        except Exception as exc:
+            print(f"[embedding_progress] inotify disabled: {exc}")
+            use_inotify = False
+            inotify_fd = None
+
+        next_reconcile = time.time() + _RECONCILE_SECS
+        next_poll = time.time() + _FALLBACK_POLL_SECS
+
+        try:
+            while not self._stop_event.is_set() and self.remaining > 0:
+                now = time.time()
+                if use_inotify and inotify_fd is not None:
+                    timeout = max(0.1, min(0.5, next_reconcile - now))
+                    ready, _, _ = select.select([inotify_fd], [], [], timeout)
+                    if ready:
+                        progressed = _consume_inotify_events(
+                            inotify_fd=inotify_fd,
+                            wd_to_dir=wd_to_dir,
+                            on_file=self._mark_path_present,
+                        )
+                        if progressed:
+                            self._write_snapshot(force=False)
+                else:
+                    wait_for = max(0.1, min(0.5, next_poll - now))
+                    self._stop_event.wait(wait_for)
+
+                now = time.time()
+                if now >= next_reconcile:
+                    self._reconcile_pending()
+                    next_reconcile = now + _RECONCILE_SECS
+
+                if not use_inotify and now >= next_poll:
+                    self._reconcile_pending()
+                    next_poll = now + _FALLBACK_POLL_SECS
+                self._flush_if_due()
+
+            if self.remaining == 0:
+                self.state = "done"
+                self._write_snapshot(force=False)
+        finally:
+            if inotify_fd is not None:
+                try:
+                    os.close(inotify_fd)
+                except OSError:
+                    pass
+
+
+def _inotify_init() -> int | None:
+    if sys.platform != "linux":
+        return None
+
+    libc_name = ctypes.util.find_library("c")
+    if not libc_name:
+        return None
+    libc = ctypes.CDLL(libc_name, use_errno=True)
+    init_fn = getattr(libc, "inotify_init1", None)
+    if init_fn is None:
+        return None
+
+    init_fn.argtypes = [ctypes.c_int]
+    init_fn.restype = ctypes.c_int
+
+    fd = init_fn(_IN_NONBLOCK | _IN_CLOEXEC)
+    if fd < 0:
+        err = ctypes.get_errno()
+        raise OSError(err, os.strerror(err))
+    return fd
+
+
+def _inotify_add_watch(inotify_fd: int, path: Path) -> int | None:
+    libc_name = ctypes.util.find_library("c")
+    if not libc_name:
+        return None
+    libc = ctypes.CDLL(libc_name, use_errno=True)
+    add_fn = getattr(libc, "inotify_add_watch", None)
+    if add_fn is None:
+        return None
+
+    add_fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
+    add_fn.restype = ctypes.c_int
+
+    mask = (
+        _IN_CLOSE_WRITE
+        | _IN_MOVED_TO
+        | _IN_CREATE
+        | _IN_DELETE_SELF
+        | _IN_MOVE_SELF
+    )
+    wd = add_fn(inotify_fd, str(path).encode("utf-8"), mask)
+    if wd < 0:
+        err = ctypes.get_errno()
+        # Missing directories are common during warm-up; not fatal.
+        if err in (2, 20):  # ENOENT / ENOTDIR
+            return None
+        raise OSError(err, os.strerror(err))
+    return wd
+
+
+def _add_watch_if_exists(inotify_fd: int, watch_dir: Path, wd_to_dir: dict[int, Path]) -> None:
+    # Watch only concrete directories for this profile. Missing directories are
+    # handled by reconciliation sweeps to avoid broad watches (e.g., '/').
+    candidate = watch_dir
+    if not candidate.exists() or not candidate.is_dir():
+        return
+
+    if candidate in wd_to_dir.values():
+        return
+
+    wd = _inotify_add_watch(inotify_fd, candidate)
+    if wd is not None:
+        wd_to_dir[wd] = candidate
+
+
+def _consume_inotify_events(
+    *,
+    inotify_fd: int,
+    wd_to_dir: dict[int, Path],
+    on_file,
+) -> bool:
+    progressed = False
+
+    while True:
+        try:
+            data = os.read(inotify_fd, 65536)
+        except BlockingIOError:
+            break
+        except OSError:
+            break
+
+        if not data:
+            break
+
+        offset = 0
+        while offset + 16 <= len(data):
+            wd, mask, _cookie, name_len = struct.unpack_from("iIII", data, offset)
+            offset += 16
+            raw_name = data[offset : offset + name_len]
+            offset += name_len
+
+            watch_dir = wd_to_dir.get(wd)
+            if watch_dir is None:
+                continue
+
+            if mask & _IN_IGNORED:
+                wd_to_dir.pop(wd, None)
+                continue
+
+            name = raw_name.split(b"\x00", 1)[0].decode("utf-8", errors="ignore")
+            if not name:
+                continue
+
+            event_path = (watch_dir / name).resolve()
+            if mask & _IN_ISDIR:
+                # Directory events are handled by periodic reconciliation.
+                continue
+
+            if mask & (_IN_CLOSE_WRITE | _IN_MOVED_TO | _IN_CREATE):
+                if event_path.exists():
+                    progressed = on_file(str(event_path)) or progressed
+
+    return progressed

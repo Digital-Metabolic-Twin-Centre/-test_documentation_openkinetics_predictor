@@ -145,6 +145,9 @@ def dlkcat_predictions(
             job=job,
             env=env,
             label="DLKcat",
+            method_key="DLKcat",
+            target="kcat",
+            valid_sequences=valid_sequences,
         )
     except subprocess.CalledProcessError as e:
         _cleanup(input_file, output_file)
