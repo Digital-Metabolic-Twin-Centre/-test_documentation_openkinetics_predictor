@@ -31,6 +31,7 @@ export default function useJobSubmission() {
   const [csvFile, setCsvFile] = useState(null);
   const [fileName, setFileName] = useState('No file chosen');
   const [useExperimental, setUseExperimental] = useState(false);
+  const [includeSimilarityColumns, setIncludeSimilarityColumns] = useState(true);
   const [canonicalizeSubstrates, setCanonicalizeSubstrates] = useState(true);
   const [handleLongSeqs, setHandleLongSeqs] = useState('truncate');
 
@@ -276,6 +277,7 @@ export default function useJobSubmission() {
         file: csvFile,
         handleLongSequences: handleLongSeqs,
         useExperimental,
+        includeSimilarityColumns,
         canonicalizeSubstrates,
       });
       setSubmissionResult((prev) => ({
@@ -316,6 +318,8 @@ export default function useJobSubmission() {
     csvParsing,
     useExperimental,
     setUseExperimental,
+    includeSimilarityColumns,
+    setIncludeSimilarityColumns,
     canonicalizeSubstrates,
     setCanonicalizeSubstrates,
     handleLongSeqs,

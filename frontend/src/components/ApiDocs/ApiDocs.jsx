@@ -140,6 +140,7 @@ with open("input.csv", "rb") as f:
             "targets":             '["kcat"]',
             "methods":             '{"kcat":"DLKcat"}',
             "handleLongSequences": "truncate",
+            "includeSimilarityColumns": "true",
             "canonicalizeSubstrates": "true",
         },
     )
@@ -154,6 +155,7 @@ print(resp.json())`,
   -F 'targets=["kcat"]' \\
   -F 'methods={"kcat":"DLKcat"}' \\
   -F "handleLongSequences=truncate" \\
+  -F "includeSimilarityColumns=true" \\
   -F "canonicalizeSubstrates=true"`,
   },
 ];
@@ -234,6 +236,7 @@ with open("input.csv", "rb") as f:
             "methods":             '{"kcat":"DLKcat"}',
             "handleLongSequences": "truncate",
             "useExperimental":     "true",
+            "includeSimilarityColumns": "true",
             "canonicalizeSubstrates": "true",
         },
     )
@@ -280,6 +283,7 @@ JOB=$(curl -s -X POST "$BASE/submit/" \\
   -F 'methods={"kcat":"DLKcat"}' \\
   -F "handleLongSequences=truncate" \\
   -F "useExperimental=true" \\
+  -F "includeSimilarityColumns=true" \\
   -F "canonicalizeSubstrates=true")
 
 JOB_ID=$(echo "$JOB" | python3 -c "import sys,json; print(json.load(sys.stdin)['jobId'])")
@@ -318,6 +322,7 @@ response = requests.post(
         "methods":             {"kcat": "DLKcat"},
         "handleLongSequences": "truncate",
         "useExperimental":     True,
+        "includeSimilarityColumns": True,
         "canonicalizeSubstrates": True,
         "data": [
             {"Protein Sequence": "MKTLLIFAGFCLAGLSLTPVAHA...", "Substrate": "CC(=O)O"},
@@ -623,6 +628,11 @@ export default function ApiDocs() {
                   </tr>
                   <tr>
                     <td><code>canonicalizeSubstrates</code></td>
+                    <td>No (default: <code>true</code>)</td>
+                    <td><code>true</code> · <code>false</code></td>
+                  </tr>
+                  <tr>
+                    <td><code>includeSimilarityColumns</code></td>
                     <td>No (default: <code>true</code>)</td>
                     <td><code>true</code> · <code>false</code></td>
                   </tr>

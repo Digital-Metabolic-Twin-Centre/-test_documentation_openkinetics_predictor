@@ -58,6 +58,7 @@ def run_prediction(
     target: str,
     experimental_results: list | None = None,
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run a single-target prediction job.
@@ -89,6 +90,7 @@ def run_prediction(
             target,
             experimental_results or [],
             canonicalize_substrates=canonicalize_substrates,
+            include_similarity_columns=include_similarity_columns,
         )
         Job.objects.filter(pk=job.pk).update(
             status="Completed",
@@ -120,6 +122,7 @@ def run_both_prediction(
     km_key: str,
     experimental_results: list | None = None,
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run a dual-target prediction job (kcat and KM in sequence).
@@ -154,6 +157,7 @@ def run_both_prediction(
             df,
             experimental_results or [],
             canonicalize_substrates=canonicalize_substrates,
+            include_similarity_columns=include_similarity_columns,
         )
         Job.objects.filter(pk=job.pk).update(
             status="Completed",
@@ -186,6 +190,7 @@ def run_multi_prediction(
     methods: dict[str, str],
     experimental_results: dict | None = None,
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run a multi-target prediction job.
@@ -238,6 +243,7 @@ def run_multi_prediction(
             df=df,
             experimental_results=experimental_results or {},
             canonicalize_substrates=canonicalize_substrates,
+            include_similarity_columns=include_similarity_columns,
         )
         Job.objects.filter(pk=job.pk).update(
             status="Completed",
@@ -275,6 +281,7 @@ def _execute_prediction(
     target: str,
     experimental_results: list,
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run a single-target prediction and write output.csv.
@@ -359,7 +366,7 @@ def _execute_prediction(
 
     out_path = _output_path(job.public_id)
     df.to_csv(out_path, index=False)
-    if target == "kcat":
+    if target == "kcat" and include_similarity_columns:
         append_kcat_similarity_columns_to_output_csv(out_path, desc.key)
 
     # ── 7. Credit back empty rows and update job ──────────────────────────────
@@ -378,6 +385,7 @@ def _execute_both_prediction(
     df: pd.DataFrame,
     experimental_results: list,
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run kcat and KM predictions in sequence and write a combined output.csv.
@@ -559,7 +567,8 @@ def _execute_both_prediction(
     # ── 7. Write CSV, credit back, update job ─────────────────────────────────
     out_path = _output_path(job.public_id)
     results_df.to_csv(out_path, index=False)
-    append_kcat_similarity_columns_to_output_csv(out_path, kcat_desc.key)
+    if include_similarity_columns:
+        append_kcat_similarity_columns_to_output_csv(out_path, kcat_desc.key)
 
     fully_predicted = (
         (results_df["kcat (1/s)"] != "")
@@ -585,6 +594,7 @@ def _execute_multi_prediction(
     df: pd.DataFrame,
     experimental_results: dict[str, list],
     canonicalize_substrates: bool = True,
+    include_similarity_columns: bool = True,
 ) -> None:
     """
     Run one or more prediction targets and write a combined output.csv.
@@ -771,7 +781,7 @@ def _execute_multi_prediction(
 
     out_path = _output_path(job.public_id)
     results_df.to_csv(out_path, index=False)
-    if "kcat" in targets and "kcat" in desc_by_target:
+    if include_similarity_columns and "kcat" in targets and "kcat" in desc_by_target:
         append_kcat_similarity_columns_to_output_csv(
             out_path,
             desc_by_target["kcat"].key,

@@ -4,6 +4,7 @@ import { Card, Row, Col, Form, Button } from 'react-bootstrap';
 import MethodDetails from './MethodDetails';
 import ExperimentalSwitch from './ExperimentalSwitch';
 import CanonicalizationSwitch from './CanonicalizationSwitch';
+import SimilarityColumnsSwitch from './SimilarityColumnsSwitch';
 import '../../../styles/components/PredictionTypeSelect.css';
 
 const TARGET_ORDER = ['kcat', 'Km', 'kcat/Km'];
@@ -23,6 +24,8 @@ export default function MethodPicker({
   csvFormatInfo,
   useExperimental,
   setUseExperimental,
+  includeSimilarityColumns,
+  setIncludeSimilarityColumns,
   canonicalizeSubstrates,
   setCanonicalizeSubstrates,
   onSubmit,
@@ -79,6 +82,10 @@ export default function MethodPicker({
             onChange={setCanonicalizeSubstrates}
           />
           <ExperimentalSwitch checked={useExperimental} onChange={setUseExperimental} />
+          <SimilarityColumnsSwitch
+            checked={includeSimilarityColumns}
+            onChange={setIncludeSimilarityColumns}
+          />
           <Button
             className="kave-btn ms-3"
             onClick={onSubmit}
@@ -101,6 +108,8 @@ MethodPicker.propTypes = {
   csvFormatInfo: PropTypes.object,
   useExperimental: PropTypes.bool.isRequired,
   setUseExperimental: PropTypes.func.isRequired,
+  includeSimilarityColumns: PropTypes.bool.isRequired,
+  setIncludeSimilarityColumns: PropTypes.func.isRequired,
   canonicalizeSubstrates: PropTypes.bool.isRequired,
   setCanonicalizeSubstrates: PropTypes.func.isRequired,
   onSubmit: PropTypes.func.isRequired,

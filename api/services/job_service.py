@@ -75,6 +75,7 @@ def process_job_submission_from_params(
                       methods              – e.g. {"kcat":"DLKcat","Km":"UniKP"}
                       handle_long_sequences– "truncate" or "skip"
                       use_experimental     – bool
+                      include_similarity_columns – bool
                       canonicalize_substrates – bool
         file:       A file-like object (Django InMemoryUploadedFile or
                     io.BytesIO) containing the CSV data.
@@ -240,11 +241,13 @@ def dispatch_prediction_task(
     targets = params["targets"]
     methods = params["methods"]
     canonicalize_substrates = params.get("canonicalize_substrates", True)
+    include_similarity_columns = params.get("include_similarity_columns", True)
 
     print(
         "Dispatching multi-target task: "
         f"targets={targets}, methods={methods}, "
-        f"canonicalize_substrates={canonicalize_substrates}"
+        f"canonicalize_substrates={canonicalize_substrates}, "
+        f"include_similarity_columns={include_similarity_columns}"
     )
     run_multi_prediction.delay(
         public_id,
@@ -252,6 +255,7 @@ def dispatch_prediction_task(
         methods,
         experimental_results or {},
         canonicalize_substrates,
+        include_similarity_columns,
     )
 
 

@@ -303,6 +303,10 @@ def extract_job_parameters_from_request(request) -> Dict[str, Any]:
             request.POST.get("useExperimental"),
             default=False,
         ),
+        "include_similarity_columns": coerce_bool_param(
+            request.POST.get("includeSimilarityColumns"),
+            default=True,
+        ),
         "canonicalize_substrates": coerce_bool_param(
             request.POST.get("canonicalizeSubstrates"),
             default=True,

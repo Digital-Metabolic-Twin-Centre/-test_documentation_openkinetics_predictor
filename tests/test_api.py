@@ -133,7 +133,8 @@ def submit(base: str, headers: dict, csv_content: str,
            prediction_type: str, kcat_method: str = None,
            km_method: str = None, kcat_km_method: str = None,
            handle_long: str = "truncate",
-           use_experimental: str = "false") -> requests.Response:
+           use_experimental: str = "false",
+           include_similarity_columns: bool | None = None) -> requests.Response:
     """Helper: POST to /submit/ and return the response."""
     targets = []
     methods = {}
@@ -155,6 +156,8 @@ def submit(base: str, headers: dict, csv_content: str,
         "handleLongSequences": handle_long,
         "useExperimental":     use_experimental,
     }
+    if include_similarity_columns is not None:
+        data["includeSimilarityColumns"] = "true" if include_similarity_columns else "false"
 
     return requests.post(
         f"{base}/submit/",
@@ -169,6 +172,8 @@ def expected_kcat_similarity_columns(submitted: dict) -> tuple[str, str] | None:
     Return expected similarity column names for kcat-target jobs, else None.
     """
     if submitted.get("prediction_type") != "kcat":
+        return None
+    if not submitted.get("include_similarity_columns", True):
         return None
     method_key = submitted.get("kcat_method")
     if not method_key:
@@ -341,6 +346,7 @@ def test_submit_selected_methods(base: str, headers: dict, methods: set) -> list
             kcat_method=spec["kcat_method"],
             km_method=spec["km_method"],
             kcat_km_method=spec.get("kcat_km_method"),
+            include_similarity_columns=spec.get("include_similarity_columns"),
         )
         ok = check(f"[{label}] status 201", r.status_code == 201, f"got {r.status_code}")
         if not ok:
@@ -362,6 +368,50 @@ def test_submit_selected_methods(base: str, headers: dict, methods: set) -> list
     return submitted_jobs
 
 
+def test_submit_kcat_similarity_toggle_off(base: str, headers: dict, methods: set) -> dict | None:
+    """
+    Submit one explicit kcat job with includeSimilarityColumns=false and
+    validate in result checks that similarity columns are absent.
+    """
+    kcat_method = next((m for m in selected_kcat_methods(methods)), None)
+    if kcat_method is None:
+        print("\n  (skipping similarity toggle-off submit test — no kcat method selected)")
+        return None
+
+    csv_content = MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV
+    label = f"kcat/{kcat_method}/simoff"
+    section(f"POST /submit/ — kcat submit with includeSimilarityColumns=false [{kcat_method}]")
+
+    r = submit(
+        base,
+        headers,
+        csv_content,
+        "kcat",
+        kcat_method=kcat_method,
+        include_similarity_columns=False,
+    )
+    if not check(f"[{label}] status 201", r.status_code == 201, f"got {r.status_code}"):
+        return None
+
+    j = r.json()
+    check(f"[{label}] has jobId", "jobId" in j)
+    check(f"[{label}] status=Pending", j.get("status") == "Pending")
+    if "jobId" not in j:
+        return None
+
+    print(f"         → Submitted {label}: jobId={j['jobId']}")
+    return {
+        "prediction_type": "kcat",
+        "kcat_method": kcat_method,
+        "km_method": None,
+        "kcat_km_method": None,
+        "include_similarity_columns": False,
+        "label": label,
+        "job": j,
+        "job_id": j["jobId"],
+    }
+
+
 def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None:
     kcat_method = next(
         (m for m in KCAT_METHOD_IDS if m.lower() in methods and m != "TurNup"), None
@@ -377,6 +427,7 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
         "methods":             {"kcat": kcat_method},
         "handleLongSequences": "truncate",
         "useExperimental":     False,
+        "includeSimilarityColumns": False,
         "data": [
             {
                 "Protein Sequence": (
@@ -414,6 +465,7 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
         "kcat_method": kcat_method,
         "km_method": None,
         "kcat_km_method": None,
+        "include_similarity_columns": False,
         "label": label,
         "job": j,
         "job_id": j["jobId"],
@@ -894,6 +946,9 @@ def main():
 
     # Submit one job for each selected method/prediction type.
     submitted_jobs = test_submit_selected_methods(base, headers, methods)
+    simoff_job = test_submit_kcat_similarity_toggle_off(base, headers, methods)
+    if simoff_job:
+        submitted_jobs.append(simoff_job)
 
     # Optional success-path submission variants. If enabled, their jobs are
     # included in full end-to-end status/result validation.

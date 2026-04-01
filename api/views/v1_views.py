@@ -213,6 +213,7 @@ def api_submit_job(request):
                                              to method key
          handleLongSequences   (optional, default "truncate") — "truncate" or "skip"
          useExperimental       (optional, default "false")   — "true" or "false"
+         includeSimilarityColumns (optional, default "true") — "true" or "false"
          canonicalizeSubstrates (optional, default "true")  — "true" or "false"
 
     2. application/json — send data directly as a JSON body:
@@ -221,6 +222,7 @@ def api_submit_job(request):
            "methods": {"kcat": "DLKcat"},
            "handleLongSequences": "truncate",
            "useExperimental": false,
+           "includeSimilarityColumns": true,
            "canonicalizeSubstrates": true,
            "data": [
              {"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"},
@@ -294,6 +296,10 @@ def _parse_multipart_body(request):
         "use_experimental": coerce_bool_param(
             request.POST.get("useExperimental"),
             default=False,
+        ),
+        "include_similarity_columns": coerce_bool_param(
+            request.POST.get("includeSimilarityColumns"),
+            default=True,
         ),
         "canonicalize_substrates": coerce_bool_param(
             request.POST.get("canonicalizeSubstrates"),
@@ -370,6 +376,10 @@ def _parse_json_body(request):
         "use_experimental": coerce_bool_param(
             body.get("useExperimental"),
             default=False,
+        ),
+        "include_similarity_columns": coerce_bool_param(
+            body.get("includeSimilarityColumns"),
+            default=True,
         ),
         "canonicalize_substrates": coerce_bool_param(
             body.get("canonicalizeSubstrates"),

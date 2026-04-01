@@ -58,6 +58,7 @@ export async function submitJob({
   file,
   handleLongSequences,
   useExperimental,
+  includeSimilarityColumns,
   canonicalizeSubstrates,
 }) {
   const formData = new FormData();
@@ -66,6 +67,7 @@ export async function submitJob({
   formData.append('file', file);
   formData.append('handleLongSequences', handleLongSequences);
   formData.append('useExperimental', useExperimental);
+  formData.append('includeSimilarityColumns', includeSimilarityColumns);
   formData.append('canonicalizeSubstrates', canonicalizeSubstrates);
   const { data } = await apiClient.post('/submit-job/', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
