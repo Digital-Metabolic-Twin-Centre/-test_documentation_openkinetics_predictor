@@ -14,6 +14,8 @@ Open Kinetics Predictor is a production web interface for predicting enzyme kine
 | DLKcat | Protein sequence + substrate SMILES | kcat | [Li et al., Nat Catal 2022](https://www.nature.com/articles/s41929-022-00798-z) ([GitHub](https://github.com/SysBioChalmers/DLKcat)) |
 | TurNup | Protein sequence + substrates list + products list | kcat | [Kroll et al., Nat Commun 2023](https://www.nature.com/articles/s41467-023-39840-4) ([GitHub](https://github.com/AlexanderKroll/Kcat_prediction)) |
 | EITLEM | Protein sequence + substrate SMILES | kcat or Km | [Shen et al., Biotechnol Adv 2024](https://www.sciencedirect.com/science/article/pii/S2667109324002665) ([GitHub](https://github.com/XvesS/EITLEM-Kinetics)) |
+| CataPro | Protein sequence + substrate SMILES | kcat, Km, or kcat/Km | [Wang et al., Nat Commun 2025](https://www.nature.com/articles/s41467-025-58038-4) ([GitHub](https://github.com/zchwang/CataPro)) |
+| CatPred | Protein sequence + substrate SMILES | kcat or Km | [Boorla et al., Nat Commun 2025](https://www.nature.com/articles/s41467-025-57215-9) ([GitHub](https://github.com/maranasgroup/CatPred)) |
 
 Each model is loaded with its published weights/code from `models/` and invoked through integration wrappers in `api/prediction_engines/`, so new engines can be added with minimal wiring.
 
