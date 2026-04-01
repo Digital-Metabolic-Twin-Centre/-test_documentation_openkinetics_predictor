@@ -25,7 +25,14 @@
   margin-bottom: 0.6rem;
 }
 
+.format-panels {
+  align-items: stretch;
+}
+
 .format-panel {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
   background: rgba(24, 22, 50, 0.74);
   border: 1px solid rgba(233, 233, 233, 0.15);
   border-radius: 7px;
@@ -39,20 +46,40 @@
   margin-bottom: 0.2rem;
 }
 
-.format-panel-model {
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.5);
+.format-models-label {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+  margin-bottom: 0.3rem;
 }
 
 .format-panel-models {
-  font-size: 0.71rem;
-  color: rgba(255, 255, 255, 0.38);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-content: flex-start;
+  min-height: 1.7rem;
   margin-bottom: 0.6rem;
+}
+
+.format-model-chip {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.14rem 0.42rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.09);
+  line-height: 1.2;
 }
 
 .format-fields {
   display: flex;
   flex-direction: column;
+  flex: 1 1 auto;
   gap: 0.3rem;
 }
 
@@ -233,6 +260,12 @@
 .benchmark-empty {
   color: rgba(255, 255, 255, 0.22) !important;
   font-style: italic;
+}
+
+.benchmark-na {
+  color: rgba(255, 255, 255, 0.35) !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.04em;
 }
 
 /* Method Cards Styling */

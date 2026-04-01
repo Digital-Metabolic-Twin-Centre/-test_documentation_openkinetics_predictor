@@ -7,14 +7,14 @@ import '../../../styles/components/HowToUseCard.css';
 
 
 const BENCHMARK_DATA = [
-  { method: 'CatPred',   uncached: '14 min 0 s',  cached: '23 s'        },
-  { method: 'CataPro',   uncached: '25 min 9 s',  cached: '41 s'        },
-  { method: 'DLKcat',    uncached: '32 s',         cached: '28 s'        },
-  { method: 'EITLEM',    uncached: '18 min 13 s',  cached: '4 min 11 s'  },
-  { method: 'KinForm-H', uncached: '56 min 10 s',  cached: '36 s'        },
-  { method: 'KinForm-L', uncached: '54 min 38 s',  cached: '37 s'        },
-  { method: 'TurNup',    uncached: null,            cached: null          },
-  { method: 'UniKP',     uncached: null,            cached: null          },
+  { method: 'DLKcat',    uncached: '32 s',          cached: 'N/A'         },
+  { method: 'CatPred',   uncached: '14 min 0 s',    cached: '23 s'        },
+  { method: 'EITLEM',    uncached: '18 min 13 s',   cached: '4 min 11 s'  },
+  { method: 'TurNup',    uncached: '19 min 36 s',   cached: '3 min 48 s'  },
+  { method: 'CataPro',   uncached: '25 min 9 s',    cached: '41 s'        },
+  { method: 'UniKP',     uncached: '33 min 46 s',   cached: '4 min 7 s'   },
+  { method: 'KinForm-L', uncached: '54 min 38 s',   cached: '37 s'        },
+  { method: 'KinForm-H', uncached: '56 min 10 s',   cached: '36 s'        },
 ];
 
 export default function HowToUseCard({ methods = {} }) {
@@ -125,10 +125,19 @@ export default function HowToUseCard({ methods = {} }) {
           ))}
         </Row>
         <p className="format-section-label my-2">Input Data Format</p>
-        <div className="d-flex gap-3 flex-column flex-md-row">
-          <div className="format-panel flex-fill">
+        <div className="format-panels d-flex gap-3 flex-column flex-md-row">
+          <div className="format-panel">
             <div className="format-panel-title">Single-Substrate</div>
-            <div className="format-panel-models">DLKcat · EITLEM · UniKP · KinForm-H · KinForm-L · CataPro</div>
+            <div className="format-models-label">Models</div>
+            <div className="format-panel-models">
+              <span className="format-model-chip">DLKcat</span>
+              <span className="format-model-chip">EITLEM</span>
+              <span className="format-model-chip">UniKP</span>
+              <span className="format-model-chip">KinForm-H</span>
+              <span className="format-model-chip">KinForm-L</span>
+              <span className="format-model-chip">CataPro</span>
+              <span className="format-model-chip">CatPred (K<sub>M</sub> only)</span>
+            </div>
             <div className="format-fields">
               <div className="format-header-row">
                 <span className="format-header">Column</span>
@@ -140,13 +149,37 @@ export default function HowToUseCard({ methods = {} }) {
               </div>
               <div className="format-row">
                 <span className="format-chip">Substrate</span>
-                <span className="format-desc">One <code>SMILES</code> or <code>InChI</code> string</span>
+                <span className="format-desc">One <code>SMILES</code> or <code>InChI</code> string per row</span>
               </div>
             </div>
           </div>
-          <div className="format-panel flex-fill">
-            <div className="format-panel-title">Multi-Substrate <span className="format-panel-model">· TurNup</span></div>
-            <div className="format-panel-models">&nbsp;</div>
+          <div className="format-panel">
+            <div className="format-panel-title">Multi-Substrate</div>
+            <div className="format-models-label">Models</div>
+            <div className="format-panel-models">
+              <span className="format-model-chip">CatPred (k<sub>cat</sub> only)</span>
+            </div>
+            <div className="format-fields">
+              <div className="format-header-row">
+                <span className="format-header">Column</span>
+                <span className="format-header">Expected content</span>
+              </div>
+              <div className="format-row">
+                <span className="format-chip">Protein Sequence</span>
+                <span className="format-desc">Full amino-acid sequence</span>
+              </div>
+              <div className="format-row">
+                <span className="format-chip">Substrate</span>
+                <span className="format-desc">One or more <code>SMILES</code> strings joined with <code>.</code> per row (for example: <code>CC(=O)O.O</code>)</span>
+              </div>
+            </div>
+          </div>
+          <div className="format-panel">
+            <div className="format-panel-title">Full Reaction</div>
+            <div className="format-models-label">Models</div>
+            <div className="format-panel-models">
+              <span className="format-model-chip">TurNup</span>
+            </div>
             <div className="format-fields">
               <div className="format-header-row">
                 <span className="format-header">Column</span>
@@ -168,7 +201,7 @@ export default function HowToUseCard({ methods = {} }) {
           </div>
         </div>
         <p className="format-note mt-2">
-          Multi-substrate CSVs can also be used for K<sub>M</sub> predictions. Each 'Substrates' entry receives its own K<sub>M</sub> value (semicolon-separated).
+          For CatPred k<sub>cat</sub>, keep a single <code>Substrate</code> column and join co-substrates with <code>.</code>. For CatPred K<sub>M</sub>, use one substrate per row in <code>Substrate</code>. Use <code>Substrates</code> + <code>Products</code> only for TurNup full-reaction input.
         </p>
 
         {/* ── Timing Benchmark ── */}
@@ -188,7 +221,7 @@ export default function HowToUseCard({ methods = {} }) {
           {showBenchmark && (
             <div className="benchmark-content">
               <p className="benchmark-intro">
-                PLM embeddings are cached on the server. A sequence computed once is reused for all future jobs.
+                Protein language model (PLM) embeddings are cached on the server. A sequence computed once is reused for all future jobs.
                 Therefore, <strong>compute time scales with the number of unique protein sequences</strong>, not the number of rows.
               </p>
               <p className="benchmark-conditions">
@@ -208,8 +241,8 @@ export default function HowToUseCard({ methods = {} }) {
                   {BENCHMARK_DATA.map(({ method, uncached, cached }) => (
                     <tr key={method}>
                       <td className="benchmark-method">{method}</td>
-                      <td className={uncached ? '' : 'benchmark-empty'}>{uncached ?? '—'}</td>
-                      <td className={cached ? '' : 'benchmark-empty'}>{cached ?? '—'}</td>
+                      <td>{uncached ?? '—'}</td>
+                      <td className={cached === 'N/A' ? 'benchmark-na' : cached ? '' : 'benchmark-empty'}>{cached ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -237,6 +270,15 @@ export default function HowToUseCard({ methods = {} }) {
           >
             <BoxArrowInDown className="me-2" />
             Multi-Substrate Template
+          </Button>
+
+          <Button
+            href="/templates/full_reaction_template.csv"
+            download
+            className="btn btn-custom-subtle"
+          >
+            <BoxArrowInDown className="me-2" />
+            Full-Reaction Template
           </Button>
         </div>
       </Card.Body>
