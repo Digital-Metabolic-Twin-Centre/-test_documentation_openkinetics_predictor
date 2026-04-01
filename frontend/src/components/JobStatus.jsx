@@ -21,7 +21,11 @@ import {
   ClipboardCheck,
   ArrowClockwise,
   FileEarmarkArrowDown,
-  Stopwatch
+  Stopwatch,
+  Database,
+  Cpu,
+  GraphUp,
+  CheckCircleFill,
 } from 'react-bootstrap-icons';
 import moment from 'moment';
 import ExpandableErrorMessage from './ExpandableErrorMessage';
@@ -364,7 +368,7 @@ function JobStatus() {
               )}
 
               {publicId && (
-                <div className="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                <div className="job-header mb-4">
                   <div className="d-flex align-items-center gap-2">
                     <span className="label-muted">Job ID:</span>
                     <code className="jobid-chip">{publicId}</code>
@@ -397,77 +401,125 @@ function JobStatus() {
 
               {jobStatus && (
                 <>
-                  {/* Stats always show sticky x/y, even after completion */}
-                  <Row className="mb-3 g-3 stats-grid">
-                    <Col xs={6} sm={6} lg>
-                      <div className="stat-card">
-                        <div className="stat-label"><Stopwatch className="me-2" />Queue Time</div>
-                        <div className="stat-value">{queueTime || '—'}</div>
-                      </div>
-                    </Col>
-                    <Col xs={6} sm={6} lg>
-                      <div className="stat-card">
-                        <div className="stat-label"><Stopwatch className="me-2" />Compute Time</div>
-                        <div className="stat-value">{computeTime || '—'}</div>
-                      </div>
-                    </Col>
-                    <Col xs={6} sm={6} lg>
-                      <div className="stat-card">
-                        <div className="stat-label">Preprocessed</div>
-                        <div className="stat-value">
-                          {metrics.moleculesProcessed}
-                          <span className="stat-sub"> / {metrics.totalMolecules}</span>
+                  {/* ── PENDING ────────────────────────────────────────── */}
+                  {jobStatus.status === 'Pending' && (
+                    <div className="pending-section mb-4">
+                      {queuePosition != null && (
+                        <div className="queue-position-badge">
+                          Position <span className="queue-position-number">#{queuePosition}</span> in queue
                         </div>
-                      </div>
-                    </Col>
-                    <Col xs={6} sm={6} lg>
-                      <div className="stat-card">
-                        <div className="stat-label">Predictions</div>
-                        <div className="stat-value">
-                          {metrics.predictionsMade}
-                          <span className="stat-sub"> / {metrics.totalPredictions}</span>
-                        </div>
-                      </div>
-                    </Col>
-                    <Col xs={6} sm={6} lg>
-                      <div className="stat-card">
-                        <div className="stat-label">Invalid Rows</div>
-                        <div className="stat-value">{metrics.invalidRows}</div>
-                      </div>
-                    </Col>
-                    {metrics.embeddingEnabled && (
-                      <Col xs={6} sm={6} lg>
+                      )}
+                      <div className="pending-hint">Job is queued and waiting to start…</div>
+                      <Spinner animation="border" role="status" />
+                    </div>
+                  )}
+
+                  {/* ── TIMING ─────────────────────────────────────────── */}
+                  <div className="stat-section">
+                    <div className="stat-section-title">Timing</div>
+                    <Row className="g-3">
+                      <Col xs={6}>
                         <div className="stat-card">
-                          <div className="stat-label">Embeddings Cached Already</div>
-                          <div className="stat-value">{metrics.embeddingCachedAlready}</div>
+                          <div className="stat-label"><Stopwatch className="me-2" />Queue Time</div>
+                          <div className="stat-value">{queueTime || '—'}</div>
+                          <div className="stat-hint">Time spent waiting in queue before processing began</div>
                         </div>
                       </Col>
-                    )}
-                    {metrics.embeddingEnabled && (
-                      <Col xs={6} sm={6} lg>
+                      <Col xs={6}>
                         <div className="stat-card">
-                          <div className="stat-label">Embeddings Need Computation</div>
-                          <div className="stat-value">{metrics.embeddingNeedComputation}</div>
+                          <div className="stat-label"><Cpu className="me-2" />Compute Time</div>
+                          <div className="stat-value">{computeTime || '—'}</div>
+                          <div className="stat-hint">Active processing time on the server</div>
                         </div>
                       </Col>
-                    )}
-                    {metrics.embeddingEnabled && (
-                      <Col xs={6} sm={6} lg>
+                    </Row>
+                  </div>
+
+                  {/* ── RESULTS ────────────────────────────────────────── */}
+                  <div className="stat-section">
+                    <div className="stat-section-title">Results</div>
+                    <Row className="g-3">
+                      <Col xs={12} sm={4}>
                         <div className="stat-card">
-                          <div className="stat-label">Embeddings Computed</div>
+                          <div className="stat-label">Preprocessed</div>
                           <div className="stat-value">
-                            {metrics.embeddingComputed}
-                            <span className="stat-sub"> / {metrics.embeddingNeedComputation}</span>
+                            {metrics.moleculesProcessed}
+                            <span className="stat-sub"> / {metrics.totalMolecules}</span>
+                          </div>
+                          <div className="stat-hint">Reactions validated and prepared for prediction</div>
+                        </div>
+                      </Col>
+                      <Col xs={12} sm={4}>
+                        <div className="stat-card">
+                          <div className="stat-label"><GraphUp className="me-2" />Predictions</div>
+                          <div className="stat-value">
+                            {metrics.predictionsMade}
+                            <span className="stat-sub"> / {metrics.totalPredictions}</span>
+                          </div>
+                          <div className="stat-hint">Kinetic parameters predicted so far</div>
+                        </div>
+                      </Col>
+                      <Col xs={12} sm={4}>
+                        <div className={`stat-card${metrics.invalidRows > 0 ? ' stat-card-warn' : ''}`}>
+                          <div className="stat-label">
+                            {metrics.invalidRows > 0 && <ExclamationTriangle className="me-2" />}
+                            Invalid Rows
+                          </div>
+                          <div className="stat-value">{metrics.invalidRows}</div>
+                          <div className="stat-hint">
+                            {metrics.invalidRows > 0
+                              ? 'Rows skipped — unrecognised format, missing fields, or unsupported sequences'
+                              : 'All input rows passed validation'}
                           </div>
                         </div>
                       </Col>
-                    )}
-                  </Row>
+                    </Row>
+                  </div>
 
-                  {(jobStatus.status === 'Processing') && (
-                    <>
+                  {/* ── PROTEIN EMBEDDINGS ─────────────────────────────── */}
+                  {metrics.embeddingEnabled && (
+                    <div className="stat-section">
+                      <div className="stat-section-title">
+                        <Database className="me-2" />Protein Embeddings
+                      </div>
+                      <p className="stat-section-desc">
+                        PLM embeddings encode your protein sequences for prediction. Each embedding is computed once and stored.
+                      </p>
+                      <Row className="g-3">
+                        <Col xs={12} sm={4}>
+                          <div className="stat-card stat-card-cached">
+                            <div className="stat-label"><CheckCircleFill className="me-2" />Cached</div>
+                            <div className="stat-value">{metrics.embeddingCachedAlready}</div>
+                            <div className="stat-hint">Found in cache — no computation needed</div>
+                          </div>
+                        </Col>
+                        <Col xs={12} sm={4}>
+                          <div className="stat-card">
+                            <div className="stat-label"><Cpu className="me-2" />Need Computation</div>
+                            <div className="stat-value">{metrics.embeddingNeedComputation}</div>
+                            <div className="stat-hint">New sequences requiring fresh embedding generation</div>
+                          </div>
+                        </Col>
+                        <Col xs={12} sm={4}>
+                          <div className="stat-card">
+                            <div className="stat-label">Computed</div>
+                            <div className="stat-value">
+                              {metrics.embeddingComputed}
+                              <span className="stat-sub"> / {metrics.embeddingNeedComputation}</span>
+                            </div>
+                            <div className="stat-hint">Newly generated embeddings this job</div>
+                          </div>
+                        </Col>
+                      </Row>
+                    </div>
+                  )}
+
+                  {/* ── LIVE PROGRESS (Processing only) ────────────────── */}
+                  {jobStatus.status === 'Processing' && (
+                    <div className="stat-section">
+                      <div className="stat-section-title">Live Progress</div>
                       {metrics.embeddingEnabled && metrics.embeddingNeedComputation > 0 && (
-                        <div className="mb-3">
+                        <div className="progress-item">
                           <div className="progress-row">
                             <div className="progress-title">Embeddings Computed</div>
                             <div className="progress-count">
@@ -477,9 +529,8 @@ function JobStatus() {
                           <ProgressBar now={embeddingPct} className="kave-progress" />
                         </div>
                       )}
-
                       {metrics.totalMolecules > 0 && (
-                        <div className="mb-3">
+                        <div className="progress-item">
                           <div className="progress-row">
                             <div className="progress-title">Reactions Processed</div>
                             <div className="progress-count">{moleculesPct}%</div>
@@ -487,9 +538,8 @@ function JobStatus() {
                           <ProgressBar now={moleculesPct} className="kave-progress" />
                         </div>
                       )}
-
                       {metrics.totalPredictions > 0 && (
-                        <div className="mb-2">
+                        <div className="progress-item">
                           <div className="progress-row">
                             <div className="progress-title">Predictions Made</div>
                             <div className="progress-count">{predsPct}%</div>
@@ -497,27 +547,21 @@ function JobStatus() {
                           <ProgressBar now={predsPct} className="kave-progress" />
                         </div>
                       )}
-                      <div className="mt-3 d-flex justify-content-center">
+                      <div className="mt-4 d-flex justify-content-center">
                         <Spinner animation="border" role="status" />
                       </div>
-                    </>
-                  )}
-
-                  {jobStatus.status === 'Pending' && (
-                    <div className="mt-3 d-flex flex-column align-items-center gap-2">
-                      {queuePosition != null && (
-                        <div className="queue-position-badge">
-                          Position <span className="queue-position-number">#{queuePosition}</span> in queue
-                        </div>
-                      )}
-                      <div className="stat-label">Job is queued and waiting to start...</div>
-                      <Spinner animation="border" role="status" />
                     </div>
                   )}
 
+                  {/* ── COMPLETED ──────────────────────────────────────── */}
                   {jobStatus.status === 'Completed' && (
-                    <div className="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-3">
-                      <div>Job completed. Download your results below.</div>
+                    <div className="job-complete-banner mt-3">
+                      <div className="job-complete-header">
+                        <CheckCircle size={18} className="me-2" />
+                        Job Completed
+                      </div>
+                      <div className="job-complete-body d-flex align-items-center justify-content-between flex-wrap gap-2">
+                        <span>Your results are ready for download.</span>
                         <a
                           className="btn btn-custom-subtle"
                           href={`${apiBaseUrl}/jobs/${publicId}/download/`}
@@ -525,21 +569,22 @@ function JobStatus() {
                           <FileEarmarkArrowDown className="me-2" />
                           Download Results
                         </a>
+                      </div>
                     </div>
                   )}
 
-                  {/* Expandable details for skipped/unpredicted rows — only on Completed */}
+                  {/* Expandable details for skipped/unpredicted rows */}
                   {skippedRowsMessage && (
                     <div className="mt-3">
                       <ExpandableErrorMessage errorMessage={skippedRowsMessage} />
                     </div>
                   )}
 
-                  {/* User-friendly failure banner */}
+                  {/* ── FAILED ─────────────────────────────────────────── */}
                   {jobStatus.status === 'Failed' && (
                     <div className="job-failed-banner mt-3">
                       <div className="job-failed-header">
-                        <XCircle size={20} className="me-2" />
+                        <XCircle size={18} className="me-2" />
                         Job Failed
                       </div>
                       <div className="job-failed-body">

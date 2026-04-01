@@ -42,7 +42,10 @@ if CATPRED_ROOT:
 SIMILARITY_DATASETS = build_similarity_datasets(FASTAS_DIR)
 TARGET_DBS = {label: item["target_db"] for label, item in SIMILARITY_DATASETS.items()}
 
-CONDA_PATH = None
+CONDA_PATH = os.environ.get("WEBKINPRED_CONDA_PATH")
+if not CONDA_PATH:
+    default_conda_path = "/opt/conda/bin/conda"
+    CONDA_PATH = default_conda_path if os.path.exists(default_conda_path) else None
 DEBUG = True
 ALLOWED_FRONTEND_IPS = [*DEFAULT_ALLOWED_FRONTEND_IPS, "frontend", "backend"]
 
