@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import json
 import os
-from collections import defaultdict
 
 import pandas as pd
 from celery import shared_task
@@ -390,10 +389,7 @@ def _execute_both_prediction(
     """
     Run kcat and KM predictions in sequence and write a combined output.csv.
 
-    Uses the stricter of the two methods' sequence-length limits.  When the
-    kcat method uses multi-substrate format (input_format == "multi"), KM is
-    predicted per individual substrate (exploding the "Substrates" column)
-    and the results are rejoined with semicolons.
+    Uses the stricter of the two methods' sequence-length limits.
     """
     sequences = df["Protein Sequence"].tolist()
     n_rows = len(sequences)
@@ -408,11 +404,6 @@ def _execute_both_prediction(
     else:
         valid_idx = get_valid_indices(sequences, limit, mode="skip")
         sequences_proc = [sequences[i] for i in valid_idx]
-
-    # Pre-compute position lookup for multi-sub Km section
-    valid_idx_to_pos: dict[int, int] = {
-        global_i: pos for pos, global_i in enumerate(valid_idx)
-    }
 
     # Rows skipped by length handling
     skipped_reasons: dict[int, str] = {
@@ -450,77 +441,25 @@ def _execute_both_prediction(
         skipped_reasons.update(_map_subset_invalid_reasons(valid_idx, kcat_bad))
 
     # ── 4. KM predictions ─────────────────────────────────────────────────────
-    # Special-case bridge: when the submitted CSV is multi-substrate
-    # (Substrates/Products) but the selected KM method expects a single
-    # "Substrate" input, explode Substrates and predict KM per substrate.
-    is_multisub = (
-        "Substrate" in km_desc.col_to_kwarg
-        and "Substrate" not in df.columns
-        and "Substrates" in df.columns
-    )
-
     if valid_idx:
-        if is_multisub:
-            # Explode "Substrates" column: predict KM per individual substrate,
-            # then re-join results with ";" for each original row.
-            aug_rows = []
-            for global_i in valid_idx:
-                row = df.iloc[global_i]
-                pos = valid_idx_to_pos[global_i]
-                for smiles in [
-                    s.strip()
-                    for s in str(row["Substrates"]).split(";")
-                    if s.strip()
-                ]:
-                    aug_rows.append({
-                        "original_idx": global_i,
-                        "sequence": sequences_proc[pos],
-                        "substrate": smiles,
-                    })
-            aug_df = pd.DataFrame(aug_rows)
-            km_call_kwargs = {
-                "substrates": aug_df["substrate"].tolist(),
-            }
-            km_call_kwargs.update(km_desc.target_kwargs.get("Km", {}))
-            km_subset, km_bad = _invoke_method_prediction(
-                desc=km_desc,
-                sequences=aug_df["sequence"].tolist(),
-                public_id=job.public_id,
-                target="Km",
-                canonicalize_substrates=canonicalize_substrates,
-                **km_call_kwargs,
-            )
-            # Group predictions back by original row index
-            km_map: dict[int, list] = defaultdict(list)
-            for original_i, pred in zip(aug_df["original_idx"], km_subset):
-                km_map[original_i].append("" if pred is None else str(pred))
-            for global_i in valid_idx:
-                if global_i in km_map:
-                    km_preds[global_i] = ";".join(km_map[global_i])
-                    km_src[global_i] = f"Prediction from {km_desc.display_name}"
-            skipped_reasons.update(
-                _map_subset_invalid_reasons(aug_df["original_idx"].tolist(), km_bad)
-            )
+        km_call_kwargs = {}
+        for col, kwarg_name in km_desc.col_to_kwarg.items():
+            km_call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
+        km_call_kwargs.update(km_desc.target_kwargs.get("Km", {}))
 
-        else:
-            km_call_kwargs = {}
-            for col, kwarg_name in km_desc.col_to_kwarg.items():
-                km_call_kwargs[kwarg_name] = [df[col].iloc[i] for i in valid_idx]
-            km_call_kwargs.update(km_desc.target_kwargs.get("Km", {}))
-
-            km_subset, km_bad = _invoke_method_prediction(
-                desc=km_desc,
-                sequences=sequences_proc,
-                public_id=job.public_id,
-                target="Km",
-                canonicalize_substrates=canonicalize_substrates,
-                **km_call_kwargs,
-            )
-            for global_i, pred in zip(valid_idx, km_subset):
-                km_preds[global_i] = pred if pred is not None else ""
-                if pred is not None:
-                    km_src[global_i] = f"Prediction from {km_desc.display_name}"
-            skipped_reasons.update(_map_subset_invalid_reasons(valid_idx, km_bad))
+        km_subset, km_bad = _invoke_method_prediction(
+            desc=km_desc,
+            sequences=sequences_proc,
+            public_id=job.public_id,
+            target="Km",
+            canonicalize_substrates=canonicalize_substrates,
+            **km_call_kwargs,
+        )
+        for global_i, pred in zip(valid_idx, km_subset):
+            km_preds[global_i] = pred if pred is not None else ""
+            if pred is not None:
+                km_src[global_i] = f"Prediction from {km_desc.display_name}"
+        skipped_reasons.update(_map_subset_invalid_reasons(valid_idx, km_bad))
 
     for idx, reason in skipped_reasons.items():
         kcat_src[idx] = reason
@@ -614,9 +553,6 @@ def _execute_multi_prediction(
         valid_idx = get_valid_indices(sequences, limit, mode="skip")
         sequences_proc = [sequences[i] for i in valid_idx]
 
-    valid_idx_to_pos: dict[int, int] = {
-        global_i: pos for pos, global_i in enumerate(valid_idx)
-    }
     skipped_reasons: dict[int, str] = {
         idx: "Sequence too long — row was excluded"
         for idx in set(range(n_rows)) - set(valid_idx)
@@ -638,70 +574,6 @@ def _execute_multi_prediction(
         results = target_results[target]
 
         if not valid_idx:
-            continue
-
-        is_multisub_bridge = (
-            "Substrate" in desc.col_to_kwarg
-            and "Substrate" not in df.columns
-            and "Substrates" in df.columns
-            and "Products" in df.columns
-        )
-
-        if is_multisub_bridge:
-            aug_rows: list[dict] = []
-            for global_i in valid_idx:
-                row = df.iloc[global_i]
-                pos = valid_idx_to_pos[global_i]
-                substrates = [
-                    s.strip()
-                    for s in str(row["Substrates"]).split(";")
-                    if s.strip()
-                ]
-                for substrate in substrates:
-                    aug_row = {
-                        "original_idx": global_i,
-                        "sequence": sequences_proc[pos],
-                        "substrate": substrate,
-                    }
-                    for col, kwarg_name in desc.col_to_kwarg.items():
-                        if col == "Substrate":
-                            continue
-                        aug_row[kwarg_name] = row[col]
-                    aug_rows.append(aug_row)
-
-            if not aug_rows:
-                continue
-
-            aug_df = pd.DataFrame(aug_rows)
-            call_kwargs: dict = {}
-            for col, kwarg_name in desc.col_to_kwarg.items():
-                if col == "Substrate":
-                    call_kwargs[kwarg_name] = aug_df["substrate"].tolist()
-                else:
-                    call_kwargs[kwarg_name] = aug_df[kwarg_name].tolist()
-            call_kwargs.update(desc.target_kwargs.get(target, {}))
-
-            pred_subset, invalid_subset = _invoke_method_prediction(
-                desc=desc,
-                sequences=aug_df["sequence"].tolist(),
-                public_id=job.public_id,
-                target=target,
-                canonicalize_substrates=canonicalize_substrates,
-                **call_kwargs,
-            )
-
-            pred_map: dict[int, list[str]] = defaultdict(list)
-            for original_i, pred in zip(aug_df["original_idx"], pred_subset):
-                pred_map[int(original_i)].append("" if pred is None else str(pred))
-
-            for global_i in valid_idx:
-                if global_i in pred_map:
-                    results["preds"][global_i] = ";".join(pred_map[global_i])
-                    results["sources"][global_i] = f"Prediction from {desc.display_name}"
-
-            skipped_reasons.update(
-                _map_subset_invalid_reasons(aug_df["original_idx"].tolist(), invalid_subset)
-            )
             continue
 
         call_kwargs = {}

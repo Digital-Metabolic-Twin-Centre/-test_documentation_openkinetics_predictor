@@ -76,6 +76,15 @@ SINGLE_SUBSTRATE_CSV = textwrap.dedent("""\
     MCTAITLNGNSNYFGRNLDLDFSYGEEVIITPAEYEFKFRKEKAIKNHKSLIGVGIVANDYPLYFDAINEDGLGMAGLNFPGNAYYSDALENDKDNITPFEFIPWILGQCSDVNEARNLVEKINLINLSFSEQLPLAGLHWLIADREKSIVVEVTKSGVHIYDNPIGILTNNPEFNYQMYNLNKYRNLSISTPQNTFSDSVDLKVDGTGFGGIGLPGDVSPESRFVRATFSKLNSSKGMTVEEDITQFFHILGTVEQIKGVNKTESGKEEYTVYSNCYDLDNKTLYYTTYENRQIVAVTLNKDKDGNRLVTYPFERKQIINKLN,OCC(O)CO
 """)
 
+# CatPred compatibility fixture: uses the single "Substrate" column where
+# co-substrates are dot-joined (e.g., "A.B"), as required for CatPred kcat.
+CATPRED_DOTJOIN_SUBSTRATE_CSV = textwrap.dedent("""\
+    Protein Sequence,Substrate
+    MAAAALRLSEAGHTVACHDESFKQKDELEAFAETYPQLKPMSEQEPAELIEAVTSAYGQVDVLVSNDIFAPEFQPIDKYAVEDYRGAVEALQIRPFALVNAVASQMKKRKSGHIIFITSATPFGPWKELSTYTSARAGACTLANALSKELGEYNIPVFAIGPNYLHSEDSPYFYPTEPWKTNPEHVAHVKKVTALQRLGTQKELGELVAFLASGSCDYLTGQVFWLAGGFPMIERWPGMPE,CC(=O)O.O
+    MEMLEEHRCFEGWQQRWRHDSSTLNCPMTFSIFLPPPRDHTPPPVLYWLSGLTCNDENFTTKAGAQRVAAELGIVLVMPDTSPRGEKVANDDGYDLGQGAGFYLNATQPPWATHYRMYDYLRDELPALVQSQFNVSDRCAISGHSMGGHGALIMALKNPGKYTSVSAFAPIVNPCSVPWGIKAFSSYLGEDKNAWLEWDSCALMYASNAQDAIPTLIAQGDNDQFLADQLQPAVLAEAARQKAWPMTLRIQPGYDHSYYFIASFIEDHLRFHAQYLLK,C1CCCCC1.O
+    MCTAITLNGNSNYFGRNLDLDFSYGEEVIITPAEYEFKFRKEKAIKNHKSLIGVGIVANDYPLYFDAINEDGLGMAGLNFPGNAYYSDALENDKDNITPFEFIPWILGQCSDVNEARNLVEKINLINLSFSEQLPLAGLHWLIADREKSIVVEVTKSGVHIYDNPIGILTNNPEFNYQMYNLNKYRNLSISTPQNTFSDSVDLKVDGTGFGGIGLPGDVSPESRFVRATFSKLNSSKGMTVEEDITQFFHILGTVEQIKGVNKTESGKEEYTVYSNCYDLDNKTLYYTTYENRQIVAVTLNKDKDGNRLVTYPFERKQIINKLN,OCC(O)CO.CCO
+""")
+
 # Multi-substrate CSV (for TurNup only — uses Substrates + Products columns)
 MULTI_SUBSTRATE_CSV = textwrap.dedent("""\
     Protein Sequence,Substrates,Products
@@ -165,6 +174,29 @@ def submit(base: str, headers: dict, csv_content: str,
         files={"file": csv_file(csv_content)},
         data=data,
     )
+
+
+def choose_submit_csv(
+    prediction_type: str,
+    kcat_method: str | None = None,
+    km_method: str | None = None,
+) -> str:
+    """
+    Choose the CSV fixture that matches method-specific input expectations.
+
+    - TurNup (kcat) uses full-reaction multi-column CSV.
+    - CatPred tests use dot-joined values in the single "Substrate" column.
+    - Other methods use the standard single-substrate fixture.
+    """
+    if prediction_type == "kcat":
+        if kcat_method == "TurNup":
+            return MULTI_SUBSTRATE_CSV
+        if kcat_method == "CatPred":
+            return CATPRED_DOTJOIN_SUBSTRATE_CSV
+    elif prediction_type == "Km":
+        if km_method == "CatPred":
+            return CATPRED_DOTJOIN_SUBSTRATE_CSV
+    return SINGLE_SUBSTRATE_CSV
 
 
 def expected_kcat_similarity_columns(submitted: dict) -> tuple[str, str] | None:
@@ -300,7 +332,10 @@ def build_selected_method_jobs(methods: set) -> list[dict]:
             "kcat_method": kcat_method,
             "km_method": None,
             "kcat_km_method": None,
-            "csv_content": MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV,
+            "csv_content": choose_submit_csv(
+                prediction_type="kcat",
+                kcat_method=kcat_method,
+            ),
             "label": f"kcat/{kcat_method}",
         })
     for km_method in selected_km_methods(methods):
@@ -309,7 +344,10 @@ def build_selected_method_jobs(methods: set) -> list[dict]:
             "kcat_method": None,
             "km_method": km_method,
             "kcat_km_method": None,
-            "csv_content": SINGLE_SUBSTRATE_CSV,
+            "csv_content": choose_submit_csv(
+                prediction_type="Km",
+                km_method=km_method,
+            ),
             "label": f"Km/{km_method}",
         })
     for ratio_method in selected_kcat_km_methods(methods):
@@ -378,7 +416,10 @@ def test_submit_kcat_similarity_toggle_off(base: str, headers: dict, methods: se
         print("\n  (skipping similarity toggle-off submit test — no kcat method selected)")
         return None
 
-    csv_content = MULTI_SUBSTRATE_CSV if kcat_method == "TurNup" else SINGLE_SUBSTRATE_CSV
+    csv_content = choose_submit_csv(
+        prediction_type="kcat",
+        kcat_method=kcat_method,
+    )
     label = f"kcat/{kcat_method}/simoff"
     section(f"POST /submit/ — kcat submit with includeSimilarityColumns=false [{kcat_method}]")
 
@@ -437,7 +478,7 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
                     "YPTEPWKTNPEHVAHVKKVTALQRLGTQKELGELVAFLASGSCDYLTGQVFWLAGGFPMIER"
                     "WPGMPE"
                 ),
-                "Substrate": "CC(=O)O",
+                "Substrate": "CC(=O)O.O" if kcat_method == "CatPred" else "CC(=O)O",
             },
             {
                 "Protein Sequence": (
@@ -447,7 +488,7 @@ def test_submit_json_body(base: str, headers: dict, methods: set) -> dict | None
                     "GEDKNAWLEWDSCALMYASNAQDAIPTLIAQGDNDQFLADQLQPAVLAEAARQKAWPMTLRIQ"
                     "PGYDHSYYFIASFIEDHLRFHAQYLLK"
                 ),
-                "Substrate": "C1CCCCC1",
+                "Substrate": "C1CCCCC1.O" if kcat_method == "CatPred" else "C1CCCCC1",
             },
         ],
     }

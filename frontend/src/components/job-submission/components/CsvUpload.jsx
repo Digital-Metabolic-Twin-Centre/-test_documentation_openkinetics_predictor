@@ -14,6 +14,11 @@ export default function CsvUpload({
 const fileRef = useRef(null);
 const [fileInputKey, setFileInputKey] = useState(0);
 const hasFile = !!fileName && fileName !== 'No file chosen';
+const csvTypeLabel = csvFormatInfo?.csv_type === 'full_reaction'
+  ? 'full-reaction'
+  : csvFormatInfo?.csv_type === 'multi'
+    ? 'multi-substrate'
+    : 'single-substrate';
   return (
     <Card className="section-container section-reaction-info mb-4">
       <Card.Header as="h3" className="text-center">
@@ -95,7 +100,7 @@ const hasFile = !!fileName && fileName !== 'No file chosen';
 
         {csvFormatValid && csvFormatInfo?.csv_type && (
           <Alert variant="success" className="mt-3">
-          Detected a <strong>{csvFormatInfo.csv_type === 'multi' ? 'multi-substrate' : 'single-substrate'}</strong> CSV with {csvFormatInfo.num_rows} rows. You may now choose compatible methods.
+          Detected a <strong>{csvTypeLabel}</strong> CSV with {csvFormatInfo.num_rows} rows. You may now choose compatible methods.
           </Alert>
         )}
         {!csvFormatValid && csvFormatError && (

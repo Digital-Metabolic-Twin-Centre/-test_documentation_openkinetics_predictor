@@ -50,6 +50,28 @@ def safe_convert_to_mol(value: Any) -> Optional[Any]:
     return convert_to_mol(sanitized_value)
 
 
+def split_single_substrate_components(value: Any) -> List[str]:
+    """
+    Split single-column substrate values into individually validatable components.
+
+    Rules:
+    - InChI values are treated as a single token.
+    - SMILES values are split by '.' to support multi-component entries
+      like "A.B" in the "Substrate" column.
+    """
+    if not isinstance(value, str):
+        return []
+
+    text = value.strip()
+    if not text or text in ["None", "NaN", "nan"]:
+        return []
+    if text.startswith("InChI="):
+        return [text]
+
+    parts = [part.strip() for part in text.split(".") if part.strip()]
+    return parts if parts else [text]
+
+
 def validate_csv_structure(dataframe: pd.DataFrame) -> Optional[str]:
     """
     Validate that CSV has required columns for substrate/protein validation.
@@ -95,17 +117,26 @@ def validate_single_substrate_schema(dataframe: pd.DataFrame) -> List[Dict[str, 
             temp = val_to_output[val].copy()
             temp["row"] = row_num
             invalid_substrates.append(temp)
-        elif safe_convert_to_mol(val) is None:
-            error_entry = {
-                "row": row_num,
-                "value": val,
-                "reason": "Invalid SMILES/InChI",
-            }
-            val_to_output[val] = error_entry
-            invalid_substrates.append(error_entry)
         else:
-            val_to_output[val] = "OK"
-    
+            components = split_single_substrate_components(val)
+            invalid_components = [
+                component for component in components
+                if safe_convert_to_mol(component) is None
+            ]
+
+            if not components or invalid_components:
+                error_entry = {
+                    "row": row_num,
+                    "value": val,
+                    "reason": "Invalid SMILES/InChI",
+                }
+                if invalid_components:
+                    error_entry["invalid_components"] = invalid_components
+                val_to_output[val] = error_entry
+                invalid_substrates.append(error_entry)
+            else:
+                val_to_output[val] = "OK"
+
     return invalid_substrates
 
 

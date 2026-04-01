@@ -287,7 +287,16 @@ def _split_tokens(value: Any) -> list[str]:
     if text.lower() in {"none", "nan"}:
         return []
 
-    return [tok.strip() for tok in text.split(";") if tok.strip()]
+    semicolon_tokens = [tok.strip() for tok in text.split(";") if tok.strip()]
+    out: list[str] = []
+    for token in semicolon_tokens:
+        if token.startswith("InChI="):
+            out.append(token)
+            continue
+        # Support multi-component entries (e.g. "A.B") in single substrate fields.
+        dot_parts = [part.strip() for part in token.split(".") if part.strip()]
+        out.extend(dot_parts if dot_parts else [token])
+    return out
 
 
 def _chemistry_is_valid(row: dict[str, Any], input_format: str) -> bool:

@@ -148,21 +148,17 @@ def validate_required_columns_for_methods(
     methods: Dict[str, str],
 ) -> Optional[str]:
     """
-    Validate CSV columns for selected methods with multi-substrate bridge support.
+    Validate CSV columns for selected methods.
 
-    Methods requiring "Substrate" are considered valid when either:
-    - "Substrate" exists, or
-    - both "Substrates" and "Products" exist (bridge path).
+    Methods requiring "Substrate" must receive a "Substrate" column.
+    Full-reaction input ("Substrates" + "Products") is only valid for methods
+    that explicitly declare those columns (for example, TurNup).
     """
     from api.methods.registry import get
 
     missing: set[str] = set()
     if "Protein Sequence" not in dataframe.columns:
         missing.add("Protein Sequence")
-
-    has_substrate = "Substrate" in dataframe.columns
-    has_multi = {"Substrates", "Products"}.issubset(set(dataframe.columns))
-    needs_single_substrate = False
 
     for target in canonicalise_targets(targets):
         method_key = methods.get(target)
@@ -174,24 +170,13 @@ def validate_required_columns_for_methods(
             continue
 
         for col in desc.col_to_kwarg.keys():
-            if col == "Substrate":
-                needs_single_substrate = True
-                continue
             if col not in dataframe.columns:
                 missing.add(col)
-
-    if needs_single_substrate and not (has_substrate or has_multi):
-        missing.add("Substrate")
 
     if not missing:
         return None
 
     ordered = sorted(missing, key=lambda c: (c != "Protein Sequence", c))
-    if ordered == ["Substrate"]:
-        return (
-            "Missing required columns: Substrate (or provide both Substrates and "
-            "Products for multi-substrate bridge mode)."
-        )
     return f'Missing required columns: {", ".join(ordered)}'
 
 

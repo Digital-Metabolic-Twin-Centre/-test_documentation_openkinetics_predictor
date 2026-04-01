@@ -83,14 +83,17 @@ export default function useJobSubmission() {
   );
 
   // Allowed methods derived from CSV format and registry.
-  // For multi-substrate CSV we allow both multi and single input-format methods
-  // because backend bridge mode can explode "Substrates" for single-substrate methods.
+  // - single/multi: "Protein Sequence" + "Substrate" (same method set)
+  // - full_reaction: "Protein Sequence" + "Substrates" + "Products" (TurNup path)
   const allowedMethodsByTarget = useMemo(() => {
     const out = { kcat: [], Km: [], 'kcat/Km': [] };
     if (!methods || !csvFormatInfo?.csv_type) return out;
 
-    const isSingleCsv = csvFormatInfo.csv_type === 'single';
-    const canUseMethod = (methodMeta) => (isSingleCsv ? methodMeta.inputFormat === 'single' : true);
+    const csvType = csvFormatInfo.csv_type;
+    const canUseMethod = (methodMeta) => {
+      if (csvType === 'full_reaction') return methodMeta.inputFormat === 'multi';
+      return methodMeta.inputFormat === 'single';
+    };
 
     for (const target of TARGET_ORDER) {
       out[target] = Object.entries(methods)

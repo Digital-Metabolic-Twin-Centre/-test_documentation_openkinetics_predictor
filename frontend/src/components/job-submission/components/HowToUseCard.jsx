@@ -125,84 +125,71 @@ export default function HowToUseCard({ methods = {} }) {
           ))}
         </Row>
         <p className="format-section-label my-2">Input Data Format</p>
-        <div className="format-panels d-flex gap-3 flex-column flex-md-row">
-          <div className="format-panel">
-            <div className="format-panel-title">Single-Substrate</div>
-            <div className="format-models-label">Models</div>
-            <div className="format-panel-models">
-              <span className="format-model-chip">DLKcat</span>
-              <span className="format-model-chip">EITLEM</span>
-              <span className="format-model-chip">UniKP</span>
-              <span className="format-model-chip">KinForm-H</span>
-              <span className="format-model-chip">KinForm-L</span>
-              <span className="format-model-chip">CataPro</span>
-              <span className="format-model-chip">CatPred (K<sub>M</sub> only)</span>
+        <div className="fmtgrid">
+
+          {/* ── Single-Substrate ── */}
+          <div className="fmtcard">
+            <div className="fmtcard-header">
+              <span className="fmtcard-title">Single-Substrate</span>
+              <span className="fmtcard-models">
+                DLKcat · EITLEM · UniKP · KinForm-H · KinForm-L · CataPro · CatPred (K<sub>M</sub>)
+              </span>
             </div>
-            <div className="format-fields">
-              <div className="format-header-row">
-                <span className="format-header">Column</span>
-                <span className="format-header">Expected content</span>
+            <div className="fmtcols">
+              <div className="fmtcol">
+                <span className="fmtcol-name">Protein Sequence</span>
+                <span className="fmtcol-desc">Full amino-acid sequence</span>
               </div>
-              <div className="format-row">
-                <span className="format-chip">Protein Sequence</span>
-                <span className="format-desc">Full amino-acid sequence</span>
-              </div>
-              <div className="format-row">
-                <span className="format-chip">Substrate</span>
-                <span className="format-desc">One <code>SMILES</code> or <code>InChI</code> string per row</span>
+              <div className="fmtcol">
+                <span className="fmtcol-name">Substrate</span>
+                <span className="fmtcol-desc"><code>SMILES</code> or <code>InChI</code> — one per row</span>
               </div>
             </div>
           </div>
-          <div className="format-panel">
-            <div className="format-panel-title">Multi-Substrate</div>
-            <div className="format-models-label">Models</div>
-            <div className="format-panel-models">
-              <span className="format-model-chip">CatPred (k<sub>cat</sub> only)</span>
+
+          {/* ── Multi-Substrate ── */}
+          <div className="fmtcard">
+            <div className="fmtcard-header">
+              <span className="fmtcard-title">Multi-Substrate</span>
+              <span className="fmtcard-models">
+                CatPred (k<sub>cat</sub> only)
+              </span>
             </div>
-            <div className="format-fields">
-              <div className="format-header-row">
-                <span className="format-header">Column</span>
-                <span className="format-header">Expected content</span>
+            <div className="fmtcols">
+              <div className="fmtcol">
+                <span className="fmtcol-name">Protein Sequence</span>
+                <span className="fmtcol-desc">Full amino-acid sequence</span>
               </div>
-              <div className="format-row">
-                <span className="format-chip">Protein Sequence</span>
-                <span className="format-desc">Full amino-acid sequence</span>
-              </div>
-              <div className="format-row">
-                <span className="format-chip">Substrate</span>
-                <span className="format-desc">One or more <code>SMILES</code> strings joined with <code>.</code> per row (for example: <code>CC(=O)O.O</code>)</span>
-              </div>
-            </div>
-          </div>
-          <div className="format-panel">
-            <div className="format-panel-title">Full Reaction</div>
-            <div className="format-models-label">Models</div>
-            <div className="format-panel-models">
-              <span className="format-model-chip">TurNup</span>
-            </div>
-            <div className="format-fields">
-              <div className="format-header-row">
-                <span className="format-header">Column</span>
-                <span className="format-header">Expected content</span>
-              </div>
-              <div className="format-row">
-                <span className="format-chip">Protein Sequence</span>
-                <span className="format-desc">Full amino-acid sequence</span>
-              </div>
-              <div className="format-row">
-                <span className="format-chip">Substrates</span>
-                <span className="format-desc">Semicolon-separated <code>SMILES</code> or <code>InChI</code></span>
-              </div>
-              <div className="format-row">
-                <span className="format-chip">Products</span>
-                <span className="format-desc">Semicolon-separated <code>SMILES</code> or <code>InChI</code></span>
+              <div className="fmtcol">
+                <span className="fmtcol-name">Substrate</span>
+                <span className="fmtcol-desc">Co-substrates joined with <code>.</code><br /><code className="fmtcol-example">CC(=O)O.O</code></span>
               </div>
             </div>
           </div>
+
+          {/* ── Full Reaction ── */}
+          <div className="fmtcard">
+            <div className="fmtcard-header">
+              <span className="fmtcard-title">Full Reaction</span>
+              <span className="fmtcard-models">TurNup</span>
+            </div>
+            <div className="fmtcols">
+              <div className="fmtcol">
+                <span className="fmtcol-name">Protein Sequence</span>
+                <span className="fmtcol-desc">Full amino-acid sequence</span>
+              </div>
+              <div className="fmtcol">
+                <span className="fmtcol-name">Substrates</span>
+                <span className="fmtcol-desc">Semicolon-separated <code>SMILES</code> or <code>InChI</code></span>
+              </div>
+              <div className="fmtcol">
+                <span className="fmtcol-name">Products</span>
+                <span className="fmtcol-desc">Semicolon-separated <code>SMILES</code> or <code>InChI</code></span>
+              </div>
+            </div>
+          </div>
+
         </div>
-        <p className="format-note mt-2">
-          For CatPred k<sub>cat</sub>, keep a single <code>Substrate</code> column and join co-substrates with <code>.</code>. For CatPred K<sub>M</sub>, use one substrate per row in <code>Substrate</code>. Use <code>Substrates</code> + <code>Products</code> only for TurNup full-reaction input.
-        </p>
 
         {/* ── Timing Benchmark ── */}
         <div className="benchmark-section mt-3">

@@ -25,115 +25,105 @@
   margin-bottom: 0.6rem;
 }
 
-.format-panels {
-  align-items: stretch;
+/* ── Input Data Format grid ── */
+.fmtgrid {
+  display: flex;
+  gap: 0.65rem;
 }
 
-.format-panel {
+.fmtcard {
   flex: 1 1 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   background: rgba(24, 22, 50, 0.74);
-  border: 1px solid rgba(233, 233, 233, 0.15);
-  border-radius: 7px;
-  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-.format-panel-title {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.9);
-  margin-bottom: 0.2rem;
-}
-
-.format-models-label {
-  font-size: 0.66rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
-  margin-bottom: 0.3rem;
-}
-
-.format-panel-models {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  align-content: flex-start;
-  min-height: 1.7rem;
-  margin-bottom: 0.6rem;
-}
-
-.format-model-chip {
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  padding: 0.14rem 0.42rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.09);
-  line-height: 1.2;
-}
-
-.format-fields {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  gap: 0.3rem;
-}
-
-.format-header-row {
-  display: flex;
-  gap: 0.5rem;
-  padding-bottom: 0.25rem;
+.fmtcard-header {
+  padding: 0.65rem 0.85rem 0.6rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  margin-bottom: 0.1rem;
+  background: rgba(255, 255, 255, 0.03);
 }
 
-.format-header {
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.28);
+.fmtcard-title {
+  display: block;
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 0.3rem;
+  letter-spacing: 0.01em;
+}
+
+.fmtcard-models {
+  display: block;
+  font-size: 0.69rem;
+  color: rgba(255, 255, 255, 0.68);
+  line-height: 1.5;
+}
+
+/* Mini-spreadsheet: columns side by side */
+.fmtcols {
+  display: flex;
   flex: 1;
 }
 
-.format-header:first-child {
-  flex: 0 0 auto;
-  min-width: 110px;
-}
-
-.format-row {
+.fmtcol {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
-  align-items: baseline;
-  gap: 0.5rem;
-  font-size: 0.8rem;
+  flex-direction: column;
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.format-chip {
+.fmtcol:last-child {
+  border-right: none;
+}
+
+.fmtcol-name {
+  display: block;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.69rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.88);
   background: rgba(255, 255, 255, 0.06);
+  padding: 0.32rem 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   white-space: nowrap;
-  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
 }
 
-.format-desc {
-  color: rgba(255, 255, 255, 0.55);
-  line-height: 1.3;
+.fmtcol-desc {
+  display: block;
+  font-size: 0.68rem;
+  color: rgba(255, 255, 255, 0.4);
+  padding: 0.38rem 0.55rem;
+  line-height: 1.5;
 }
 
-.format-note {
-  font-size: 0.74rem;
-  color: rgba(255, 255, 255, 0.38);
-  text-align: center;
+.fmtcol-desc code {
+  font-size: 0.66rem;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
+}
+
+.fmtcol-example {
+  display: inline-block;
+  margin-top: 0.2rem;
+  color: rgba(255, 255, 255, 0.5) !important;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 640px) {
+  .fmtgrid {
+    flex-direction: column;
+  }
 }
 
 /* ── Timing Benchmark ── */
