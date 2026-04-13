@@ -1,6 +1,13 @@
 # api/urls.py
 from django.urls import path
-from .views import job_views, file_views, health_views, progress_views, similarity_views, validation_views
+from .views import (
+    job_views,
+    file_views,
+    health_views,
+    progress_views,
+    similarity_views,
+    validation_views,
+)
 from .views.csrf_views import get_csrf
 from .views.api_key_views import api_key_status, api_key_generate, api_key_revoke
 
@@ -28,9 +35,7 @@ urlpatterns = [
         similarity_views.sequence_similarity_summary,
         name="sequence_similarity_summary",
     ),
-    path(
-        "progress-stream/", progress_views.progress_stream, name="progress-stream"
-    ),
+    path("progress-stream/", progress_views.progress_stream, name="progress-stream"),
     path("csrf/", get_csrf, name="get-csrf"),
     path(
         "jobs/<slug:public_id>/download/",

@@ -69,8 +69,6 @@ class Command(BaseCommand):
         self.stdout.write(f"  Quota:  {user.effective_daily_limit:,} predictions/day")
         self.stdout.write("")
         self.stdout.write(
-            self.style.WARNING(
-                "⚠  Store this key securely — it will not be shown again."
-            )
+            self.style.WARNING("⚠  Store this key securely — it will not be shown again.")
         )
         self.stdout.write("")

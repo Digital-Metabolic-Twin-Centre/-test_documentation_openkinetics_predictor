@@ -57,7 +57,9 @@ transformers_logging.set_verbosity_error()
 warnings.filterwarnings("ignore")
 
 
-DEFAULT_LOCAL_MODEL = "/home/saleh/webKinPred/models/UniKP-main/models/protT5_xl/prot_t5_xl_uniref50"
+DEFAULT_LOCAL_MODEL = (
+    "/home/saleh/webKinPred/models/UniKP-main/models/protT5_xl/prot_t5_xl_uniref50"
+)
 DEFAULT_DOCKER_MODEL = "/app/models/UniKP-main/models/protT5_xl/prot_t5_xl_uniref50"
 DEFAULT_HF_ID = "Rostlab/prot_t5_xl_uniref50"
 
@@ -352,7 +354,9 @@ def _print_table(results: list[Dict[str, Any]]) -> None:
                     _fmt_mb(r["delta_load_mb"]),
                     _fmt_mb(r["delta_infer_mb"]) if r.get("delta_infer_mb") is not None else "N/A",
                     _fmt_mb(r["theoretical_param_mb"]),
-                    f"{r['ratio_rss_to_params']:.2f}x" if r.get("ratio_rss_to_params") is not None else "N/A",
+                    f"{r['ratio_rss_to_params']:.2f}x"
+                    if r.get("ratio_rss_to_params") is not None
+                    else "N/A",
                     f"{r['seconds']:.1f}s",
                 ]
             )

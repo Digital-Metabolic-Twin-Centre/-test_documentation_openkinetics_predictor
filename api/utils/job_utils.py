@@ -1,6 +1,7 @@
 """
 Job-specific utility functions for job submission and management.
 """
+
 import json
 import os
 import pandas as pd
@@ -61,15 +62,11 @@ def validate_prediction_parameters(
 
     if not isinstance(targets, list) or not targets:
         return (
-            'Invalid targets. Expected a non-empty list with values from '
-            '"kcat", "Km", "kcat/Km".'
+            'Invalid targets. Expected a non-empty list with values from "kcat", "Km", "kcat/Km".'
         )
 
     if not isinstance(methods, dict):
-        return (
-            'Invalid methods payload. Expected an object mapping target names '
-            "to method keys."
-        )
+        return "Invalid methods payload. Expected an object mapping target names to method keys."
 
     invalid_targets = [t for t in targets if t not in VALID_TARGETS]
     if invalid_targets:
@@ -177,7 +174,7 @@ def validate_required_columns_for_methods(
         return None
 
     ordered = sorted(missing, key=lambda c: (c != "Protein Sequence", c))
-    return f'Missing required columns: {", ".join(ordered)}'
+    return f"Missing required columns: {', '.join(ordered)}"
 
 
 def create_job_directory(public_id: str) -> str:
@@ -269,8 +266,7 @@ def extract_job_parameters_from_request(request) -> Dict[str, Any]:
             targets = json.loads(targets) if targets.strip() else []
     except json.JSONDecodeError:
         parse_error = (
-            "Invalid 'targets' format. Expected a JSON array, for example: "
-            '["kcat", "Km"].'
+            'Invalid \'targets\' format. Expected a JSON array, for example: ["kcat", "Km"].'
         )
         targets = []
 
@@ -304,9 +300,7 @@ def extract_job_parameters_from_request(request) -> Dict[str, Any]:
     }
 
 
-def create_rate_limit_headers(
-    daily_limit: int, remaining: int, ttl: int
-) -> Dict[str, str]:
+def create_rate_limit_headers(daily_limit: int, remaining: int, ttl: int) -> Dict[str, str]:
     """
     Create standard rate-limiting headers for HTTP responses.
     """
@@ -323,6 +317,7 @@ def get_queue_position(job) -> Optional[int]:
     Returns None if the job is not Pending.
     """
     from api.models import Job as JobModel
+
     if job.status != "Pending":
         return None
     ahead = JobModel.objects.filter(

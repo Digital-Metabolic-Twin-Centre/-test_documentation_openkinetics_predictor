@@ -53,6 +53,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sequences_sha256 ON sequences(sha256);
 CREATE INDEX IF NOT EXISTS idx_sequences_len           ON sequences(len);
 """
 
+
 def ensure_schema(con: sqlite3.Connection) -> None:
     con.executescript(SCHEMA_SQL)
     # If the table pre-existed without uses_count, try to add it.
@@ -62,8 +63,10 @@ def ensure_schema(con: sqlite3.Connection) -> None:
         # Column already exists; ignore.
         pass
 
+
 def compute_sha_and_len(seq: str) -> Tuple[str, int]:
     return hashlib.sha256(seq.encode("utf-8")).hexdigest(), len(seq)
+
 
 def load_json(path: str) -> Dict[str, str]:
     with open(path, "r") as f:
@@ -71,6 +74,7 @@ def load_json(path: str) -> Dict[str, str]:
     if not isinstance(data, dict):
         raise SystemExit("JSON must be an object mapping {id: sequence}.")
     return data
+
 
 def migrate(json_path: str, db_path: str, dry_run: bool, batch_size: int) -> None:
     if not os.path.exists(json_path):
@@ -128,7 +132,9 @@ def migrate(json_path: str, db_path: str, dry_run: bool, batch_size: int) -> Non
                 # Do not modify existing rows on migration
             else:
                 # See if the sequence already exists (maybe under a different id)
-                row2 = con.execute("SELECT id FROM sequences WHERE sha256=? OR seq=?", (sha, seq)).fetchone()
+                row2 = con.execute(
+                    "SELECT id FROM sequences WHERE sha256=? OR seq=?", (sha, seq)
+                ).fetchone()
                 if row2:
                     seq_exists_other_id += 1
                     # Keep existing mapping; do not insert a duplicate
@@ -141,7 +147,10 @@ def migrate(json_path: str, db_path: str, dry_run: bool, batch_size: int) -> Non
                             inserted += 1
                         except sqlite3.IntegrityError as e:
                             # Race or unexpected constraint: re-check presence, else log and continue
-                            row3 = con.execute("SELECT id FROM sequences WHERE sha256=? OR seq=? OR id=?", (sha, seq, sid)).fetchone()
+                            row3 = con.execute(
+                                "SELECT id FROM sequences WHERE sha256=? OR seq=? OR id=?",
+                                (sha, seq, sid),
+                            ).fetchone()
                             if row3:
                                 # Treated as existing (concurrent insert)
                                 id_exists_same += 1
@@ -176,12 +185,17 @@ def migrate(json_path: str, db_path: str, dry_run: bool, batch_size: int) -> Non
     print(f"Malformed entries skipped   : {malformed:,}")
     print(f"Elapsed                     : {dt:.1f}s")
 
+
 def main():
-    ap = argparse.ArgumentParser(description="Migrate seq_id_to_seq.json into SQLite sequences table.")
+    ap = argparse.ArgumentParser(
+        description="Migrate seq_id_to_seq.json into SQLite sequences table."
+    )
     ap.add_argument("--json", required=True, help="Path to seq_id_to_seq.json")
     ap.add_argument("--db", default=DEFAULT_DB, help=f"Path to SQLite DB (default: {DEFAULT_DB})")
     ap.add_argument("--dry-run", action="store_true", help="Do not write; just report actions")
-    ap.add_argument("--batch-size", type=int, default=50000, help="Rows per commit (0=single commit at end)")
+    ap.add_argument(
+        "--batch-size", type=int, default=50000, help="Rows per commit (0=single commit at end)"
+    )
     ap.add_argument("--backup", action="store_true", help="Create DB backup before writing")
     args = ap.parse_args()
 
@@ -192,6 +206,7 @@ def main():
         shutil.copy2(args.db, bak)
 
     migrate(args.json, args.db, dry_run=args.dry_run, batch_size=args.batch_size)
+
 
 if __name__ == "__main__":
     main()

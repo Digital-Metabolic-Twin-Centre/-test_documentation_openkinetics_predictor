@@ -61,12 +61,10 @@ def require_api_key(view_func):
                 status=401,
             )
 
-        token = auth_header[len("Bearer "):].strip()
+        token = auth_header[len("Bearer ") :].strip()
 
         try:
-            api_key = ApiKey.objects.select_related("user").get(
-                key=token, is_active=True
-            )
+            api_key = ApiKey.objects.select_related("user").get(key=token, is_active=True)
         except ApiKey.DoesNotExist:
             return JsonResponse(
                 {"error": "Invalid or revoked API key."},

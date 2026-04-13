@@ -11,6 +11,7 @@ def _kinform_predictions_lazy(*args, **kwargs):
 
     return kinform_predictions(*args, **kwargs)
 
+
 descriptor = MethodDescriptor(
     key="KinForm-L",
     display_name="KinForm-L",
@@ -22,26 +23,20 @@ descriptor = MethodDescriptor(
     citation_url="https://www.nature.com/articles/s41540-026-00692-5",
     repo_url="https://github.com/Digital-Metabolic-Twin-Centre/KinForm",
     more_info="Recommended for proteins with low sequence similarity to training data.",
-
     # ── Capabilities ──────────────────────────────────────────────────────────
     # KinForm-L supports kcat prediction only; it is not available for KM.
     supports=["kcat"],
     input_format="single",
     output_cols={"kcat": "kcat (1/s)"},
-
     # ── Sequence length ───────────────────────────────────────────────────────
     max_seq_len=1500,
-
     # ── Input mapping ─────────────────────────────────────────────────────────
     col_to_kwarg={"Substrate": "substrates"},
-
     # ── Per-target extra kwargs ───────────────────────────────────────────────
     target_kwargs={
         "kcat": {"kinetics_type": "KCAT", "model_variant": "L"},
     },
-
     pred_func=_kinform_predictions_lazy,
-
     # ── Embeddings ────────────────────────────────────────────────────────────
     embeddings_used=["esm2", "esmc", "prot_t5", "pseq2sites"],
 )

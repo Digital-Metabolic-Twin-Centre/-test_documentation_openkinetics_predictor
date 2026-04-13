@@ -63,11 +63,7 @@ def substrate_as_smiles(
     if mol is None:
         return None
 
-    if (
-        not canonicalize
-        and preserve_raw_smiles_when_possible
-        and is_smiles_text(text)
-    ):
+    if not canonicalize and preserve_raw_smiles_when_possible and is_smiles_text(text):
         return text
 
     return Chem.MolToSmiles(mol, canonical=canonicalize)

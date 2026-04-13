@@ -15,7 +15,11 @@ def _is_docker_runtime() -> bool:
 
 def _import_runtime_config() -> ModuleType:
     preferred = "webKinPred.config_docker" if _is_docker_runtime() else "webKinPred.config_local"
-    fallback = "webKinPred.config_local" if preferred.endswith("config_docker") else "webKinPred.config_docker"
+    fallback = (
+        "webKinPred.config_local"
+        if preferred.endswith("config_docker")
+        else "webKinPred.config_docker"
+    )
     try:
         return import_module(preferred)
     except Exception:

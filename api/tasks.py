@@ -50,6 +50,7 @@ except ImportError:
 # Celery tasks
 # ---------------------------------------------------------------------------
 
+
 @shared_task
 def run_prediction(
     public_id: str,
@@ -222,9 +223,7 @@ def run_multi_prediction(
         return
 
     try:
-        desc_by_target = {
-            target: get_method(methods[target]) for target in ordered_targets
-        }
+        desc_by_target = {target: get_method(methods[target]) for target in ordered_targets}
     except Exception as e:
         Job.objects.filter(pk=job.pk).update(
             status="Failed",
@@ -273,6 +272,7 @@ def run_multi_prediction(
 # Core prediction logic
 # ---------------------------------------------------------------------------
 
+
 def _execute_prediction(
     job: Job,
     desc,
@@ -294,8 +294,7 @@ def _execute_prediction(
     missing = [c for c in required_cols if c not in df.columns]
     if missing:
         raise ValueError(
-            f"Missing column(s) required for {desc.display_name}: "
-            + ", ".join(missing)
+            f"Missing column(s) required for {desc.display_name}: " + ", ".join(missing)
         )
 
     # ── 2. Extract sequences and apply length limit ───────────────────────────
@@ -322,8 +321,7 @@ def _execute_prediction(
     extra_info: list[str] = [""] * n_rows
 
     skipped_reasons: dict[int, str] = {
-        idx: "Sequence too long — row was excluded"
-        for idx in set(range(n_rows)) - set(valid_idx)
+        idx: "Sequence too long — row was excluded" for idx in set(range(n_rows)) - set(valid_idx)
     }
 
     if valid_idx:
@@ -407,8 +405,7 @@ def _execute_both_prediction(
 
     # Rows skipped by length handling
     skipped_reasons: dict[int, str] = {
-        idx: "Sequence too long — row was excluded"
-        for idx in set(range(n_rows)) - set(valid_idx)
+        idx: "Sequence too long — row was excluded" for idx in set(range(n_rows)) - set(valid_idx)
     }
 
     # ── 2. Initialise result arrays ───────────────────────────────────────────
@@ -496,12 +493,14 @@ def _execute_both_prediction(
     results_df.insert(0, "Source kcat", kcat_src)
 
     preferred = [
-        "kcat (1/s)", "Source kcat", "Extra Info kcat",
-        "KM (mM)", "Source KM", "Extra Info KM",
+        "kcat (1/s)",
+        "Source kcat",
+        "Extra Info kcat",
+        "KM (mM)",
+        "Source KM",
+        "Extra Info KM",
     ]
-    results_df = results_df[
-        preferred + [c for c in results_df.columns if c not in preferred]
-    ]
+    results_df = results_df[preferred + [c for c in results_df.columns if c not in preferred]]
 
     # ── 7. Write CSV, credit back, update job ─────────────────────────────────
     out_path = _output_path(job.public_id)
@@ -554,8 +553,7 @@ def _execute_multi_prediction(
         sequences_proc = [sequences[i] for i in valid_idx]
 
     skipped_reasons: dict[int, str] = {
-        idx: "Sequence too long — row was excluded"
-        for idx in set(range(n_rows)) - set(valid_idx)
+        idx: "Sequence too long — row was excluded" for idx in set(range(n_rows)) - set(valid_idx)
     }
 
     target_results: dict[str, dict] = {}
@@ -610,8 +608,7 @@ def _execute_multi_prediction(
 
             if exp.get("protein_sequence") != sequences[idx]:
                 print(
-                    f"  Protein sequence mismatch at index {idx}, "
-                    "skipping experimental overwrite."
+                    f"  Protein sequence mismatch at index {idx}, skipping experimental overwrite."
                 )
                 continue
 
@@ -663,9 +660,7 @@ def _execute_multi_prediction(
     for target in targets:
         pred_col = target_results[target]["output_col"]
         fully_predicted = (
-            fully_predicted
-            & (results_df[pred_col] != "")
-            & results_df[pred_col].notna()
+            fully_predicted & (results_df[pred_col] != "") & results_df[pred_col].notna()
         )
 
     processed = int(fully_predicted.sum())
@@ -682,6 +677,7 @@ def _execute_multi_prediction(
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _invoke_method_prediction(
     desc,
@@ -722,9 +718,7 @@ def _invoke_method_prediction(
             **call_kwargs,
         )
 
-    raise PredictionError(
-        f"{desc.display_name} is not configured with a prediction engine."
-    )
+    raise PredictionError(f"{desc.display_name} is not configured with a prediction engine.")
 
 
 def _map_subset_invalid_reasons(
@@ -750,10 +744,7 @@ def _build_skipped_message(skipped_reasons: dict[int, str]) -> str:
     groups: dict[str, list[int]] = {}
     for idx, reason in skipped_reasons.items():
         groups.setdefault(reason, []).append(idx)
-    return json.dumps([
-        {"rows": sorted(rows), "reason": reason}
-        for reason, rows in groups.items()
-    ])
+    return json.dumps([{"rows": sorted(rows), "reason": reason} for reason, rows in groups.items()])
 
 
 def _load_input(job: Job) -> pd.DataFrame:
@@ -792,6 +783,7 @@ def _sanitise_unexpected(exc: Exception, label: str) -> str:
     message, stripping internal paths and stack traces.
     """
     import re
+
     msg = str(exc)
     # If the message contains file paths or the word "Traceback", it's too
     # technical for a user.  Replace with a generic fallback.

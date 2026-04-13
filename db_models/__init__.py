@@ -1,1 +1,1 @@
-default_app_config = 'db_models.apps.SeqmapConfig'
+default_app_config = "db_models.apps.SeqmapConfig"

@@ -8,9 +8,7 @@ from api.methods.base import MethodDescriptor, SubprocessEngineConfig
 descriptor = MethodDescriptor(
     key="CatPred",
     display_name="CatPred",
-    authors=(
-        "Veda Sheersh Boorla, Somtirtha Santra, Costas D. Maranas"
-    ),
+    authors=("Veda Sheersh Boorla, Somtirtha Santra, Costas D. Maranas"),
     publication_title=(
         "CatPred: A comprehensive framework for deep learning in vitro enzyme kinetic parameters"
     ),
@@ -20,7 +18,6 @@ descriptor = MethodDescriptor(
         "CatPred currently integrates kcat and Km through a local CPU inference "
         "adapter. Ki remains outside the current webKinPred target model."
     ),
-
     supports=["kcat", "Km"],
     input_format="single",
     output_cols={

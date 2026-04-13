@@ -25,9 +25,7 @@ def smiles_to_inchi(smiles: str) -> str | None:
     return Chem.MolToInchi(mol) if mol else None
 
 
-def lookup_experimental(
-    prot_seqs: str, substrates: str, param_type: str = "Km"
-) -> dict:
+def lookup_experimental(prot_seqs: str, substrates: str, param_type: str = "Km") -> dict:
     """
     Quick lookup of one experimental datum.
 

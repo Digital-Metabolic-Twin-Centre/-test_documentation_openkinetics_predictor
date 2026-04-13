@@ -1,9 +1,10 @@
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse, StreamingHttpResponse
 
 from api.services.progress_service import sse_generator
+
+
 @csrf_exempt
 def progress_stream(request):
     """

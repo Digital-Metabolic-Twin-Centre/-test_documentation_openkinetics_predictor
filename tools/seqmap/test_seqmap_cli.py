@@ -36,11 +36,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_sequences_sha256 ON sequences(sha256);
 CREATE INDEX IF NOT EXISTS idx_sequences_len           ON sequences(len);
 """
 
+
 def sha256_hex(s: str) -> str:
     return hashlib.sha256(s.encode("utf-8")).hexdigest()
 
+
 def base12(h: str) -> str:
     return h[:12]
+
 
 def run_cli(args, *, stdin_str=None, db_path=None, check=True):
     """Run the CLI and return (rc, stdout, stderr)."""
@@ -55,8 +58,11 @@ def run_cli(args, *, stdin_str=None, db_path=None, check=True):
         stderr=subprocess.PIPE,
     )
     if check and proc.returncode != 0:
-        raise AssertionError(f"CLI failed rc={proc.returncode}\ncmd={cmd}\nstdout={proc.stdout}\nstderr={proc.stderr}")
+        raise AssertionError(
+            f"CLI failed rc={proc.returncode}\ncmd={cmd}\nstdout={proc.stdout}\nstderr={proc.stderr}"
+        )
     return proc.returncode, proc.stdout, proc.stderr
+
 
 class SeqMapCLITests(unittest.TestCase):
     def setUp(self):
@@ -73,9 +79,13 @@ class SeqMapCLITests(unittest.TestCase):
         con = sqlite3.connect(self.db, timeout=60, isolation_level=None)
         cur = con.cursor()
         if sid:
-            row = cur.execute("SELECT id, seq, sha256, len, uses_count FROM sequences WHERE id=?", (sid,)).fetchone()
+            row = cur.execute(
+                "SELECT id, seq, sha256, len, uses_count FROM sequences WHERE id=?", (sid,)
+            ).fetchone()
         elif seq:
-            row = cur.execute("SELECT id, seq, sha256, len, uses_count FROM sequences WHERE seq=?", (seq,)).fetchone()
+            row = cur.execute(
+                "SELECT id, seq, sha256, len, uses_count FROM sequences WHERE seq=?", (seq,)
+            ).fetchone()
         else:
             row = None
         con.close()
@@ -108,7 +118,9 @@ class SeqMapCLITests(unittest.TestCase):
     def test_batch_stdin_order_and_counts(self):
         seqs = ["AAA", "BBB", "AAA", "", "CCC", "BBB", "AAA"]
         stdin_payload = "\n".join(seqs) + "\n"
-        rc, out, _ = run_cli(["batch-get-or-create", "--stdin"], stdin_str=stdin_payload, db_path=self.db)
+        rc, out, _ = run_cli(
+            ["batch-get-or-create", "--stdin"], stdin_str=stdin_payload, db_path=self.db
+        )
         ids = [line for line in out.strip().splitlines()]
         # Empty lines are ignored -> expected 6 outputs
         self.assertEqual(len(ids), 6)
@@ -161,8 +173,10 @@ class SeqMapCLITests(unittest.TestCase):
             run_cli(["batch-get-or-create", "--stdin"], stdin_str=payload, db_path=self.db)
 
         threads = [threading.Thread(target=worker) for _ in range(N_PROCS)]
-        for t in threads: t.start()
-        for t in threads: t.join()
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
         row = self.fetch_row(seq=seq)
         self.assertIsNotNone(row)
@@ -171,7 +185,9 @@ class SeqMapCLITests(unittest.TestCase):
 
         # Only one row for this sha/seq should exist
         con = sqlite3.connect(self.db, timeout=60, isolation_level=None)
-        cnt = con.execute("SELECT COUNT(*) FROM sequences WHERE sha256=? OR seq=?", (sha256_hex(seq), seq)).fetchone()[0]
+        cnt = con.execute(
+            "SELECT COUNT(*) FROM sequences WHERE sha256=? OR seq=?", (sha256_hex(seq), seq)
+        ).fetchone()[0]
         con.close()
         self.assertEqual(cnt, 1)
 
@@ -185,7 +201,8 @@ class SeqMapCLITests(unittest.TestCase):
         # Expect non-zero exit code
         rc, out, err = run_cli(
             ["batch-get-or-create", "--csv", csv_path, "--col", "Protein Sequence"],
-            db_path=self.db, check=False
+            db_path=self.db,
+            check=False,
         )
         self.assertNotEqual(rc, 0)
         self.assertIn("Column 'Protein Sequence' not found", (out + err))
@@ -196,6 +213,7 @@ class SeqMapCLITests(unittest.TestCase):
         sid = out.strip()
         row = self.fetch_row(sid=sid)
         self.assertEqual(row[3], 5000)  # len
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

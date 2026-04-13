@@ -1,6 +1,7 @@
 """
 Similarity analysis service that orchestrates the similarity workflow.
 """
+
 import tempfile
 import os
 import subprocess
@@ -29,39 +30,38 @@ from api.utils.similarity_config import SIMILARITY_DATASETS, TARGET_DBS
 def analyze_sequence_similarity(csv_file, session_id: str = "default") -> Dict[str, Any]:
     """
     Analyze sequence similarity against target databases.
-    
+
     Args:
         csv_file: Uploaded CSV file containing protein sequences
         session_id: Session ID for logging
-        
+
     Returns:
         Dictionary containing similarity analysis results
-        
+
     Raises:
         ValueError: If CSV is invalid or contains no sequences
         Exception: If analysis fails
     """
     # Extract sequences from CSV
     input_sequences = extract_protein_sequences_from_csv(csv_file)
-    
+
     # Create unique sequence mapping to avoid redundant analysis
     unique_sequences, seq_to_unique_id = create_unique_sequence_mapping(input_sequences)
-    
+
     # Create temporary FASTA file
     query_file_path = create_fasta_file(unique_sequences, seq_to_unique_id)
     temp_files_to_cleanup = [query_file_path]
-    
+
     try:
         # Create MMseqs2 database
         query_db, temp_query_dir = create_mmseqs_database(query_file_path, session_id)
         temp_files_to_cleanup.append(temp_query_dir)
-        
+
         # Process each target database
         method_histograms = {}
 
         datasets = SIMILARITY_DATASETS or {
-            label: {"label": label, "target_db": path}
-            for label, path in TARGET_DBS.items()
+            label: {"label": label, "target_db": path} for label, path in TARGET_DBS.items()
         }
 
         for _dataset_key, dataset in datasets.items():
@@ -75,13 +75,18 @@ def analyze_sequence_similarity(csv_file, session_id: str = "default") -> Dict[s
                 continue
 
             push_line(session_id, f"==> Processing DB: {label}")
-            
+
             # Run similarity analysis for this dataset
             method_result = analyze_similarity_for_method(
-                query_db, target_db, query_file_path, label,
-                input_sequences, seq_to_unique_id, session_id
+                query_db,
+                target_db,
+                query_file_path,
+                label,
+                input_sequences,
+                seq_to_unique_id,
+                session_id,
             )
-            
+
             method_histograms[label] = method_result
 
         if not method_histograms:
@@ -89,21 +94,26 @@ def analyze_sequence_similarity(csv_file, session_id: str = "default") -> Dict[s
                 "No similarity datasets are available. "
                 "Add a dataset in similarity config and build its MMseqs DB."
             )
-        
+
         return method_histograms
-        
+
     finally:
         # Clean up all temporary files
         cleanup_temporary_files(*temp_files_to_cleanup)
 
 
 def analyze_similarity_for_method(
-    query_db: str, target_db: str, query_file_path: str, method_name: str,
-    original_sequences: List[str], seq_to_unique_id: Dict[str, str], session_id: str
+    query_db: str,
+    target_db: str,
+    query_file_path: str,
+    method_name: str,
+    original_sequences: List[str],
+    seq_to_unique_id: Dict[str, str],
+    session_id: str,
 ) -> Dict[str, Any]:
     """
     Analyze similarity for a specific method/database.
-    
+
     Args:
         query_db: Path to query database
         target_db: Path to target database
@@ -112,37 +122,36 @@ def analyze_similarity_for_method(
         original_sequences: Original sequence list
         seq_to_unique_id: Sequence to unique ID mapping
         session_id: Session ID for logging
-        
+
     Returns:
         Dictionary containing method-specific results
     """
     result_file = None
-    
+
     try:
         # Run MMseqs2 search
         result_file = run_mmseqs_search(query_db, target_db, method_name, session_id)
-        
+
         # Parse results to get identity scores
         unique_max_identity, unique_mean_identity = parse_mmseqs_results(
             result_file, query_file_path
         )
-        
+
         # Map results back to original sequences
         query_to_max, query_to_mean = map_results_to_original_sequences(
-            unique_max_identity, unique_mean_identity, 
-            original_sequences, seq_to_unique_id
+            unique_max_identity, unique_mean_identity, original_sequences, seq_to_unique_id
         )
-        
+
         # Calculate histograms
         histogram_max_counts, histogram_max_perc = calculate_identity_histogram(query_to_max)
         histogram_mean_counts, histogram_mean_perc = calculate_identity_histogram(query_to_mean)
-        
+
         # Calculate averages
         average_max_similarity = calculate_average_similarity(query_to_max)
         average_mean_similarity = calculate_average_similarity(query_to_mean)
-        
+
         push_line(session_id, f"--> [{method_name}] Aggregated {len(query_to_max)} sequences")
-        
+
         return {
             "histogram_max": histogram_max_perc,
             "histogram_mean": histogram_mean_perc,
@@ -151,7 +160,7 @@ def analyze_similarity_for_method(
             "count_max": histogram_max_counts,
             "count_mean": histogram_mean_counts,
         }
-        
+
     finally:
         # Clean up result file and its parent directory
         if result_file and os.path.exists(result_file):
@@ -168,8 +177,7 @@ def _similarity_column_names(method_key: str) -> tuple[str, str]:
 
 def _resolve_similarity_dataset_for_method(method_key: str) -> tuple[Optional[str], Optional[str]]:
     datasets = SIMILARITY_DATASETS or {
-        label: {"label": label, "target_db": path}
-        for label, path in TARGET_DBS.items()
+        label: {"label": label, "target_db": path} for label, path in TARGET_DBS.items()
     }
 
     for dataset_key, dataset in datasets.items():
@@ -244,9 +252,7 @@ def append_kcat_similarity_columns_to_output_csv(
 
         dataset_label, target_db = _resolve_similarity_dataset_for_method(kcat_method_key)
         if not target_db:
-            raise ValueError(
-                f"No similarity dataset is configured for method '{kcat_method_key}'"
-            )
+            raise ValueError(f"No similarity dataset is configured for method '{kcat_method_key}'")
         if not (os.path.exists(target_db) or os.path.exists(f"{target_db}.dbtype")):
             raise FileNotFoundError(
                 f"Similarity DB for '{dataset_label or kcat_method_key}' not found at {target_db}"

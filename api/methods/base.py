@@ -29,6 +29,7 @@ The CSV input format expected by a method.
 # PredictionError — the canonical exception for prediction engine failures
 # ---------------------------------------------------------------------------
 
+
 class PredictionError(Exception):
     """
     Raised by prediction engines when an unrecoverable error occurs during
@@ -42,8 +43,7 @@ class PredictionError(Exception):
     them as PredictionError with a descriptive message.  Examples::
 
         raise PredictionError(
-            "DLKcat ran out of memory. Try reducing the number of rows "
-            "or the sequence lengths."
+            "DLKcat ran out of memory. Try reducing the number of rows or the sequence lengths."
         )
 
         raise PredictionError(
@@ -56,6 +56,7 @@ class PredictionError(Exception):
 # ---------------------------------------------------------------------------
 # SubprocessEngineConfig — configuration for the generic subprocess engine
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class SubprocessEngineConfig:
@@ -107,6 +108,7 @@ class SubprocessEngineConfig:
 # ---------------------------------------------------------------------------
 # MethodDescriptor — full specification of one prediction method
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class MethodDescriptor:
@@ -166,9 +168,11 @@ class MethodDescriptor:
 
         Examples::
 
-            {"Substrate": "substrates"}          # single-substrate methods
-            {"Substrates": "substrates",         # TurNup
-             "Products": "products"}
+            {"Substrate": "substrates"}  # single-substrate methods
+            {
+                "Substrates": "substrates",  # TurNup
+                "Products": "products",
+            }
 
     target_kwargs : dict[str, dict]
         Extra static keyword arguments passed to ``pred_func`` depending on
@@ -177,7 +181,7 @@ class MethodDescriptor:
 
             {
                 "kcat": {"kinetics_type": "KCAT"},
-                "Km":   {"kinetics_type": "KM"},
+                "Km": {"kinetics_type": "KM"},
             }
 
         For methods that only support one target, this can be empty or omitted.

@@ -59,6 +59,7 @@ def _load() -> None:
 # Public interface
 # ---------------------------------------------------------------------------
 
+
 def get(key: str) -> "MethodDescriptor":
     """
     Return the descriptor for the given method key.
@@ -67,10 +68,7 @@ def get(key: str) -> "MethodDescriptor":
     """
     _load()
     if key not in _REGISTRY:
-        raise KeyError(
-            f"Unknown prediction method '{key}'. "
-            f"Available methods: {sorted(_REGISTRY)}"
-        )
+        raise KeyError(f"Unknown prediction method '{key}'. Available methods: {sorted(_REGISTRY)}")
     return _REGISTRY[key]
 
 

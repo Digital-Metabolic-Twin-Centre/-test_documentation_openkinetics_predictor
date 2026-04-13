@@ -11,6 +11,7 @@ def _kinform_predictions_lazy(*args, **kwargs):
 
     return kinform_predictions(*args, **kwargs)
 
+
 descriptor = MethodDescriptor(
     key="KinForm-H",
     display_name="KinForm-H",
@@ -22,7 +23,6 @@ descriptor = MethodDescriptor(
     citation_url="https://www.nature.com/articles/s41540-026-00692-5",
     repo_url="https://github.com/Digital-Metabolic-Twin-Centre/KinForm",
     more_info="Recommended for proteins with high sequence similarity to training data.",
-
     # ── Capabilities ──────────────────────────────────────────────────────────
     supports=["kcat", "Km"],
     input_format="single",
@@ -30,22 +30,17 @@ descriptor = MethodDescriptor(
         "kcat": "kcat (1/s)",
         "Km": "KM (mM)",
     },
-
     # ── Sequence length ───────────────────────────────────────────────────────
     max_seq_len=1500,
-
     # ── Input mapping ─────────────────────────────────────────────────────────
     col_to_kwarg={"Substrate": "substrates"},
-
     # ── Per-target extra kwargs ───────────────────────────────────────────────
     # kinform_predictions() accepts both `kinetics_type` and `model_variant`.
     target_kwargs={
         "kcat": {"kinetics_type": "KCAT", "model_variant": "H"},
-        "Km":   {"kinetics_type": "KM",   "model_variant": "H"},
+        "Km": {"kinetics_type": "KM", "model_variant": "H"},
     },
-
     pred_func=_kinform_predictions_lazy,
-
     # ── Embeddings ────────────────────────────────────────────────────────────
     # KinForm uses four protein embedding models that are all available in our
     # shared embedding infrastructure (see api/embeddings/registry.py).

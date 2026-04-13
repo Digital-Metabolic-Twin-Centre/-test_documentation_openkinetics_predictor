@@ -1,6 +1,7 @@
 """
 Job service that orchestrates job submission and management workflows.
 """
+
 from typing import Any, Dict, Optional, Tuple
 
 from django.http import JsonResponse
@@ -95,9 +96,7 @@ def process_job_submission_from_params(
     if param_error:
         return JsonResponse({"error": param_error}, status=400), None
 
-    seq_handling_error = validate_sequence_handling_option(
-        params["handle_long_sequences"]
-    )
+    seq_handling_error = validate_sequence_handling_option(params["handle_long_sequences"])
     if seq_handling_error:
         return JsonResponse({"error": seq_handling_error}, status=400), None
 
@@ -176,12 +175,15 @@ def handle_quota_validation(ip_address: str, requested_rows: int) -> Optional[Js
     rate_headers = create_rate_limit_headers(DAILY_LIMIT, remaining, ttl)
 
     if not allowed:
-        error_response = JsonResponse({
-            "error": (
-                f"Upload rejected: daily limit exceeded. "
-                f"{remaining} predictions remaining today; this upload requires {requested_rows}."
-            )
-        }, status=429)
+        error_response = JsonResponse(
+            {
+                "error": (
+                    f"Upload rejected: daily limit exceeded. "
+                    f"{remaining} predictions remaining today; this upload requires {requested_rows}."
+                )
+            },
+            status=429,
+        )
 
         for key, value in rate_headers.items():
             error_response[key] = value
@@ -191,9 +193,7 @@ def handle_quota_validation(ip_address: str, requested_rows: int) -> Optional[Js
     return None
 
 
-def create_job_record(
-    params: Dict[str, Any], ip_address: str, requested_rows: int, user
-) -> Job:
+def create_job_record(params: Dict[str, Any], ip_address: str, requested_rows: int, user) -> Job:
     """
     Create and save a new job record.
 

@@ -1,12 +1,17 @@
 import hashlib, os, sqlite3
 
-DEFAULT_DB = os.environ.get("SEQMAP_DB", "/home/saleh/webKinPred/media/sequence_info/seqmap.sqlite3")
+DEFAULT_DB = os.environ.get(
+    "SEQMAP_DB", "/home/saleh/webKinPred/media/sequence_info/seqmap.sqlite3"
+)
+
 
 def sha256_hex(seq: str) -> str:
     return hashlib.sha256(seq.encode("utf-8")).hexdigest()
 
+
 def base12(sha: str) -> str:
     return sha[:12]
+
 
 def open_db(db_path: str) -> sqlite3.Connection:
     # autocommit; keep connections short-lived; no explicit transactions
@@ -17,6 +22,7 @@ def open_db(db_path: str) -> sqlite3.Connection:
     con.execute("PRAGMA temp_store=MEMORY;")
     # con.execute("PRAGMA busy_timeout=0;")  # uncomment for truly fail-fast behaviour
     return con
+
 
 def get_or_create_id(con: sqlite3.Connection, sequence: str) -> str:
     """

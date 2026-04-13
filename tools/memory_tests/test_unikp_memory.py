@@ -20,9 +20,11 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # ---------------- Memory helpers ----------------
 
+
 def rss_mb() -> float:
     """Current process RSS in MB."""
     return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+
 
 def ru_maxrss_mb() -> float:
     """Kernel-reported peak RSS (MB). Linux returns KB; macOS returns bytes."""
@@ -32,8 +34,10 @@ def ru_maxrss_mb() -> float:
     else:
         return val / (1024.0 * 1024.0)
 
+
 class MemoryMonitor:
     """High-frequency RSS sampler to catch short spikes."""
+
     def __init__(self, interval_s: float = 0.005):
         self.interval_s = interval_s
         self._peak_abs_mb = 0.0
@@ -62,19 +66,20 @@ class MemoryMonitor:
                 self._peak_abs_mb = cur
             time.sleep(self.interval_s)
 
+
 def run_stage(label, fn, mon, report):
     """Run a stage, logging RSS/ru_maxrss before/after and peak increases."""
     before_peak = mon.peak_abs_mb
-    before_ru   = ru_maxrss_mb()
-    before_rss  = rss_mb()
+    before_ru = ru_maxrss_mb()
+    before_rss = rss_mb()
     t0 = time.time()
 
     out = fn()
 
     dt = time.time() - t0
     after_peak = mon.peak_abs_mb
-    after_ru   = ru_maxrss_mb()
-    after_rss  = rss_mb()
+    after_ru = ru_maxrss_mb()
+    after_rss = rss_mb()
 
     report[label] = {
         "rss_after_mb": after_rss,
@@ -85,26 +90,34 @@ def run_stage(label, fn, mon, report):
     }
     return out
 
+
 # ---------------- UniKP helpers (from run_unikp_batch.py) ----------------
+
 
 def resolve_seq_ids_via_cli(sequences, seqmap_py, seqmap_cli, seqmap_db):
     """Resolve stable IDs for sequences via seqmap CLI."""
     import subprocess
+
     payload = "\n".join(sequences) + "\n"
     cmd = [seqmap_py, seqmap_cli, "--db", seqmap_db, "batch-get-or-create", "--stdin"]
-    proc = subprocess.run(cmd, input=payload, text=True,
-                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    proc = subprocess.run(
+        cmd, input=payload, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
     if proc.returncode != 0:
-        raise RuntimeError(f"seqmap CLI failed (rc={proc.returncode})\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+        raise RuntimeError(
+            f"seqmap CLI failed (rc={proc.returncode})\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
+        )
     ids = proc.stdout.strip().splitlines()
     if len(ids) != len(sequences):
         raise RuntimeError(f"seqmap returned {len(ids)} ids for {len(sequences)} sequences")
     return ids
 
+
 def load_t5_model_local(prott5_path):
     """Load local ProtT5-XL (encoder) and tokenizer on CPU."""
     import torch
     from transformers import T5Tokenizer, T5EncoderModel
+
     gc.collect()
     try:
         tokenizer = T5Tokenizer.from_pretrained(prott5_path, do_lower_case=False)
@@ -157,6 +170,7 @@ def smiles_to_vec(Smiles, vocab, trfm):
 def seq_to_vec(sequences, tokenizer, model, device, seq_vec_dir, seqmap_py, seqmap_cli, seqmap_db):
     """Return np.ndarray [N, 1024] ProtT5-XL mean-pooled embeddings; caches to disk."""
     import torch, re
+
     ids = resolve_seq_ids_via_cli(sequences, seqmap_py, seqmap_cli, seqmap_db)
 
     vecs = []
@@ -172,32 +186,34 @@ def seq_to_vec(sequences, tokenizer, model, device, seq_vec_dir, seqmap_py, seqm
     if seqs_to_embed:
         print(f"Generating embeddings for {len(seqs_to_embed)} sequences...")
         for seq, sid in zip(seqs_to_embed, ids_to_embed):
-            spaced = ' '.join(seq)
+            spaced = " ".join(seq)
             spaced = re.sub(r"[UZOB]", "X", spaced)
             enc = tokenizer.batch_encode_plus([spaced], add_special_tokens=True, padding=True)
-            input_ids = torch.tensor(enc['input_ids']).to(device)
-            attention_mask = torch.tensor(enc['attention_mask']).to(device)
+            input_ids = torch.tensor(enc["input_ids"]).to(device)
+            attention_mask = torch.tensor(enc["attention_mask"]).to(device)
             with torch.inference_mode():
-                hidden = model(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state  # [1, L, 1024]
+                hidden = model(
+                    input_ids=input_ids, attention_mask=attention_mask
+                ).last_hidden_state  # [1, L, 1024]
             hidden = hidden.cpu().numpy()[0]
             seq_len = int((attention_mask[0] == 1).sum().item())
-            seq_vec = hidden[:seq_len - 1].mean(axis=0).astype(np.float32)  # [1024]
+            seq_vec = hidden[: seq_len - 1].mean(axis=0).astype(np.float32)  # [1024]
             out_path = os.path.join(seq_vec_dir, f"{sid}.npy")
             np.save(out_path, seq_vec)
             vecs.append(seq_vec)
 
     return np.stack(vecs)
 
+
 # ---------------- Main workflow ----------------
+
 
 def test_unikp_memory():
     print("=== Peak RAM measurement: UniKP (single sample) ===")
 
-    # --- Config (edit as needed) 
+    # --- Config (edit as needed)
     UNIKP_DIR = os.path.join(REPO_ROOT, "models", "UniKP-main")
-    SEQ_VEC_DIR = os.path.join(
-        REPO_ROOT, "media", "sequence_info", "prot_t5_last", "mean_vecs"
-    )
+    SEQ_VEC_DIR = os.path.join(REPO_ROOT, "media", "sequence_info", "prot_t5_last", "mean_vecs")
     PROTT5XL_MODEL_PATH = os.path.join(
         REPO_ROOT, "models", "UniKP-main", "models", "prot_t5_xl_uniref50"
     )
@@ -206,15 +222,13 @@ def test_unikp_memory():
     SEQMAP_DB = os.path.join(REPO_ROOT, "media", "sequence_info", "seqmap.sqlite3")
     VOCAB_PATH = os.path.join(REPO_ROOT, "models", "UniKP-main", "vocab.pkl")
     TRFM_PATH = os.path.join(REPO_ROOT, "models", "UniKP-main", "trfm_12_23000.pkl")
-    PREDICTOR_PATH = os.path.join(
-        REPO_ROOT, "models", "UniKP-main", "models", "UniKP_KCAT.pkl"
-    )
+    PREDICTOR_PATH = os.path.join(REPO_ROOT, "models", "UniKP-main", "models", "UniKP_KCAT.pkl")
 
     # Test sample
     max_sequence_list = np.random.choice(list("ACDEFGHIKLMNPQRSTVWY"), size=(1000,))
-    max_sequence = ''.join(max_sequence_list)# representative long sequence
+    max_sequence = "".join(max_sequence_list)  # representative long sequence
     sequences = [max_sequence]
-    test_smiles = 'CCO'  # ethanol
+    test_smiles = "CCO"  # ethanol
 
     # For reproducible memory; remove to see real-world worst case
     os.environ["OMP_NUM_THREADS"] = "1"
@@ -245,17 +259,20 @@ def test_unikp_memory():
         from build_vocab import WordVocab
         from pretrain_trfm import TrfmSeq2seq
         from utils import split  # noqa: F401
+
     run_stage("imports", do_imports, mon, stage_report)
 
     # Stage 2: load SMILES model (vocab + transformer)
     def load_smiles_model():
         global vocab, trfm
         import torch
+
         vocab = WordVocab.load_vocab(VOCAB_PATH)
         trfm = TrfmSeq2seq(len(vocab), 256, len(vocab), 4)
         sd = torch.load(TRFM_PATH, map_location=torch.device("cpu"))
         trfm.load_state_dict(sd)
         trfm.eval()
+
     run_stage("smiles_model_load", load_smiles_model, mon, stage_report)
 
     # Stage 3: decide whether ProtT5-XL is needed; load if yes
@@ -269,14 +286,17 @@ def test_unikp_memory():
         else:
             tokenizer, t5_model, t5_device = None, None, None
             print("All sequences cached — ProtT5-XL not needed.")
+
     run_stage("maybe_t5_load", maybe_load_t5, mon, stage_report)
 
     # Stage 4: load UniKP predictor
     def load_predictor():
         global predictor
         import pickle
+
         with open(PREDICTOR_PATH, "rb") as f:
             predictor = pickle.load(f)
+
     run_stage("predictor_load", load_predictor, mon, stage_report)
 
     # Stage 5: end-to-end features + predict
@@ -289,16 +309,24 @@ def test_unikp_memory():
             # Re-resolve IDs and load from cache
             vecs = seq_to_vec(
                 sequences,
-                tokenizer=None, model=None, device=None,
+                tokenizer=None,
+                model=None,
+                device=None,
                 seq_vec_dir=SEQ_VEC_DIR,
-                seqmap_py=SEQMAP_PY, seqmap_cli=SEQMAP_CLI, seqmap_db=SEQMAP_DB
+                seqmap_py=SEQMAP_PY,
+                seqmap_cli=SEQMAP_CLI,
+                seqmap_db=SEQMAP_DB,
             )
         else:
             vecs = seq_to_vec(
                 sequences,
-                tokenizer=tokenizer, model=t5_model, device=t5_device,
+                tokenizer=tokenizer,
+                model=t5_model,
+                device=t5_device,
                 seq_vec_dir=SEQ_VEC_DIR,
-                seqmap_py=SEQMAP_PY, seqmap_cli=SEQMAP_CLI, seqmap_db=SEQMAP_DB
+                seqmap_py=SEQMAP_PY,
+                seqmap_cli=SEQMAP_CLI,
+                seqmap_db=SEQMAP_DB,
             )
 
         # Concatenate and predict
@@ -322,12 +350,14 @@ def test_unikp_memory():
 
     print("\n=== Stage summary (MB) ===")
     for k, v in stage_report.items():
-        print(f"- {k}: "
-              f"rss_after={v['rss_after_mb']:.2f}, "
-              f"rss_delta={v['rss_delta_mb']:.2f}, "
-              f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
-              f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
-              f"time={v['seconds']:.3f}s")
+        print(
+            f"- {k}: "
+            f"rss_after={v['rss_after_mb']:.2f}, "
+            f"rss_delta={v['rss_delta_mb']:.2f}, "
+            f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
+            f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
+            f"time={v['seconds']:.3f}s"
+        )
 
     print("\n=== Overall ===")
     print(f"Final RSS: {final_rss:.2f} MB")
@@ -341,8 +371,12 @@ def test_unikp_memory():
     model_loaded_memory = stage_report["predictor_load"]["rss_after_mb"]
     model_load_memory = model_loaded_memory - stage_report["imports"]["rss_after_mb"]
     processing_peak_inc = stage_report["embed_infer_one_sample"]["stage_peak_inc_mb"]
-    processing_baseline = stage_report["embed_infer_one_sample"]["rss_after_mb"] - stage_report["embed_infer_one_sample"]["rss_delta_mb"]
+    processing_baseline = (
+        stage_report["embed_infer_one_sample"]["rss_after_mb"]
+        - stage_report["embed_infer_one_sample"]["rss_delta_mb"]
+    )
     return model_load_memory, processing_peak_inc, processing_baseline
+
 
 if __name__ == "__main__":
     # Ensure UniKP code path (for direct execution)

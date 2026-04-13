@@ -1,10 +1,12 @@
 import csv, sys
 
+
 def iter_sequences_from_stdin():
     for line in sys.stdin:
         s = line.rstrip("\n\r")
         if s != "":
             yield s
+
 
 def iter_sequences_from_csv(path, col):
     with open(path, newline="") as f:

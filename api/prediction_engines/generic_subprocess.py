@@ -59,9 +59,7 @@ def run_generic_subprocess_prediction(
     """
     cfg = desc.subprocess
     if cfg is None:
-        raise PredictionError(
-            f"{desc.display_name} is not configured with a subprocess engine."
-        )
+        raise PredictionError(f"{desc.display_name} is not configured with a subprocess engine.")
 
     job = Job.objects.get(public_id=public_id)
     _initialise_job_progress(job, len(sequences))
@@ -73,9 +71,7 @@ def run_generic_subprocess_prediction(
         sequences=sequences,
         call_kwargs=kwargs,
     )
-    static_params = {
-        key: value for key, value in kwargs.items() if key not in row_kwarg_names
-    }
+    static_params = {key: value for key, value in kwargs.items() if key not in row_kwarg_names}
 
     predictions: list[Any] = [None] * len(sequences)
     valid_rows, valid_indices, invalid_reasons = _validate_rows(
@@ -212,13 +208,9 @@ def _extract_row_inputs(
     for key in row_kwarg_names:
         values = call_kwargs.get(key)
         if not isinstance(values, list):
-            raise PredictionError(
-                f"{method_label} input mapping is invalid for '{key}'."
-            )
+            raise PredictionError(f"{method_label} input mapping is invalid for '{key}'.")
         if len(values) != n_rows:
-            raise PredictionError(
-                f"{method_label} input mapping length mismatch for '{key}'."
-            )
+            raise PredictionError(f"{method_label} input mapping length mismatch for '{key}'.")
         out[key] = values
 
     return out

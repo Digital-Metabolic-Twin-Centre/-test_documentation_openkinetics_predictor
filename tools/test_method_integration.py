@@ -79,7 +79,7 @@ def _build_fixture_df(desc, rows: int = 2) -> pd.DataFrame:
         elif col == "Products":
             data[col] = ["CC(O)=O;[H+]", "OC1CCCCC1;[H+]"][:rows]
         else:
-            data[col] = [f"dummy_{i+1}" for i in range(rows)]
+            data[col] = [f"dummy_{i + 1}" for i in range(rows)]
 
     return pd.DataFrame(data)
 
@@ -129,9 +129,7 @@ def _build_scenarios(desc) -> list[Scenario]:
         )
 
     if not scenarios:
-        raise IntegrationTestError(
-            f"Method '{desc.key}' supports none of kcat/Km/kcat/Km."
-        )
+        raise IntegrationTestError(f"Method '{desc.key}' supports none of kcat/Km/kcat/Km.")
     return scenarios
 
 
@@ -192,9 +190,7 @@ def _run_single_target_scenario(
     except Exception as e:
         print(f"\n[ERROR] Full traceback for [{scenario.name}]:", file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
-        raise IntegrationTestError(
-            f"Execution failed for scenario [{scenario.name}]: {e}"
-        ) from e
+        raise IntegrationTestError(f"Execution failed for scenario [{scenario.name}]: {e}") from e
 
     output_path = job_dir / "output.csv"
     if not output_path.exists():
@@ -219,11 +215,7 @@ def _validate_output(
         raise IntegrationTestError(f"No prediction columns added for [{scenario.name}]")
 
     kcat_cols = [c for c in output_df.columns if "kcat" in c.lower()]
-    km_cols = [
-        c
-        for c in output_df.columns
-        if c.lower().startswith("km") or " km" in c.lower()
-    ]
+    km_cols = [c for c in output_df.columns if c.lower().startswith("km") or " km" in c.lower()]
 
     target_cols: list[str] = []
     if scenario.prediction_type == "kcat":
@@ -239,9 +231,7 @@ def _validate_output(
             c for c in output_df.columns if "kcat/km" in c.lower() or "kcat/ km" in c.lower()
         ]
         if not ratio_cols:
-            raise IntegrationTestError(
-                f"Could not find kcat/Km column in [{scenario.name}]"
-            )
+            raise IntegrationTestError(f"Could not find kcat/Km column in [{scenario.name}]")
         target_cols = ratio_cols
 
     if not allow_empty_predictions:
@@ -303,9 +293,7 @@ def main() -> int:
     methods = all_methods()
     if args.method not in methods:
         available = ", ".join(sorted(methods.keys()))
-        raise IntegrationTestError(
-            f"Method '{args.method}' not found. Available: {available}"
-        )
+        raise IntegrationTestError(f"Method '{args.method}' not found. Available: {available}")
 
     method_desc = get_method(args.method)
     _assert_descriptor_is_runnable(method_desc)

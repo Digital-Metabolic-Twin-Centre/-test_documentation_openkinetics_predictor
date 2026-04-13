@@ -7,6 +7,7 @@ from django.conf import settings
 from django.utils.text import slugify
 from ..models import Job
 
+
 @csrf_exempt
 def detect_csv_format(request):
     if request.method != "POST" or "file" not in request.FILES:
@@ -41,9 +42,7 @@ def detect_csv_format(request):
         return JsonResponse(
             {
                 "status": "invalid",
-                "errors": [
-                    "Cannot have both 'Substrate' and 'Substrates'/'Products' columns."
-                ],
+                "errors": ["Cannot have both 'Substrate' and 'Substrates'/'Products' columns."],
             },
             status=400,
         )
@@ -93,9 +92,7 @@ def download_job_output(request, public_id):
     slugified_id = slugify(str(public_id))
     default_name = f"job-{slugified_id}-output.csv"
 
-    response = FileResponse(
-        open(media_url, "rb"), as_attachment=True, filename=default_name
-    )
+    response = FileResponse(open(media_url, "rb"), as_attachment=True, filename=default_name)
     response["Content-Type"] = "text/csv"
     return response
 
@@ -113,8 +110,6 @@ def download_job_input(request, public_id):
     slugified_id = slugify(str(public_id))
     default_name = f"job-{slugified_id}-input.csv"
 
-    response = FileResponse(
-        open(media_url, "rb"), as_attachment=True, filename=default_name
-    )
+    response = FileResponse(open(media_url, "rb"), as_attachment=True, filename=default_name)
     response["Content-Type"] = "text/csv"
     return response

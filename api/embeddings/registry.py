@@ -22,9 +22,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 EMBEDDING_REGISTRY: dict[str, dict] = {
-
     # ── Protein embeddings ────────────────────────────────────────────────────
-
     "esm2": {
         "name": "ESM-2 (Meta / Fair ESM)",
         "description": (
@@ -33,7 +31,7 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
         ),
         "implemented": True,
         "conda_env": "esm",
-        "python_path_key": "esm2",   # key in config PYTHON_PATHS
+        "python_path_key": "esm2",  # key in config PYTHON_PATHS
         "used_by": ["KinForm-H", "KinForm-L", "CatPred"],
         "notes": (
             "Invoked as a subprocess by KinForm.  The python path is passed via "
@@ -43,7 +41,6 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "rather than reusing the shared mean-vector cache directly."
         ),
     },
-
     "esmc": {
         "name": "ESMC (ESM-3 Cambrian)",
         "description": (
@@ -54,11 +51,8 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
         "conda_env": "esmc",
         "python_path_key": "esmc",
         "used_by": ["KinForm-H", "KinForm-L"],
-        "notes": (
-            "Invoked as a subprocess by KinForm via KINFORM_ESMC_PATH."
-        ),
+        "notes": ("Invoked as a subprocess by KinForm via KINFORM_ESMC_PATH."),
     },
-
     "prot_t5": {
         "name": "ProtT5-XL-UniRef50",
         "description": (
@@ -74,7 +68,6 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "UniKP and CataPro also use ProtT5 internally."
         ),
     },
-
     "pseq2sites": {
         "name": "Pseq2Sites",
         "description": (
@@ -85,13 +78,9 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
         "conda_env": "pseq2sites",
         "python_path_key": "pseq2sites",
         "used_by": ["KinForm-H", "KinForm-L"],
-        "notes": (
-            "Invoked as a subprocess by KinForm via KINFORM_PSEQ2SITES_PATH."
-        ),
+        "notes": ("Invoked as a subprocess by KinForm via KINFORM_PSEQ2SITES_PATH."),
     },
-
     # ── Substrate / molecular embeddings ─────────────────────────────────────
-
     "farm": {
         "name": "FARM (Functional Attribute-based Representations for Molecules)",
         "description": (
@@ -99,7 +88,7 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "attributes.  Used by KinForm for substrate representation."
         ),
         "implemented": False,
-        "conda_env": "kinform_env",   # bundled inside the KinForm environment
+        "conda_env": "kinform_env",  # bundled inside the KinForm environment
         "python_path_key": None,
         "used_by": ["KinForm-H", "KinForm-L"],
         "notes": (
@@ -107,7 +96,6 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "exposed as a standalone shared embedding."
         ),
     },
-
     "unimol": {
         "name": "Uni-Mol",
         "description": (
@@ -123,7 +111,6 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "and register it in PYTHON_PATHS."
         ),
     },
-
     "chemprop_mpnn": {
         "name": "Chemprop (Message Passing Neural Network)",
         "description": (
@@ -131,7 +118,7 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
             "Used internally by DLKcat for substrate encoding."
         ),
         "implemented": False,
-        "conda_env": "dlkcat_env",    # bundled inside the DLKcat environment
+        "conda_env": "dlkcat_env",  # bundled inside the DLKcat environment
         "python_path_key": None,
         "used_by": ["DLKcat"],
         "notes": (
@@ -145,10 +132,7 @@ EMBEDDING_REGISTRY: dict[str, dict] = {
 def get(key: str) -> dict:
     """Return metadata for the given embedding key.  Raises KeyError if unknown."""
     if key not in EMBEDDING_REGISTRY:
-        raise KeyError(
-            f"Unknown embedding key '{key}'. "
-            f"Available: {sorted(EMBEDDING_REGISTRY)}"
-        )
+        raise KeyError(f"Unknown embedding key '{key}'. Available: {sorted(EMBEDDING_REGISTRY)}")
     return EMBEDDING_REGISTRY[key]
 
 

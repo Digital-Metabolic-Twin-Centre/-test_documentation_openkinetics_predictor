@@ -34,7 +34,6 @@ urlpatterns = [
         v1_views.api_list_methods,
         name="api_v1_methods",
     ),
-
     # -------------------------------------------------------------------------
     # Authentication required (Bearer token)
     # -------------------------------------------------------------------------

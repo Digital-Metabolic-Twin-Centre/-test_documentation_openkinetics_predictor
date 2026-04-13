@@ -1,6 +1,8 @@
 import sys
 from .db import open_db, get_or_create_id
 from .io import iter_sequences_from_stdin, iter_sequences_from_csv
+
+
 def cmd_get_or_create(args):
     con = open_db(args.db)
     try:
@@ -8,7 +10,8 @@ def cmd_get_or_create(args):
         print(sid)
     finally:
         con.close()
-        
+
+
 def cmd_batch_get_or_create(args):
     con = open_db(args.db)
     try:

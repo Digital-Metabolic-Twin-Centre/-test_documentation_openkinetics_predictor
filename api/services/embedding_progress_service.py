@@ -620,13 +620,7 @@ def _inotify_add_watch(inotify_fd: int, path: Path) -> int | None:
     add_fn.argtypes = [ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32]
     add_fn.restype = ctypes.c_int
 
-    mask = (
-        _IN_CLOSE_WRITE
-        | _IN_MOVED_TO
-        | _IN_CREATE
-        | _IN_DELETE_SELF
-        | _IN_MOVE_SELF
-    )
+    mask = _IN_CLOSE_WRITE | _IN_MOVED_TO | _IN_CREATE | _IN_DELETE_SELF | _IN_MOVE_SELF
     wd = add_fn(inotify_fd, str(path).encode("utf-8"), mask)
     if wd < 0:
         err = ctypes.get_errno()

@@ -30,24 +30,24 @@ from django.core.management.base import BaseCommand, CommandError
 
 AA_ALPHABET = "ACDEFGHIKLMNPQRSTVWY"
 SUBSTRATE_POOL = [
-    "CCO",             # ethanol
-    "CC(=O)O",         # acetic acid
-    "O=C=O",           # carbon dioxide
-    "C1=CC=CC=C1",     # benzene
-    "CCN",             # ethylamine
-    "CC(O)C",          # isopropanol
-    "CC(C)O",          # isobutanol-like
-    "CCOC(=O)C",       # ethyl acetate
+    "CCO",  # ethanol
+    "CC(=O)O",  # acetic acid
+    "O=C=O",  # carbon dioxide
+    "C1=CC=CC=C1",  # benzene
+    "CCN",  # ethylamine
+    "CC(O)C",  # isopropanol
+    "CC(C)O",  # isobutanol-like
+    "CCOC(=O)C",  # ethyl acetate
 ]
 PRODUCT_POOL = [
-    "CC=O",            # acetaldehyde
-    "O",               # water
-    "CO",              # methanol
-    "CC(=O)O",         # acetic acid
-    "C=O",             # formaldehyde
-    "CCO",             # ethanol
-    "O=C=O",           # carbon dioxide
-    "CC(=O)N",         # acetamide
+    "CC=O",  # acetaldehyde
+    "O",  # water
+    "CO",  # methanol
+    "CC(=O)O",  # acetic acid
+    "C=O",  # formaldehyde
+    "CCO",  # ethanol
+    "O=C=O",  # carbon dioxide
+    "CC(=O)N",  # acetamide
 ]
 DEFAULT_API_BASE_URL = "https://predictor.openkinetics.org/api/v1"
 
@@ -196,9 +196,7 @@ class Command(BaseCommand):
         )
 
         if not api_key:
-            raise CommandError(
-                "Missing API key. Pass --api-key or set WEBKINPRED_API_KEY."
-            )
+            raise CommandError("Missing API key. Pass --api-key or set WEBKINPRED_API_KEY.")
         if poll_seconds <= 0:
             raise CommandError("--poll-seconds must be > 0.")
         if timeout_seconds <= 0:
@@ -224,12 +222,9 @@ class Command(BaseCommand):
             unknown = sorted(requested - set(kcat_methods))
             if unknown:
                 raise CommandError(
-                    "Unknown or non-kcat method key(s) for this API: "
-                    + ", ".join(unknown)
+                    "Unknown or non-kcat method key(s) for this API: " + ", ".join(unknown)
                 )
-            selected_keys = sorted(
-                key for key in requested if key in kcat_methods
-            )
+            selected_keys = sorted(key for key in requested if key in kcat_methods)
         else:
             selected_keys = sorted(kcat_methods)
 
@@ -247,8 +242,7 @@ class Command(BaseCommand):
         )
         self.stdout.write(f"API base URL: {api_base_url}")
         self.stdout.write(
-            "Reporting metric: computeSeconds from /api/v1/status/ "
-            "(queueSeconds ignored)."
+            "Reporting metric: computeSeconds from /api/v1/status/ (queueSeconds ignored)."
         )
         self.stdout.write(
             "Projected quota cost: "
@@ -256,8 +250,7 @@ class Command(BaseCommand):
             "(2 jobs per method)."
         )
         self.stdout.write(
-            f"Seed: {run_seed} "
-            f"({'fixed' if options['seed'] is not None else 'auto-generated'})"
+            f"Seed: {run_seed} ({'fixed' if options['seed'] is not None else 'auto-generated'})"
         )
         self.stdout.write(
             "Uncached run uses fresh proteins per method; cached run repeats "
@@ -332,9 +325,7 @@ class Command(BaseCommand):
             if r.uncached.status == "Completed" and r.cached.status == "Completed"
         )
         self.stdout.write("-" * 72)
-        self.stdout.write(
-            f"Completed successfully for {success_count}/{len(results)} method(s)."
-        )
+        self.stdout.write(f"Completed successfully for {success_count}/{len(results)} method(s).")
 
     def _validate_generation_parameters(
         self,
@@ -577,8 +568,7 @@ class Command(BaseCommand):
                     compute_seconds=None,
                     status="Failed",
                     error_message=(
-                        f"Timed out after {timeout_seconds}s waiting for job {public_id}. "
-                        f"{detail}"
+                        f"Timed out after {timeout_seconds}s waiting for job {public_id}. {detail}"
                     ),
                     public_id=public_id,
                 )

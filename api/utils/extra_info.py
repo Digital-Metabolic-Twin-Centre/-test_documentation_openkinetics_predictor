@@ -30,9 +30,7 @@ def _source(exp: dict) -> str:
 # ------------------------------------------------------------------
 # public function
 # ------------------------------------------------------------------
-def build_extra_info(
-    exp: dict, param_type: str, prediction: str = "", model_key: str = ""
-) -> str:
+def build_extra_info(exp: dict, param_type: str, prediction: str = "", model_key: str = "") -> str:
     """
     Parameters
     ----------
@@ -80,12 +78,8 @@ def build_extra_info(
         parts.append(f"Standard deviation is {sd_val}")
 
     # full reaction, if both sides available
-    if not _nullish(exp.get("all_substrates")) and not _nullish(
-        exp.get("all_products")
-    ):
-        parts.append(
-            "Full reaction is:\n" f"{exp['all_substrates']} --> {exp['all_products']}"
-        )
+    if not _nullish(exp.get("all_substrates")) and not _nullish(exp.get("all_products")):
+        parts.append(f"Full reaction is:\n{exp['all_substrates']} --> {exp['all_products']}")
 
     # temperature / pH
     temp = None if _nullish(exp.get("temperature")) else exp["temperature"]

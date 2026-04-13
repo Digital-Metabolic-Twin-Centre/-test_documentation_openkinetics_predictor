@@ -90,7 +90,9 @@ def _build_one(label: str, dataset: dict) -> None:
 
 def parse_args() -> argparse.Namespace:
     datasets = _datasets()
-    parser = argparse.ArgumentParser(description="Build MMseqs DBs for configured similarity datasets.")
+    parser = argparse.ArgumentParser(
+        description="Build MMseqs DBs for configured similarity datasets."
+    )
     parser.add_argument(
         "--dataset",
         action="append",

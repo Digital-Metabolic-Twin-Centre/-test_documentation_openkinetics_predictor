@@ -5,7 +5,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("api", "0009_job_ip_address_job_requested_rows"),
     ]
@@ -37,9 +36,7 @@ class Migration(migrations.Migration):
                 ("last_seen", models.DateTimeField(auto_now=True)),
                 (
                     "notes",
-                    models.TextField(
-                        blank=True, help_text="Admin notes about this user"
-                    ),
+                    models.TextField(blank=True, help_text="Admin notes about this user"),
                 ),
             ],
             options={

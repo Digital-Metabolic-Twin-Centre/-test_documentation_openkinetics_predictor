@@ -31,13 +31,13 @@ def api_key_status(request):
     ip = get_client_ip(request)
 
     try:
-        api_key = ApiKey.objects.select_related("user").get(
-            user__ip_address=ip, is_active=True
+        api_key = ApiKey.objects.select_related("user").get(user__ip_address=ip, is_active=True)
+        return JsonResponse(
+            {
+                "hasKey": True,
+                "keySuffix": api_key.key[-6:],
+            }
         )
-        return JsonResponse({
-            "hasKey": True,
-            "keySuffix": api_key.key[-6:],
-        })
     except ApiKey.DoesNotExist:
         return JsonResponse({"hasKey": False})
 
@@ -81,11 +81,14 @@ def api_key_generate(request):
     except ApiKey.DoesNotExist:
         api_key = ApiKey.objects.create(user=user, label="Self-service (web)")
 
-    return JsonResponse({
-        "key": api_key.key,
-        "keySuffix": api_key.key[-6:],
-        "message": "Store this key securely — it will not be shown again.",
-    }, status=201)
+    return JsonResponse(
+        {
+            "key": api_key.key,
+            "keySuffix": api_key.key[-6:],
+            "message": "Store this key securely — it will not be shown again.",
+        },
+        status=201,
+    )
 
 
 @csrf_exempt
@@ -96,9 +99,7 @@ def api_key_revoke(request):
     """
     ip = get_client_ip(request)
 
-    updated = ApiKey.objects.filter(
-        user__ip_address=ip, is_active=True
-    ).update(is_active=False)
+    updated = ApiKey.objects.filter(user__ip_address=ip, is_active=True).update(is_active=False)
 
     if updated:
         return JsonResponse({"revoked": True})

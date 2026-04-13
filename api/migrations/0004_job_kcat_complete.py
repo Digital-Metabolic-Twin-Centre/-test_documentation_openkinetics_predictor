@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("api", "0003_remove_job_estimated_duration_remove_job_priority_and_more"),
     ]

@@ -71,9 +71,9 @@ def turnup_predictions(
     job.invalid_rows = 0
     job.predictions_made = 0
     job.total_molecules = len(sequences)
-    job.save(update_fields=[
-        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
-    ])
+    job.save(
+        update_fields=["molecules_processed", "invalid_rows", "predictions_made", "total_molecules"]
+    )
 
     python_path = PYTHON_PATHS.get("TurNup", "")
     prediction_script = PREDICTION_SCRIPTS.get("TurNup", "")
@@ -122,14 +122,8 @@ def turnup_predictions(
                 sub_value = ";".join(Chem.MolToInchi(mol) for mol in sub_mols)
                 prod_value = ";".join(Chem.MolToInchi(mol) for mol in prod_mols)
             else:
-                sub_value = ";".join(
-                    validated_molecule_text(token) or ""
-                    for token in sub_tokens
-                )
-                prod_value = ";".join(
-                    validated_molecule_text(token) or ""
-                    for token in prod_tokens
-                )
+                sub_value = ";".join(validated_molecule_text(token) or "" for token in sub_tokens)
+                prod_value = ";".join(validated_molecule_text(token) or "" for token in prod_tokens)
             valid_sub_values.append(sub_value)
             valid_prod_values.append(prod_value)
             valid_sequences.append(seq)
@@ -145,16 +139,17 @@ def turnup_predictions(
 
     # ── Write CSV input file ──────────────────────────────────────────────────
     try:
-        df_input = pd.DataFrame({
-            "Substrates": valid_sub_values,
-            "Products": valid_prod_values,
-            "Protein Sequence": valid_sequences,
-        })
+        df_input = pd.DataFrame(
+            {
+                "Substrates": valid_sub_values,
+                "Products": valid_prod_values,
+                "Protein Sequence": valid_sequences,
+            }
+        )
         df_input.to_csv(input_file, index=False)
     except OSError as e:
         raise PredictionError(
-            "TurNup could not write its input file. "
-            "Please contact support if this persists."
+            "TurNup could not write its input file. Please contact support if this persists."
         ) from e
 
     # ── Run prediction subprocess ─────────────────────────────────────────────
@@ -172,8 +167,7 @@ def turnup_predictions(
         _cleanup(input_file, output_file)
         if e.returncode in (-9, 137):
             raise PredictionError(
-                "TurNup ran out of memory. "
-                "Try reducing the number of rows or the sequence lengths."
+                "TurNup ran out of memory. Try reducing the number of rows or the sequence lengths."
             ) from e
         raise PredictionError(
             "TurNup encountered an internal error and could not complete. "
@@ -184,8 +178,7 @@ def turnup_predictions(
         if isinstance(e, PredictionError):
             raise
         raise PredictionError(
-            "TurNup encountered an unexpected error. "
-            "Please verify your input and try again."
+            "TurNup encountered an unexpected error. Please verify your input and try again."
         ) from e
 
     # ── Read output CSV ───────────────────────────────────────────────────────

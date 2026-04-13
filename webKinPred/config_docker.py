@@ -34,9 +34,7 @@ PREDICTION_SCRIPTS = build_prediction_scripts(BASE_PATH)
 CATPRED_ROOT = os.environ.get("WEBKINPRED_CATPRED_ROOT")
 if CATPRED_ROOT:
     DATA_PATHS["CatPred"] = CATPRED_ROOT
-    DATA_PATHS["CatPred_production_checkpoints"] = (
-        f"{CATPRED_ROOT}/data/pretrained/production"
-    )
+    DATA_PATHS["CatPred_production_checkpoints"] = f"{CATPRED_ROOT}/data/pretrained/production"
     PREDICTION_SCRIPTS["CatPred"] = f"{CATPRED_ROOT}/catpred/integration/webkinpred_adapter.py"
 
 SIMILARITY_DATASETS = build_similarity_datasets(FASTAS_DIR)

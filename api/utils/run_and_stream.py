@@ -12,6 +12,7 @@ from api.utils.log_sanitiser import sanitise_log_line
 TMP_DIR = os.environ.get("MMSEQS_TMP_DIR", "/tmp")
 os.makedirs(TMP_DIR, exist_ok=True)
 
+
 def run_and_stream(
     cmd, session_id: str, cwd: str | None = None, env: dict | None = None, fail_ok=False
 ):
@@ -55,8 +56,6 @@ def run_and_stream(
         push_line(session_id, f"[ERROR] Command failed with exit code {rc}")
         raise subprocess.CalledProcessError(rc, cmd)
     elif rc != 0 and fail_ok:
-        push_line(
-            session_id, f"[WARN] Command returned non-zero exit code {rc} (continuing)"
-        )
+        push_line(session_id, f"[WARN] Command returned non-zero exit code {rc} (continuing)")
     else:
         push_line(session_id, "[OK] Completed")

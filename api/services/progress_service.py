@@ -48,7 +48,9 @@ def cancel_session(session_id: str):
     pid_key = get_pid_key(session_id)
     pid_to_kill = redis_conn.get(pid_key)
     if pid_to_kill:
-        print(f"[cancel_session] Found PID {pid_to_kill} for session {session_id}. Attempting to terminate.")
+        print(
+            f"[cancel_session] Found PID {pid_to_kill} for session {session_id}. Attempting to terminate."
+        )
         try:
             os.killpg(int(pid_to_kill), signal.SIGTERM)
             print(f"[cancel_session] Successfully sent SIGTERM to PID {pid_to_kill}.")
@@ -76,7 +78,7 @@ def sse_generator(session_id: str, keepalive_secs: int = 15):
       3. Use pub/sub messages purely as wakeup signals; read new lines only from
          the persistent list to guarantee no duplicates and no missed messages.
     """
-    channel  = get_channel_name(session_id)
+    channel = get_channel_name(session_id)
     list_key = get_log_list_key(session_id)
 
     # Step 1 — subscribe before touching the list so no signals are missed.

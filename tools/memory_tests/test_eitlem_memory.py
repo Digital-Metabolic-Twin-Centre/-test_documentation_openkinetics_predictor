@@ -34,9 +34,11 @@ EITLEM_ROOT = os.path.join(REPO_ROOT, "models", "EITLEM")
 
 # ---------- Memory helpers ----------
 
+
 def rss_mb() -> float:
     p = psutil.Process(os.getpid())
     return p.memory_info().rss / (1024 * 1024)
+
 
 def ru_maxrss_mb() -> float:
     # Linux reports KB; macOS reports bytes
@@ -46,8 +48,10 @@ def ru_maxrss_mb() -> float:
     else:
         return val / (1024.0 * 1024.0)
 
+
 class MemoryMonitor:
     """High-frequency RSS sampler to catch transient spikes."""
+
     def __init__(self, interval_s: float = 0.005):
         self.interval_s = interval_s
         self._peak_abs_mb = 0.0
@@ -76,18 +80,22 @@ class MemoryMonitor:
                 self._peak_abs_mb = cur
             time.sleep(self.interval_s)
 
+
 # ---------- Stage runner ----------
 
-def run_stage(label: str, fn: Callable[[], Any], mon: MemoryMonitor, report: Dict[str, Dict[str, float]]):
+
+def run_stage(
+    label: str, fn: Callable[[], Any], mon: MemoryMonitor, report: Dict[str, Dict[str, float]]
+):
     before_peak = mon.peak_abs_mb
-    before_ru   = ru_maxrss_mb()
-    before_rss  = rss_mb()
+    before_ru = ru_maxrss_mb()
+    before_rss = rss_mb()
     t0 = time.time()
     out = fn()
     dt = time.time() - t0
     after_peak = mon.peak_abs_mb
-    after_ru   = ru_maxrss_mb()
-    after_rss  = rss_mb()
+    after_ru = ru_maxrss_mb()
+    after_rss = rss_mb()
 
     report[label] = {
         "rss_after_mb": after_rss,
@@ -98,17 +106,57 @@ def run_stage(label: str, fn: Callable[[], Any], mon: MemoryMonitor, report: Dic
     }
     return out
 
+
 # ---------- Main workflow ----------
 
+
 def main():
-    ap = argparse.ArgumentParser(description="Peak RAM measurement for ESM-1v + EITLEM (single sequence).")
-    ap.add_argument("--esm",   default=os.path.join(EITLEM_ROOT, "Weights", "esm1v", "esm1v_t33_650M_UR90S_1.pt"), help="Path to ESM-1v weights (.pt)")
-    ap.add_argument("--eitlem", default=os.path.join(EITLEM_ROOT, "Weights", "KCAT", "iter8_trainR2_0.9408_devR2_0.7459_RMSE_0.7751_MAE_0.4787"), help="Path to EITLEM kcat model state_dict")
-    ap.add_argument("--code",  default=os.path.join(EITLEM_ROOT, "Code"), help="Path to EITLEM/Code to add to sys.path")
-    ap.add_argument("--seq_len", type=int, default=1022, help="Sequence length to test (max for ESM-1v ~1022 aa)")
-    ap.add_argument("--smiles", default="CCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCO", help="Substrate SMILES (MACCS fingerprint)")
-    ap.add_argument("--threads", type=int, default=None, help="Set torch/OMP thread count (e.g., 1 for reproducible memory)")
-    ap.add_argument("--monitor_interval_ms", type=float, default=5.0, help="Memory sampling interval in milliseconds")
+    ap = argparse.ArgumentParser(
+        description="Peak RAM measurement for ESM-1v + EITLEM (single sequence)."
+    )
+    ap.add_argument(
+        "--esm",
+        default=os.path.join(EITLEM_ROOT, "Weights", "esm1v", "esm1v_t33_650M_UR90S_1.pt"),
+        help="Path to ESM-1v weights (.pt)",
+    )
+    ap.add_argument(
+        "--eitlem",
+        default=os.path.join(
+            EITLEM_ROOT,
+            "Weights",
+            "KCAT",
+            "iter8_trainR2_0.9408_devR2_0.7459_RMSE_0.7751_MAE_0.4787",
+        ),
+        help="Path to EITLEM kcat model state_dict",
+    )
+    ap.add_argument(
+        "--code",
+        default=os.path.join(EITLEM_ROOT, "Code"),
+        help="Path to EITLEM/Code to add to sys.path",
+    )
+    ap.add_argument(
+        "--seq_len",
+        type=int,
+        default=1022,
+        help="Sequence length to test (max for ESM-1v ~1022 aa)",
+    )
+    ap.add_argument(
+        "--smiles",
+        default="CCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCOCCO",
+        help="Substrate SMILES (MACCS fingerprint)",
+    )
+    ap.add_argument(
+        "--threads",
+        type=int,
+        default=None,
+        help="Set torch/OMP thread count (e.g., 1 for reproducible memory)",
+    )
+    ap.add_argument(
+        "--monitor_interval_ms",
+        type=float,
+        default=5.0,
+        help="Memory sampling interval in milliseconds",
+    )
     args = ap.parse_args()
 
     # Optional thread caps for reproducibility
@@ -138,7 +186,9 @@ def main():
         from rdkit.Chem import MACCSkeys
         from torch_geometric.data import Data, Batch
         from KCM import EitlemKcatPredictor
+
         _ = (torch.__version__, esm.__version__ if hasattr(esm, "__version__") else "unknown")
+
     run_stage("imports", do_imports, mon, stage_report)
 
     # Stage 2: load ESM model
@@ -149,16 +199,19 @@ def main():
         # Move to CPU explicitly to be clear (even if already is)
         esm_model = esm_model.to("cpu")
         batch_converter = alphabet.get_batch_converter()
+
     run_stage("esm_load", load_esm, mon, stage_report)
 
     # Stage 3: load EITLEM predictor
     def load_eitlem():
         global eitlem_model
         import torch
+
         eitlem_model = EitlemKcatPredictor(167, 512, 1280, 10, 0.5, 10)
         sd = torch.load(args.eitlem, map_location=torch.device("cpu"))
         eitlem_model.load_state_dict(sd)
         eitlem_model.eval()
+
     run_stage("eitlem_load", load_eitlem, mon, stage_report)
 
     # Stage 4: embedding + inference with one max-length sequence
@@ -169,7 +222,7 @@ def main():
         from torch_geometric.data import Data, Batch
 
         max_sequence_list = np.random.choice(list("ACDEFGHIKLMNPQRSTVWY"), size=(1022,))
-        seq = ''.join(max_sequence_list)
+        seq = "".join(max_sequence_list)
 
         data = [("protein", seq)]
         _, _, batch_tokens = batch_converter(data)
@@ -179,7 +232,7 @@ def main():
         with torch.inference_mode():
             results = esm_model(batch_tokens, repr_layers=[33], return_contacts=False)
             token_reps = results["representations"][33]  # [B, L, 1280]
-            rep = token_reps[0, 1:tokens_len - 1].detach().cpu().contiguous()  # [seq_len-2, 1280]
+            rep = token_reps[0, 1 : tokens_len - 1].detach().cpu().contiguous()  # [seq_len-2, 1280]
 
         # MACCS fingerprint for the substrate
         mol = Chem.MolFromSmiles(args.smiles)
@@ -212,12 +265,14 @@ def main():
 
     print("\n=== Stage summary (MB) ===")
     for k, v in stage_report.items():
-        print(f"- {k}: "
-              f"rss_after={v['rss_after_mb']:.2f}, "
-              f"rss_delta={v['rss_delta_mb']:.2f}, "
-              f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
-              f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
-              f"time={v['seconds']:.3f}s")
+        print(
+            f"- {k}: "
+            f"rss_after={v['rss_after_mb']:.2f}, "
+            f"rss_delta={v['rss_delta_mb']:.2f}, "
+            f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
+            f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
+            f"time={v['seconds']:.3f}s"
+        )
 
     print("\n=== Overall ===")
     print(f"Final RSS: {final_rss:.2f} MB")
@@ -226,6 +281,7 @@ def main():
 
     total_max_ram_needed = max(overall_peak_sampled, overall_peak_ru)
     print(f"\nTOTAL MAX RAM NEEDED (single process, one sequence): {total_max_ram_needed:.2f} MB")
+
 
 if __name__ == "__main__":
     main()

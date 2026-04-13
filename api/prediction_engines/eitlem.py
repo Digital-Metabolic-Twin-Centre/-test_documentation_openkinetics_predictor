@@ -67,9 +67,9 @@ def eitlem_predictions(
     job.invalid_rows = 0
     job.predictions_made = 0
     job.total_molecules = len(sequences)
-    job.save(update_fields=[
-        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
-    ])
+    job.save(
+        update_fields=["molecules_processed", "invalid_rows", "predictions_made", "total_molecules"]
+    )
 
     python_path = PYTHON_PATHS.get("EITLEM", "")
     prediction_script = PREDICTION_SCRIPTS.get("EITLEM", "")
@@ -125,15 +125,16 @@ def eitlem_predictions(
 
     # ── Write CSV input file ──────────────────────────────────────────────────
     try:
-        df_input = pd.DataFrame({
-            "Substrate SMILES": valid_smiles,
-            "Protein Sequence": valid_sequences,
-        })
+        df_input = pd.DataFrame(
+            {
+                "Substrate SMILES": valid_smiles,
+                "Protein Sequence": valid_sequences,
+            }
+        )
         df_input.to_csv(input_file, index=False)
     except OSError as e:
         raise PredictionError(
-            "EITLEM could not write its input file. "
-            "Please contact support if this persists."
+            "EITLEM could not write its input file. Please contact support if this persists."
         ) from e
 
     # ── Run prediction subprocess ─────────────────────────────────────────────
@@ -151,8 +152,7 @@ def eitlem_predictions(
         _cleanup(input_file, output_file)
         if e.returncode in (-9, 137):
             raise PredictionError(
-                "EITLEM ran out of memory. "
-                "Try reducing the number of rows or the sequence lengths."
+                "EITLEM ran out of memory. Try reducing the number of rows or the sequence lengths."
             ) from e
         raise PredictionError(
             "EITLEM encountered an internal error and could not complete. "
@@ -163,8 +163,7 @@ def eitlem_predictions(
         if isinstance(e, PredictionError):
             raise
         raise PredictionError(
-            "EITLEM encountered an unexpected error. "
-            "Please verify your input and try again."
+            "EITLEM encountered an unexpected error. Please verify your input and try again."
         ) from e
 
     # ── Read output CSV ───────────────────────────────────────────────────────

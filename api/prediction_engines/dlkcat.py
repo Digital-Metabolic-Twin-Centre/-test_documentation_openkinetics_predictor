@@ -64,9 +64,9 @@ def dlkcat_predictions(
     job.invalid_rows = 0
     job.predictions_made = 0
     job.total_molecules = len(sequences)
-    job.save(update_fields=[
-        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
-    ])
+    job.save(
+        update_fields=["molecules_processed", "invalid_rows", "predictions_made", "total_molecules"]
+    )
 
     python_path = PYTHON_PATHS.get("DLKcat", "")
     prediction_script = PREDICTION_SCRIPTS.get("DLKcat", "")
@@ -99,7 +99,9 @@ def dlkcat_predictions(
             reason = "Invalid substrate (not a valid SMILES or InChI)"
         else:
             if len(Chem.GetMolFrags(mol)) > 1:
-                reason = "Substrate contains multiple disconnected fragments and cannot be processed"
+                reason = (
+                    "Substrate contains multiple disconnected fragments and cannot be processed"
+                )
             else:
                 if canonicalize_substrates:
                     smiles = Chem.MolToSmiles(Chem.AddHs(mol))
@@ -134,8 +136,7 @@ def dlkcat_predictions(
                 f.write(f"noname\t{smiles}\t{seq}\n")
     except OSError as e:
         raise PredictionError(
-            "DLKcat could not write its input file. "
-            "Please contact support if this persists."
+            "DLKcat could not write its input file. Please contact support if this persists."
         ) from e
 
     # ── Run prediction subprocess ─────────────────────────────────────────────
@@ -153,8 +154,7 @@ def dlkcat_predictions(
         _cleanup(input_file, output_file)
         if e.returncode in (-9, 137):
             raise PredictionError(
-                "DLKcat ran out of memory. "
-                "Try reducing the number of rows or the sequence lengths."
+                "DLKcat ran out of memory. Try reducing the number of rows or the sequence lengths."
             ) from e
         raise PredictionError(
             "DLKcat encountered an internal error and could not complete. "
@@ -165,8 +165,7 @@ def dlkcat_predictions(
         if isinstance(e, PredictionError):
             raise
         raise PredictionError(
-            "DLKcat encountered an unexpected error. "
-            "Please verify your input and try again."
+            "DLKcat encountered an unexpected error. Please verify your input and try again."
         ) from e
 
     # ── Read output TSV ───────────────────────────────────────────────────────

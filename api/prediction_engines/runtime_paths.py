@@ -30,7 +30,11 @@ def _import_config_module() -> ModuleType:
     Falls back to the other module if the preferred one is missing.
     """
     preferred = "webKinPred.config_docker" if _is_docker_runtime() else "webKinPred.config_local"
-    fallback = "webKinPred.config_local" if preferred.endswith("config_docker") else "webKinPred.config_docker"
+    fallback = (
+        "webKinPred.config_local"
+        if preferred.endswith("config_docker")
+        else "webKinPred.config_docker"
+    )
 
     try:
         return import_module(preferred)

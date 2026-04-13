@@ -19,9 +19,11 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
 # ---------------- Memory helpers ----------------
 
+
 def rss_mb() -> float:
     """Current process RSS in MB."""
     return psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+
 
 def ru_maxrss_mb() -> float:
     """Kernel-reported peak RSS (MB). Linux returns KB; macOS returns bytes."""
@@ -31,8 +33,10 @@ def ru_maxrss_mb() -> float:
     else:
         return val / (1024.0 * 1024.0)
 
+
 class MemoryMonitor:
     """High-frequency RSS sampler to catch short spikes."""
+
     def __init__(self, interval_s: float = 0.005):
         self.interval_s = interval_s
         self._peak_abs_mb = 0.0
@@ -61,19 +65,20 @@ class MemoryMonitor:
                 self._peak_abs_mb = cur
             time.sleep(self.interval_s)
 
+
 def run_stage(label, fn, mon, report):
     """Run a stage, logging RSS/ru_maxrss before/after and peak increases."""
     before_peak = mon.peak_abs_mb
-    before_ru   = ru_maxrss_mb()
-    before_rss  = rss_mb()
+    before_ru = ru_maxrss_mb()
+    before_rss = rss_mb()
     t0 = time.time()
 
     out = fn()
 
     dt = time.time() - t0
     after_peak = mon.peak_abs_mb
-    after_ru   = ru_maxrss_mb()
-    after_rss  = rss_mb()
+    after_ru = ru_maxrss_mb()
+    after_rss = rss_mb()
 
     report[label] = {
         "rss_after_mb": after_rss,
@@ -84,13 +89,16 @@ def run_stage(label, fn, mon, report):
     }
     return out
 
+
 # ---------------- Helpers from kcat_prediction_batch.py ----------------
+
 
 def calculate_xgb_input_matrix(df):
     fingerprints = np.reshape(np.array(list(df["difference_fp"])), (-1, 2048))
     ESM1b = np.reshape(np.array(list(df["enzyme rep"])), (-1, 1280))
     X = np.concatenate([fingerprints, ESM1b], axis=1)
     return X
+
 
 def merging_reaction_and_enzyme_df(df_reaction, df_enzyme, df_kcat):
     df_kcat["difference_fp"], df_kcat["enzyme rep"] = "", ""
@@ -103,8 +111,7 @@ def merging_reaction_and_enzyme_df(df_reaction, df_enzyme, df_kcat):
             .loc[df_reaction["products"] == df_kcat["products"][ind]]
         )[0]
         esm1b_rep = list(
-            df_enzyme["enzyme rep"]
-            .loc[df_enzyme["amino acid sequence"] == df_kcat["enzyme"][ind]]
+            df_enzyme["enzyme rep"].loc[df_enzyme["amino acid sequence"] == df_kcat["enzyme"][ind]]
         )[0]
 
         if isinstance(diff_fp, str) and isinstance(esm1b_rep, str):
@@ -114,7 +121,9 @@ def merging_reaction_and_enzyme_df(df_reaction, df_enzyme, df_kcat):
             df_kcat["enzyme rep"][ind] = esm1b_rep
     return df_kcat
 
+
 # ---------------- Main workflow ----------------
+
 
 def test_turnup_memory():
     print("=== Peak RAM measurement: TurNup (single sequence) ===")
@@ -123,8 +132,8 @@ def test_turnup_memory():
     code_dir = os.path.join(REPO_ROOT, "models", "TurNup", "code")
     data_dir = os.path.join(REPO_ROOT, "models", "TurNup", "data")
     seq_len = 1022  # max-length for ESM-1b token limit (approx.)
-    test_substrate = 'InChI=1S/H2O/h1H2;InChI=1S/H2O/h1H2'
-    test_product   = 'InChI=1S/H2O/h1H2;InChI=1S/H2O/h1H2'
+    test_substrate = "InChI=1S/H2O/h1H2;InChI=1S/H2O/h1H2"
+    test_product = "InChI=1S/H2O/h1H2;InChI=1S/H2O/h1H2"
 
     # Optionally cap threads for reproducible memory (set to None to disable)
     threads = 1
@@ -155,9 +164,12 @@ def test_turnup_memory():
         import warnings
         from os.path import join
         from metabolite_preprocessing import reaction_preprocessing
+
         # Note: TurNup function name is spelled 'calcualte_esm1b_ts_vectors' in the repo
         from enzyme_representations import calcualte_esm1b_ts_vectors
+
         warnings.filterwarnings("ignore")
+
     run_stage("imports", do_imports, mon, stage_report)
 
     # Stage 2: load XGBoost model
@@ -166,6 +178,7 @@ def test_turnup_memory():
         model_path = join(data_dir, "saved_models", "xgboost", "xgboost_train_and_test.pkl")
         with open(model_path, "rb") as f:
             bst = pickle.load(f)
+
     run_stage("xgb_load", load_xgb, mon, stage_report)
 
     # Stage 3: one full prediction path (reaction + enzyme rep + predict)
@@ -174,12 +187,11 @@ def test_turnup_memory():
 
         # Create a max-length sequence of valid amino acids
         max_sequence_list = np.random.choice(list("ACDEFGHIKLMNPQRSTVWY"), size=(1022,))
-        enzyme_upper = ''.join(max_sequence_list)
+        enzyme_upper = "".join(max_sequence_list)
 
         # Reaction processing
         df_reaction = reaction_preprocessing(
-            substrate_list=[test_substrate],
-            product_list=[test_product]
+            substrate_list=[test_substrate], product_list=[test_product]
         )
 
         # Enzyme representation (ESM1b-TS via TurNup util)
@@ -187,12 +199,15 @@ def test_turnup_memory():
 
         # Build kcat dataframe and merge features
         import pandas as _pd
-        df_kcat = _pd.DataFrame({
-            "substrates": [test_substrate],
-            "products": [test_product],
-            "enzyme": [enzyme_upper],
-            "index": [0],
-        })
+
+        df_kcat = _pd.DataFrame(
+            {
+                "substrates": [test_substrate],
+                "products": [test_product],
+                "enzyme": [enzyme_upper],
+                "index": [0],
+            }
+        )
 
         df_kcat = merging_reaction_and_enzyme_df(df_reaction, df_enzyme, df_kcat)
         df_kcat_valid = df_kcat.loc[df_kcat["complete"]].reset_index(drop=True)
@@ -222,18 +237,21 @@ def test_turnup_memory():
 
     print("\n=== Stage summary (MB) ===")
     for k, v in stage_report.items():
-        print(f"- {k}: "
-              f"rss_after={v['rss_after_mb']:.2f}, "
-              f"rss_delta={v['rss_delta_mb']:.2f}, "
-              f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
-              f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
-              f"time={v['seconds']:.3f}s")
+        print(
+            f"- {k}: "
+            f"rss_after={v['rss_after_mb']:.2f}, "
+            f"rss_delta={v['rss_delta_mb']:.2f}, "
+            f"stage_peak_inc={v['stage_peak_inc_mb']:.2f}, "
+            f"ru_maxrss_inc={v['ru_maxrss_inc_mb']:.2f}, "
+            f"time={v['seconds']:.3f}s"
+        )
 
     print("\n=== Overall ===")
     print(f"Final RSS: {final_rss:.2f} MB")
     print(f"Peak RSS (sampled): {peak_sampled:.2f} MB")
     print(f"Peak RSS (ru_maxrss): {peak_ru:.2f} MB")
     print(f"\nTOTAL MAX RAM NEEDED (single process, one sequence): {total_max_ram_needed:.2f} MB")
+
 
 if __name__ == "__main__":
     test_turnup_memory()

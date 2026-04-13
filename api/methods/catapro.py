@@ -12,13 +12,10 @@ descriptor = MethodDescriptor(
         "Zechen Wang, Dongqi Xie, Dong Wu, Xiaozhou Luo, Sheng Wang, "
         "Yangyang Li, Yanmei Yang, Weifeng Li, Liangzhen Zheng"
     ),
-    publication_title=(
-        "Robust enzyme discovery and engineering with deep learning using CataPro"
-    ),
+    publication_title=("Robust enzyme discovery and engineering with deep learning using CataPro"),
     citation_url="https://www.nature.com/articles/s41467-025-58038-4",
     repo_url="https://github.com/zchwang/CataPro",
     more_info="",
-
     supports=["kcat", "Km", "kcat/Km"],
     input_format="single",
     output_cols={

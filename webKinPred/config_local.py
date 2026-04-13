@@ -49,7 +49,9 @@ if CATPRED_ROOT:
     DATA_PATHS["CatPred_production_checkpoints"] = str(
         Path(catpred_root) / "data" / "pretrained" / "production"
     )
-    PREDICTION_SCRIPTS["CatPred"] = str(Path(catpred_root) / "catpred" / "integration" / "webkinpred_adapter.py")
+    PREDICTION_SCRIPTS["CatPred"] = str(
+        Path(catpred_root) / "catpred" / "integration" / "webkinpred_adapter.py"
+    )
     PYTHON_PATHS["CatPred"] = os.environ.get(
         "WEBKINPRED_CATPRED_PYTHON",
         _env_python("catpred_env"),

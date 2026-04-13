@@ -45,6 +45,7 @@ from api.utils.quotas import get_quota_usage
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _json_error(message: str, status: int = 400) -> JsonResponse:
     """Return a consistently formatted error response."""
     return JsonResponse({"error": message}, status=status)
@@ -64,6 +65,7 @@ def _quota_dict(ip_address: str) -> dict:
 # ---------------------------------------------------------------------------
 # GET /api/v1/health/
 # ---------------------------------------------------------------------------
+
 
 @csrf_exempt
 def api_health(request):
@@ -85,6 +87,7 @@ def api_health(request):
 # ---------------------------------------------------------------------------
 # GET /api/v1/methods/
 # ---------------------------------------------------------------------------
+
 
 @csrf_exempt
 def api_list_methods(request):
@@ -183,6 +186,7 @@ def api_list_methods(request):
 # GET /api/v1/quota/
 # ---------------------------------------------------------------------------
 
+
 @require_api_key
 def api_quota(request):
     """
@@ -197,6 +201,7 @@ def api_quota(request):
 # ---------------------------------------------------------------------------
 # POST /api/v1/submit/
 # ---------------------------------------------------------------------------
+
 
 @csrf_exempt
 @require_api_key
@@ -283,9 +288,7 @@ def _parse_multipart_body(request):
     csv_file = request.FILES.get("file")
 
     if not csv_file:
-        return None, None, _json_error(
-            "No file provided. Include 'file' as a multipart field."
-        )
+        return None, None, _json_error("No file provided. Include 'file' as a multipart field.")
 
     if not csv_file.name.lower().endswith(".csv"):
         return None, None, _json_error("The uploaded file must have a .csv extension.")
@@ -313,17 +316,24 @@ def _parse_multipart_body(request):
     try:
         params["targets"] = json.loads(targets_raw) if targets_raw else []
     except json.JSONDecodeError:
-        return None, None, _json_error(
-            "Invalid 'targets' value. Expected a JSON array, for example: "
-            '["kcat", "Km"].'
+        return (
+            None,
+            None,
+            _json_error(
+                'Invalid \'targets\' value. Expected a JSON array, for example: ["kcat", "Km"].'
+            ),
         )
 
     try:
         params["methods"] = json.loads(methods_raw) if methods_raw else {}
     except json.JSONDecodeError:
-        return None, None, _json_error(
-            "Invalid 'methods' value. Expected a JSON object, for example: "
-            '{"kcat":"DLKcat","Km":"UniKP"}.'
+        return (
+            None,
+            None,
+            _json_error(
+                "Invalid 'methods' value. Expected a JSON object, for example: "
+                '{"kcat":"DLKcat","Km":"UniKP"}.'
+            ),
         )
 
     return csv_file, params, None
@@ -347,16 +357,24 @@ def _parse_json_body(request):
     rows = body.get("data")
 
     if not rows or not isinstance(rows, list):
-        return None, None, _json_error(
-            "'data' must be a non-empty array of row objects. "
-            "Each object should map column names to values, e.g. "
-            '{"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"}.'
+        return (
+            None,
+            None,
+            _json_error(
+                "'data' must be a non-empty array of row objects. "
+                "Each object should map column names to values, e.g. "
+                '{"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"}.'
+            ),
         )
 
     if len(rows) > 10_000:
-        return None, None, _json_error(
-            f"JSON body submission is limited to 10,000 rows. "
-            f"You submitted {len(rows):,}.  Use CSV file upload for larger datasets."
+        return (
+            None,
+            None,
+            _json_error(
+                f"JSON body submission is limited to 10,000 rows. "
+                f"You submitted {len(rows):,}.  Use CSV file upload for larger datasets."
+            ),
         )
 
     # Convert the list of dicts to an in-memory CSV file-like object.
@@ -395,6 +413,7 @@ def _parse_json_body(request):
 # GET /api/v1/status/<public_id>/
 # ---------------------------------------------------------------------------
 
+
 @require_api_key
 def api_job_status(request, public_id):
     """
@@ -432,6 +451,7 @@ def api_job_status(request, public_id):
         compute_seconds = None
 
     from api.utils.job_utils import get_queue_position
+
     data = {
         "jobId": job.public_id,
         "status": job.status,
@@ -482,6 +502,7 @@ def api_job_status(request, public_id):
 # ---------------------------------------------------------------------------
 # GET /api/v1/result/<public_id>/
 # ---------------------------------------------------------------------------
+
 
 @require_api_key
 def api_download_result(request, public_id):
@@ -556,6 +577,7 @@ def api_download_result(request, public_id):
 # ---------------------------------------------------------------------------
 # POST /api/v1/validate/
 # ---------------------------------------------------------------------------
+
 
 @csrf_exempt
 @require_api_key
@@ -633,13 +655,15 @@ def api_validate(request):
             # the validation results are still useful even if similarity fails.
             similarity = {"error": str(e)}
 
-    return JsonResponse({
-        "rowCount": row_count,
-        "invalidSubstrates": validation_result["invalid_substrates"],
-        "invalidProteins": validation_result["invalid_proteins"],
-        "lengthViolations": validation_result["length_violations"],
-        "similarity": similarity,
-    })
+    return JsonResponse(
+        {
+            "rowCount": row_count,
+            "invalidSubstrates": validation_result["invalid_substrates"],
+            "invalidProteins": validation_result["invalid_proteins"],
+            "lengthViolations": validation_result["length_violations"],
+            "similarity": similarity,
+        }
+    )
 
 
 def _parse_validate_multipart_body(request):
@@ -651,9 +675,7 @@ def _parse_validate_multipart_body(request):
     csv_file = request.FILES.get("file")
 
     if not csv_file:
-        return None, False, _json_error(
-            "No file provided. Include 'file' as a multipart field."
-        )
+        return None, False, _json_error("No file provided. Include 'file' as a multipart field.")
 
     if not csv_file.name.lower().endswith(".csv"):
         return None, False, _json_error("The uploaded file must have a .csv extension.")
@@ -676,16 +698,24 @@ def _parse_validate_json_body(request):
     rows = body.get("data")
 
     if not rows or not isinstance(rows, list):
-        return None, False, _json_error(
-            "'data' must be a non-empty array of row objects. "
-            "Each object should map column names to values, e.g. "
-            '{"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"}.'
+        return (
+            None,
+            False,
+            _json_error(
+                "'data' must be a non-empty array of row objects. "
+                "Each object should map column names to values, e.g. "
+                '{"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"}.'
+            ),
         )
 
     if len(rows) > 10_000:
-        return None, False, _json_error(
-            f"JSON body submission is limited to 10,000 rows. "
-            f"You submitted {len(rows):,}.  Use CSV file upload for larger datasets."
+        return (
+            None,
+            False,
+            _json_error(
+                f"JSON body submission is limited to 10,000 rows. "
+                f"You submitted {len(rows):,}.  Use CSV file upload for larger datasets."
+            ),
         )
 
     try:

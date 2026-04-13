@@ -84,9 +84,7 @@ class ApiUserAdmin(admin.ModelAdmin):
             jobs_today = obj.jobs_today
             recent_jobs = obj.job_set.order_by("-submission_time")[:5]
 
-            html = (
-                f'<div style="background: #f8f8f8; padding: 10px; border-radius: 4px;">'
-            )
+            html = f'<div style="background: #f8f8f8; padding: 10px; border-radius: 4px;">'
             html += f"<strong>Total Jobs:</strong> {total_jobs}<br>"
             html += f"<strong>Jobs Today:</strong> {jobs_today}<br>"
 

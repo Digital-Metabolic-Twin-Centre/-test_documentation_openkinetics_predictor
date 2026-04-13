@@ -77,9 +77,9 @@ def kinform_predictions(
     job.invalid_rows = 0
     job.predictions_made = 0
     job.total_molecules = len(sequences)
-    job.save(update_fields=[
-        "molecules_processed", "invalid_rows", "predictions_made", "total_molecules"
-    ])
+    job.save(
+        update_fields=["molecules_processed", "invalid_rows", "predictions_made", "total_molecules"]
+    )
 
     python_path = PYTHON_PATHS.get("KinForm", "")
     prediction_script = PREDICTION_SCRIPTS.get("KinForm", "")
@@ -155,20 +155,25 @@ def kinform_predictions(
             json.dump(json_input, f)
     except OSError as e:
         raise PredictionError(
-            f"{model_key} could not write its input file. "
-            "Please contact support if this persists."
+            f"{model_key} could not write its input file. Please contact support if this persists."
         ) from e
 
     # ── Run prediction subprocess ─────────────────────────────────────────────
     try:
         run_prediction_subprocess(
             command=[
-                python_path, prediction_script,
-                "--mode", "predict",
-                "--task", _TASK_FLAG[kinetics_type],
-                "--model_config", f"KinForm-{model_variant}",
-                "--save_results", output_file,
-                "--data_path", input_file,
+                python_path,
+                prediction_script,
+                "--mode",
+                "predict",
+                "--task",
+                _TASK_FLAG[kinetics_type],
+                "--model_config",
+                f"KinForm-{model_variant}",
+                "--save_results",
+                output_file,
+                "--data_path",
+                input_file,
             ],
             job=job,
             env=env,
@@ -193,8 +198,7 @@ def kinform_predictions(
         if isinstance(e, PredictionError):
             raise
         raise PredictionError(
-            f"{model_key} encountered an unexpected error. "
-            "Please verify your input and try again."
+            f"{model_key} encountered an unexpected error. Please verify your input and try again."
         ) from e
 
     # ── Read output CSV ───────────────────────────────────────────────────────
