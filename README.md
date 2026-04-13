@@ -46,6 +46,37 @@ See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for a step-by-step guide.
 * SQLite
 * PyTorch, scikit-learn, RDKit, pandas for model computation & cheminformatics
 
+## Required Environment Variable
+
+`DJANGO_SECRET_KEY` is required at runtime (no fallback hardcoded key).
+
+Generate a strong key:
+
+```bash
+openssl rand -hex 50
+```
+
+Local/dev setup:
+
+```bash
+cp .env.example .env
+# edit .env and set DJANGO_SECRET_KEY=...
+docker compose up -d --build
+```
+
+Production setup:
+
+```bash
+# on the production host
+cp .env.example .env.production
+# edit .env.production and set DJANGO_SECRET_KEY=...
+./deploy.sh prod
+```
+
+`deploy.sh prod` now reads `.env.production` automatically (falls back to `.env` if present).
+For non-interactive deploys (for example CI/systemd), provide an env file or inject
+`DJANGO_SECRET_KEY` in the service environment before running `docker compose`.
+
 ## High-Level Flow
 
 1. User submits a job (sequence + substrate(s) [+ products/mutant context if required]) via the frontend.

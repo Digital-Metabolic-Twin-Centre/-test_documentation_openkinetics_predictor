@@ -18,6 +18,7 @@
 x-common-env: &common-env
   DEBUG: "0"
   DJANGO_SETTINGS_MODULE: webKinPred.settings_docker
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
   REDIS_HOST: redis
   REDIS_PORT: "6379"
 

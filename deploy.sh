@@ -24,14 +24,31 @@ ENV="${1:-prod}"
 shift 2>/dev/null || true   # remaining args = specific services to rebuild
 
 case "$ENV" in
-  prod) COMPOSE_FILE="docker-compose.prod.yml" ;;
-  dev)  COMPOSE_FILE="docker-compose.yml" ;;
+  prod)
+    COMPOSE_FILE="docker-compose.prod.yml"
+    ENV_FILE=".env.production"
+    ;;
+  dev)
+    COMPOSE_FILE="docker-compose.yml"
+    ENV_FILE=".env"
+    ;;
   *)    echo "Unknown env '$ENV'. Use 'prod' or 'dev'."; exit 1 ;;
 esac
 
+COMPOSE_ARGS=(-f "$COMPOSE_FILE")
+if [[ -f "$ENV_FILE" ]]; then
+  COMPOSE_ARGS+=(--env-file "$ENV_FILE")
+  echo "==> Using env file: $ENV_FILE"
+elif [[ "$ENV" == "prod" && -f ".env" ]]; then
+  COMPOSE_ARGS+=(--env-file ".env")
+  echo "==> Using env file: .env (fallback)"
+else
+  echo "==> No env file found for '$ENV' (expected $ENV_FILE). Using current shell env."
+fi
+
 echo "==> Building and starting services (compose: $COMPOSE_FILE) ..."
 DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
-  sudo docker compose -f "$COMPOSE_FILE" up -d --build --remove-orphans "$@"
+  sudo docker compose "${COMPOSE_ARGS[@]}" up -d --build --remove-orphans "$@"
 
 echo "==> Pruning dangling images to reclaim disk space ..."
 sudo docker image prune -f

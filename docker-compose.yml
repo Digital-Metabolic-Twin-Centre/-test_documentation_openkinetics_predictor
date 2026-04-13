@@ -30,6 +30,7 @@ services:
       - PYTHONPATH=/app
       - DEBUG=1
       - DJANGO_SETTINGS_MODULE=webKinPred.settings_docker
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
       - MMSEQS_TMP_DIR=/app/mmseqs_tmp
       
@@ -87,6 +88,7 @@ services:
       - PYTHONPATH=/app
       - DEBUG=1
       - DJANGO_SETTINGS_MODULE=webKinPred.settings_docker
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       redis:
@@ -121,6 +123,7 @@ services:
       - PYTHONPATH=/app
       - DEBUG=1
       - DJANGO_SETTINGS_MODULE=webKinPred.settings_docker
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
     depends_on:
       redis:

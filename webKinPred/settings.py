@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.0/ref/settings/
 
 from pathlib import Path
 import os
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -23,7 +24,11 @@ except ImportError:
     ALLOWED_FRONTEND_IPS = ["127.0.0.1", "localhost"]
     DEBUG = True
 
-SECRET_KEY = 'django-insecure-4bv*yd3s*pewklc+$$#m&ida!xc1+*+jthh&6r1l71&ubz&86-'
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY environment variable is required."
+    )
 
 DEBUG = DEBUG
 ALLOWED_FRONTEND_IPS = ALLOWED_FRONTEND_IPS
