@@ -329,6 +329,13 @@ def _write_protein_records(
         json.dump(records, handle)
 
 
+def _row_smiles(row: dict[str, Any]) -> str:
+    substrate = row.get("substrates", row.get("substrate", row.get("Substrate", "")))
+    if isinstance(substrate, list):
+        substrate = substrate[0] if len(substrate) == 1 else ""
+    return str(substrate).strip()
+
+
 def _predict_rows_chunk(
     *,
     rows: list[dict[str, Any]],
@@ -338,16 +345,31 @@ def _predict_rows_chunk(
     media_path: Path,
     checkpoint_root: Path,
 ) -> list[float]:
+    # CatPred deduplicates rows with identical (SMILES, seq_id) internally.
+    # Deduplicate here so we can map predictions back to every original row.
+    key_to_unique_idx: dict[tuple[str, str], int] = {}
+    unique_rows: list[dict[str, Any]] = []
+    unique_seq_ids: list[str] = []
+    original_to_unique: list[int] = []
+
+    for row, seq_id in zip(rows, seq_ids):
+        key = (_row_smiles(row), seq_id)
+        if key not in key_to_unique_idx:
+            key_to_unique_idx[key] = len(unique_rows)
+            unique_rows.append(row)
+            unique_seq_ids.append(seq_id)
+        original_to_unique.append(key_to_unique_idx[key])
+
     with tempfile.TemporaryDirectory(prefix="catpred_webkinpred_") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str).resolve()
         input_csv = tmp_dir / "input.csv"
         protein_records = tmp_dir / "protein_records.json.gz"
         results_dir = tmp_dir / "results"
 
-        _build_input_dataframe(rows, seq_ids).to_csv(input_csv, index=False)
+        _build_input_dataframe(unique_rows, unique_seq_ids).to_csv(input_csv, index=False)
         _write_protein_records(
-            rows=rows,
-            seq_ids=seq_ids,
+            rows=unique_rows,
+            seq_ids=unique_seq_ids,
             parameter=parameter,
             media_path=media_path,
             checkpoint_dir=(checkpoint_root / parameter).resolve(),
@@ -369,12 +391,12 @@ def _predict_rows_chunk(
         if value_col not in output_df.columns:
             raise RuntimeError(f"CatPred output is missing expected column: {value_col}")
 
-        raw_preds = output_df[value_col].tolist()
-        if len(raw_preds) != len(rows):
+        unique_preds = output_df[value_col].tolist()
+        if len(unique_preds) != len(unique_rows):
             raise RuntimeError(
-                f"CatPred produced {len(raw_preds)} predictions for {len(rows)} rows."
+                f"CatPred produced {len(unique_preds)} predictions for {len(unique_rows)} unique rows."
             )
-        return [float(pred) for pred in raw_preds]
+        return [float(unique_preds[original_to_unique[i]]) for i in range(len(rows))]
 
 
 def run_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
