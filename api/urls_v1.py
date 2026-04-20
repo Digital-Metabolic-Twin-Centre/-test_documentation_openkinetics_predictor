@@ -34,6 +34,11 @@ urlpatterns = [
         v1_views.api_list_methods,
         name="api_v1_methods",
     ),
+    path(
+        "gpu/status/",
+        v1_views.api_gpu_status,
+        name="api_v1_gpu_status",
+    ),
     # -------------------------------------------------------------------------
     # Authentication required (Bearer token)
     # -------------------------------------------------------------------------

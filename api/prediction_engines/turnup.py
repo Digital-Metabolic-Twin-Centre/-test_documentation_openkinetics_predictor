@@ -21,6 +21,7 @@ from api.prediction_engines.runtime_paths import (
     PREDICTION_SCRIPTS,
     PYTHON_PATHS,
 )
+from api.services.gpu_embed_service import run_gpu_precompute_if_available
 from api.utils.convert_to_mol import convert_to_mol, validated_molecule_text
 from webKinPred.settings import MEDIA_ROOT
 
@@ -136,6 +137,14 @@ def turnup_predictions(
 
     if not valid_indices:
         return predictions, invalid_reasons
+
+    run_gpu_precompute_if_available(
+        job_public_id=public_id,
+        method_key="TurNup",
+        target="kcat",
+        valid_sequences=valid_sequences,
+        env=env,
+    )
 
     # ── Write CSV input file ──────────────────────────────────────────────────
     try:

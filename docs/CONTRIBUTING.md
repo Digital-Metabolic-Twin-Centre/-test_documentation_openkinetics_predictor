@@ -196,6 +196,10 @@ If your method uses PLM embeddings, read:
 
 It explains how to use the interface cache for fast inference on repeated sequences.
 
+GPU offload integration notes (current architecture):
+- PLM-capable methods should map to a shared embedding **profile** with step-level cache checks.
+- New integrations must define sparse step planning so only missing artifacts are computed.
+
 Best practices for embedding generation:
 - Always deduplicate protein sequences before embedding inference. Compute embeddings only for **unique** proteins, then map them back to all matching rows.
 - Example: if an input has 1,000 rows but only 10 unique protein sequences, compute 10 embeddings (not 1,000).

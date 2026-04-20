@@ -21,6 +21,7 @@ from api.prediction_engines.runtime_paths import (
     PREDICTION_SCRIPTS,
     PYTHON_PATHS,
 )
+from api.services.gpu_embed_service import run_gpu_precompute_if_available
 from api.utils.convert_to_mol import convert_to_mol, substrate_as_smiles
 from webKinPred.settings import MEDIA_ROOT
 
@@ -144,6 +145,14 @@ def kinform_predictions(
 
     if not valid_indices:
         return predictions, invalid_reasons
+
+    run_gpu_precompute_if_available(
+        job_public_id=public_id,
+        method_key=model_key,
+        target="kcat" if kinetics_type.upper() == "KCAT" else "Km",
+        valid_sequences=valid_sequences,
+        env=env,
+    )
 
     # ── Write JSON input file (KinForm expects JSON, not CSV) ─────────────────
     try:

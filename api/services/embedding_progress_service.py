@@ -17,7 +17,6 @@ import json
 import os
 import select
 import struct
-import subprocess
 import sys
 import threading
 import time
@@ -26,7 +25,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
-from api.prediction_engines.runtime_paths import DATA_PATHS
+from api.services.embedding_plan_service import (
+    expected_paths_by_seq as planner_expected_paths_by_seq,
+    method_env_keys as planner_method_env_keys,
+    normalise_sequences_for_method as planner_normalise_sequences_for_method,
+    resolve_media_and_tools as planner_resolve_media_and_tools,
+    resolve_seq_ids_via_cli as planner_resolve_seq_ids_via_cli,
+)
 from api.services.progress_service import redis_conn
 
 _KEY_PREFIX = "job_embedding_progress:"
@@ -150,84 +155,19 @@ def stop_embedding_tracking(job_public_id: str, final_state: str = "done") -> No
 
 
 def _method_env_keys(method_key: str) -> tuple[str | None, str | None]:
-    mapping = {
-        "UniKP": ("UNIKP_MEDIA_PATH", "UNIKP_TOOLS_PATH"),
-        "EITLEM": ("EITLEM_MEDIA_PATH", "EITLEM_TOOLS_PATH"),
-        "TurNup": ("TURNUP_MEDIA_PATH", "TURNUP_TOOLS_PATH"),
-        "CataPro": ("CATAPRO_MEDIA_PATH", "CATAPRO_TOOLS_PATH"),
-        "CatPred": ("CATPRED_MEDIA_PATH", "CATPRED_TOOLS_PATH"),
-        "KinForm-H": ("KINFORM_MEDIA_PATH", "KINFORM_TOOLS_PATH"),
-        "KinForm-L": ("KINFORM_MEDIA_PATH", "KINFORM_TOOLS_PATH"),
-    }
-    return mapping.get(method_key, (None, None))
+    return planner_method_env_keys(method_key)
 
 
 def _resolve_media_and_tools(method_key: str, env: dict) -> tuple[Path, Path]:
-    media_key, tools_key = _method_env_keys(method_key)
-
-    media_path = env.get(media_key) if media_key else None
-    tools_path = env.get(tools_key) if tools_key else None
-
-    if not media_path:
-        media_path = DATA_PATHS.get("media")
-    if not tools_path:
-        tools_path = DATA_PATHS.get("tools")
-
-    if not media_path or not tools_path:
-        raise RuntimeError("Could not resolve media/tools paths for embedding tracking.")
-
-    return Path(media_path).resolve(), Path(tools_path).resolve()
+    return planner_resolve_media_and_tools(method_key, env)
 
 
 def _normalise_sequences_for_method(method_key: str, sequences: Iterable[str]) -> list[str]:
-    out: list[str] = []
-    seen: set[str] = set()
-
-    for raw in sequences:
-        seq = str(raw).strip()
-        if not seq:
-            continue
-        if method_key == "TurNup":
-            # TurNup upper-cases and truncates to 1022 via preprocess_enzymes().
-            seq = seq.upper()[:1022]
-        if seq not in seen:
-            seen.add(seq)
-            out.append(seq)
-    return out
+    return planner_normalise_sequences_for_method(method_key, sequences)
 
 
 def _resolve_seq_ids_via_cli(sequences: list[str], tools_path: Path, media_path: Path) -> list[str]:
-    seqmap_cli = tools_path / "seqmap" / "main.py"
-    seqmap_db = media_path / "sequence_info" / "seqmap.sqlite3"
-    if not seqmap_cli.exists():
-        raise RuntimeError(f"seqmap CLI not found: {seqmap_cli}")
-    if not seqmap_db.exists():
-        raise RuntimeError(f"seqmap DB not found: {seqmap_db}")
-
-    payload = "\n".join(sequences) + "\n"
-    cmd = [
-        sys.executable,
-        str(seqmap_cli),
-        "--db",
-        str(seqmap_db),
-        "batch-get-or-create",
-        "--stdin",
-    ]
-    proc = subprocess.run(
-        cmd,
-        input=payload,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if proc.returncode != 0:
-        raise RuntimeError(
-            f"seqmap failed (rc={proc.returncode})\nSTDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}"
-        )
-    seq_ids = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
-    if len(seq_ids) != len(sequences):
-        raise RuntimeError(f"seqmap returned {len(seq_ids)} ids for {len(sequences)} sequences")
-    return seq_ids
+    return planner_resolve_seq_ids_via_cli(sequences, tools_path, media_path)
 
 
 def _catpred_parameter(target: str) -> str | None:
@@ -270,67 +210,13 @@ def _expected_paths_by_seq(
     media_path: Path,
     env: dict,
 ) -> dict[str, set[str]]:
-    out: dict[str, set[str]] = {}
-
-    if method_key in {"UniKP", "CataPro"}:
-        base = media_path / "sequence_info" / "prot_t5_last" / "mean_vecs"
-        for seq_id in seq_ids:
-            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
-        return out
-
-    if method_key == "EITLEM":
-        base = media_path / "sequence_info" / "esm1v"
-        for seq_id in seq_ids:
-            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
-        return out
-
-    if method_key == "TurNup":
-        base = media_path / "sequence_info" / "esm1b_turnup"
-        for seq_id in seq_ids:
-            out[seq_id] = {str((base / f"{seq_id}.npy").resolve())}
-        return out
-
-    if method_key in {"KinForm-H", "KinForm-L"}:
-        base = media_path / "sequence_info"
-        roots = [
-            "esm2_layer_26",
-            "esm2_layer_29",
-            "esmc_layer_24",
-            "esmc_layer_32",
-            "prot_t5_layer_19",
-            "prot_t5_last",
-        ]
-        for seq_id in seq_ids:
-            paths: set[str] = set()
-            for root in roots:
-                paths.add(str((base / root / "mean_vecs" / f"{seq_id}.npy").resolve()))
-                paths.add(str((base / root / "weighted_vecs" / f"{seq_id}.npy").resolve()))
-            out[seq_id] = paths
-        return out
-
-    if method_key == "CatPred":
-        parameter = _catpred_parameter(target)
-        if parameter is None:
-            return {}
-
-        checkpoint_root = env.get("CATPRED_CHECKPOINT_ROOT") or DATA_PATHS.get(
-            "CatPred_production_checkpoints"
-        )
-        if not checkpoint_root:
-            return {}
-
-        model_keys = _discover_catpred_checkpoint_keys(Path(checkpoint_root).resolve(), parameter)
-        if not model_keys:
-            return {}
-
-        base = media_path / "sequence_info" / "catpred_esm2" / parameter
-        for seq_id in seq_ids:
-            out[seq_id] = {
-                str((base / model_key / f"{seq_id}.pt").resolve()) for model_key in model_keys
-            }
-        return out
-
-    return {}
+    return planner_expected_paths_by_seq(
+        method_key=method_key,
+        target=target,
+        seq_ids=seq_ids,
+        media_path=media_path,
+        env=env,
+    )
 
 
 def _prepare_plan(
@@ -376,6 +262,7 @@ def _prepare_plan(
             watch_dirs.add(Path(path_str).parent)
 
     total = len(expected)
+
     return _PreparedPlan(
         method_key=method_key,
         target=target,

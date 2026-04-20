@@ -22,6 +22,7 @@ from api.prediction_engines.runtime_paths import (
     PREDICTION_SCRIPTS,
     PYTHON_PATHS,
 )
+from api.services.gpu_embed_service import run_gpu_precompute_if_available
 from api.prediction_engines.subprocess_runner import run_prediction_subprocess
 from api.utils.convert_to_mol import convert_to_mol
 from webKinPred.settings import MEDIA_ROOT
@@ -91,6 +92,13 @@ def run_generic_subprocess_prediction(
 
     python_path, script_path = _resolve_subprocess_paths(desc)
     env = _build_subprocess_env(desc)
+    run_gpu_precompute_if_available(
+        job_public_id=public_id,
+        method_key=desc.key,
+        target=target,
+        valid_sequences=[str(row.get("sequence", "")) for row in valid_rows],
+        env=env,
+    )
 
     job_dir = os.path.join(MEDIA_ROOT, "jobs", str(public_id))
     safe_method = re.sub(r"[^A-Za-z0-9_-]+", "_", desc.key)

@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Unit tests for shared embedding planning and GPU step partitioning."""
+
+from __future__ import annotations
+
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+from api.services import embedding_plan_service as eps
+
+
+def _touch(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x")
+
+
+class EmbeddingPlanServiceTests(unittest.TestCase):
+    def test_kinform_mixed_state_sparse_steps(self):
+        with tempfile.TemporaryDirectory(prefix="emb_plan_kinform_") as tmp:
+            tmp_path = Path(tmp)
+            media = tmp_path / "media"
+            tools = tmp_path / "tools"
+            seq_ids = ["sid_1", "sid_2", "sid_3"]
+
+            # sid_1 complete; sid_2 missing only esm2; sid_3 missing only prot_t5 + binding-site row
+            kin_roots = [
+                "esm2_layer_26",
+                "esm2_layer_29",
+                "esmc_layer_24",
+                "esmc_layer_32",
+                "prot_t5_layer_19",
+                "prot_t5_last",
+            ]
+            for sid in seq_ids:
+                for root in kin_roots:
+                    _touch(media / "sequence_info" / root / "mean_vecs" / f"{sid}.npy")
+                    _touch(media / "sequence_info" / root / "weighted_vecs" / f"{sid}.npy")
+
+            # remove sid_2 esm2 files only
+            for root in ["esm2_layer_26", "esm2_layer_29"]:
+                (media / "sequence_info" / root / "mean_vecs" / "sid_2.npy").unlink()
+                (media / "sequence_info" / root / "weighted_vecs" / "sid_2.npy").unlink()
+
+            # remove sid_3 prot_t5 files only
+            for root in ["prot_t5_layer_19", "prot_t5_last"]:
+                (media / "sequence_info" / root / "mean_vecs" / "sid_3.npy").unlink()
+                (media / "sequence_info" / root / "weighted_vecs" / "sid_3.npy").unlink()
+
+            # binding site table includes sid_1 and sid_2 only
+            bs_path = media / "pseq2sites" / "binding_sites_all.tsv"
+            bs_path.parent.mkdir(parents=True, exist_ok=True)
+            bs_path.write_text("PDB\tscore\n" "sid_1\t0.9\n" "sid_2\t0.2\n", encoding="utf-8")
+
+            with patch.object(eps, "resolve_media_and_tools", return_value=(media, tools)):
+                with patch.object(eps, "resolve_seq_ids_via_cli", return_value=seq_ids):
+                    plan = eps.build_embedding_plan(
+                        method_key="KinForm-H",
+                        target="kcat",
+                        sequences=["SEQ1", "SEQ2", "SEQ3"],
+                        env={},
+                    )
+
+            self.assertEqual(plan.profile, "kinform_full")
+            self.assertTrue(plan.gpu_supported)
+            self.assertEqual(plan.total, 3)
+            self.assertEqual(plan.cached_already, 1)
+            self.assertEqual(plan.need_computation, 2)
+
+            by_step = {step.step_key: set(step.missing_seq_ids) for step in plan.step_plans}
+            self.assertEqual(by_step["kinform_pseq2sites"], {"sid_3"})
+            self.assertEqual(by_step["kinform_esm2_layers"], {"sid_2"})
+            self.assertEqual(by_step["kinform_esmc_layers"], set())
+            self.assertEqual(by_step["kinform_prott5_layers"], {"sid_3"})
+
+    def test_catapro_reuses_prott5_cache(self):
+        with tempfile.TemporaryDirectory(prefix="emb_plan_catapro_") as tmp:
+            tmp_path = Path(tmp)
+            media = tmp_path / "media"
+            tools = tmp_path / "tools"
+            seq_ids = ["a", "b"]
+            for sid in seq_ids:
+                _touch(media / "sequence_info" / "prot_t5_last" / "mean_vecs" / f"{sid}.npy")
+
+            with patch.object(eps, "resolve_media_and_tools", return_value=(media, tools)):
+                with patch.object(eps, "resolve_seq_ids_via_cli", return_value=seq_ids):
+                    plan = eps.build_embedding_plan(
+                        method_key="CataPro",
+                        target="kcat",
+                        sequences=["AA", "BB"],
+                        env={},
+                    )
+
+            self.assertEqual(plan.profile, "prot_t5_mean")
+            self.assertEqual(plan.need_computation, 0)
+            self.assertEqual(eps.gpu_step_work(plan), {})
+
+    def test_turnup_partial_cache(self):
+        with tempfile.TemporaryDirectory(prefix="emb_plan_turnup_") as tmp:
+            tmp_path = Path(tmp)
+            media = tmp_path / "media"
+            tools = tmp_path / "tools"
+            _touch(media / "sequence_info" / "esm1b_turnup" / "sid_1.npy")
+
+            with patch.object(eps, "resolve_media_and_tools", return_value=(media, tools)):
+                with patch.object(eps, "resolve_seq_ids_via_cli", return_value=["sid_1", "sid_2"]):
+                    plan = eps.build_embedding_plan(
+                        method_key="TurNup",
+                        target="kcat",
+                        sequences=["ACD", "EFG"],
+                        env={},
+                    )
+
+            self.assertEqual(plan.profile, "turnup_esm1b")
+            self.assertEqual(plan.need_computation, 1)
+            self.assertEqual(eps.gpu_step_work(plan), {"turnup_esm1b": ["sid_2"]})
+
+    def test_eitlem_gpu_offload_disabled(self):
+        with tempfile.TemporaryDirectory(prefix="emb_plan_eitlem_") as tmp:
+            tmp_path = Path(tmp)
+            media = tmp_path / "media"
+            tools = tmp_path / "tools"
+            _touch(media / "sequence_info" / "esm1v" / "sid_1.npy")
+
+            with patch.object(eps, "resolve_media_and_tools", return_value=(media, tools)):
+                with patch.object(eps, "resolve_seq_ids_via_cli", return_value=["sid_1"]):
+                    plan = eps.build_embedding_plan(
+                        method_key="EITLEM",
+                        target="kcat",
+                        sequences=["ACD"],
+                        env={},
+                    )
+
+            self.assertFalse(plan.gpu_supported)
+            self.assertEqual(plan.gpu_reason, "gpu_offload_unsupported_full_matrix_artifacts")
+
+
+if __name__ == "__main__":
+    unittest.main()

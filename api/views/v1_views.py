@@ -37,6 +37,7 @@ from api.services.job_service import process_job_submission_from_params
 from api.services.validation_service import validate_input_file
 from api.services.similarity_service import analyze_sequence_similarity
 from api.services.embedding_progress_service import get_embedding_progress
+from api.services.gpu_embed_service import get_gpu_status
 from api.utils.api_auth import require_api_key
 from api.utils.job_utils import coerce_bool_param
 from api.utils.quotas import get_quota_usage
@@ -83,6 +84,23 @@ def api_health(request):
             "timestamp": timezone.now().isoformat(),
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/gpu/status/
+# ---------------------------------------------------------------------------
+
+
+@csrf_exempt
+@require_GET
+def api_gpu_status(request):
+    """
+    Return current GPU embed-service reachability and capacity snapshot.
+
+    Uses server-side TTL caching to avoid hammering the remote GPU host.
+    """
+    status = get_gpu_status()
+    return JsonResponse(status)
 
 
 # ---------------------------------------------------------------------------

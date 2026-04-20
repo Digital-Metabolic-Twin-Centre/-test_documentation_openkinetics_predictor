@@ -33,6 +33,10 @@ services:
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
       - MMSEQS_TMP_DIR=/app/mmseqs_tmp
+      - GPU_EMBED_SERVICE_URL=${GPU_EMBED_SERVICE_URL:-}
+      - GPU_EMBED_SERVICE_TOKEN=${GPU_EMBED_SERVICE_TOKEN:-}
+      - GPU_EMBED_HEALTH_TTL_SECONDS=${GPU_EMBED_HEALTH_TTL_SECONDS:-10}
+      - GPU_EMBED_JOB_TIMEOUT_SECONDS=${GPU_EMBED_JOB_TIMEOUT_SECONDS:-1200}
       
     command: gunicorn webKinPred.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 120
     depends_on:
@@ -90,6 +94,10 @@ services:
       - DJANGO_SETTINGS_MODULE=webKinPred.settings_docker
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
+      - GPU_EMBED_SERVICE_URL=${GPU_EMBED_SERVICE_URL:-}
+      - GPU_EMBED_SERVICE_TOKEN=${GPU_EMBED_SERVICE_TOKEN:-}
+      - GPU_EMBED_HEALTH_TTL_SECONDS=${GPU_EMBED_HEALTH_TTL_SECONDS:-10}
+      - GPU_EMBED_JOB_TIMEOUT_SECONDS=${GPU_EMBED_JOB_TIMEOUT_SECONDS:-1200}
     depends_on:
       redis:
         condition: service_healthy
@@ -125,6 +133,10 @@ services:
       - DJANGO_SETTINGS_MODULE=webKinPred.settings_docker
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?DJANGO_SECRET_KEY must be set}
       - REDIS_URL=redis://redis:6379/0
+      - GPU_EMBED_SERVICE_URL=${GPU_EMBED_SERVICE_URL:-}
+      - GPU_EMBED_SERVICE_TOKEN=${GPU_EMBED_SERVICE_TOKEN:-}
+      - GPU_EMBED_HEALTH_TTL_SECONDS=${GPU_EMBED_HEALTH_TTL_SECONDS:-10}
+      - GPU_EMBED_JOB_TIMEOUT_SECONDS=${GPU_EMBED_JOB_TIMEOUT_SECONDS:-1200}
     depends_on:
       redis:
         condition: service_healthy
