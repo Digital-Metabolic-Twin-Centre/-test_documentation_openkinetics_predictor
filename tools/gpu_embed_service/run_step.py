@@ -53,7 +53,9 @@ def _load_seq_id_to_seq(seq_ids: list[str], seqmap_db: Path) -> dict[str, str]:
 
     placeholders = ",".join(["?"] * len(seq_ids))
     sql = f"SELECT id, seq FROM sequences WHERE id IN ({placeholders})"
-    with sqlite3.connect(str(seqmap_db)) as con:
+    # Use read-only URI mode to avoid WAL/lock file creation on NFS mounts.
+    uri = f"file:{seqmap_db}?mode=ro"
+    with sqlite3.connect(uri, uri=True) as con:
         rows = con.execute(sql, seq_ids).fetchall()
     found = {str(row[0]): str(row[1]) for row in rows}
     missing = [sid for sid in seq_ids if sid not in found]
@@ -244,13 +246,27 @@ calcualte_esm1b_ts_vectors(seqs)
     _run([turnup_python, "-c", code, str(seq_map_json)], turnup_env)
 
 
-def run_step(step: str, seq_ids: list[str], repo_root: Path, media_path: Path, tools_path: Path) -> None:
+def run_step(
+    step: str,
+    seq_ids: list[str],
+    repo_root: Path,
+    media_path: Path,
+    tools_path: Path,
+    *,
+    seq_id_to_seq: dict[str, str] | None = None,
+) -> None:
     if not seq_ids:
         print("No sequence IDs provided; nothing to do.")
         return
 
-    seqmap_db = (media_path / "sequence_info" / "seqmap.sqlite3").resolve()
-    seq_id_to_seq = _load_seq_id_to_seq(seq_ids, seqmap_db)
+    if seq_id_to_seq is None:
+        seqmap_db = (media_path / "sequence_info" / "seqmap.sqlite3").resolve()
+        seq_id_to_seq = _load_seq_id_to_seq(seq_ids, seqmap_db)
+    else:
+        missing = [sid for sid in seq_ids if sid not in seq_id_to_seq]
+        if missing:
+            raise RuntimeError(f"Missing seq IDs in provided map: {','.join(missing)}")
+
     tmp_dir, seq_file, id_to_seq_pkl, seq_map_json = _write_temp_inputs(seq_id_to_seq)
     env = _kinform_env(repo_root=repo_root, media_path=media_path, tools_path=tools_path)
 
