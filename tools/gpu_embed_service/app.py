@@ -5,15 +5,23 @@ import os
 import queue
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import uuid
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
+
+# Import builtin step runner (same directory as this file).
+_HERE = Path(__file__).parent
+if str(_HERE) not in sys.path:
+    sys.path.insert(0, str(_HERE))
+import run_step as _run_step_module
 
 
 class EmbedJobRequest(BaseModel):
@@ -132,33 +140,52 @@ def _run_command(cmd: str) -> None:
 
 
 def _execute_step(step_key: str, seq_ids: list[str], seq_id_to_seq: dict[str, str]) -> None:
-    # Optional step override command. If absent, this is a no-op by default.
-    # Example env key: GPU_EMBED_STEP_CMD_KINFORM_ESM2_LAYERS
+    # If an override command is configured, use it.
     # Available format args: {step_key}, {seq_ids}, {seq_count}, {seq_id_to_seq_file}
     env_key = f"GPU_EMBED_STEP_CMD_{step_key.upper()}"
     cmd = str(os.environ.get(env_key, "")).strip()
-    if not cmd:
+
+    if cmd:
+        seq_ids_arg = ",".join(seq_ids)
+        seq_count = len(seq_ids)
+        step_seq_map = {sid: seq_id_to_seq[sid] for sid in seq_ids if sid in seq_id_to_seq}
+        tmp_file: str | None = None
+        try:
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as fh:
+                json.dump(step_seq_map, fh)
+                tmp_file = fh.name
+            cmd = cmd.format(
+                step_key=step_key,
+                seq_ids=seq_ids_arg,
+                seq_count=seq_count,
+                seq_id_to_seq_file=tmp_file,
+            )
+            _run_command(cmd)
+        finally:
+            if tmp_file and os.path.exists(tmp_file):
+                os.unlink(tmp_file)
         return
 
-    seq_ids_arg = ",".join(seq_ids)
-    seq_count = len(seq_ids)
-    step_seq_map = {sid: seq_id_to_seq[sid] for sid in seq_ids if sid in seq_id_to_seq}
-
-    tmp_file: str | None = None
-    try:
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as fh:
-            json.dump(step_seq_map, fh)
-            tmp_file = fh.name
-        cmd = cmd.format(
-            step_key=step_key,
-            seq_ids=seq_ids_arg,
-            seq_count=seq_count,
-            seq_id_to_seq_file=tmp_file,
-        )
-        _run_command(cmd)
-    finally:
-        if tmp_file and os.path.exists(tmp_file):
-            os.unlink(tmp_file)
+    # No override: fall through to the builtin run_step implementation.
+    repo_root = Path(
+        os.environ.get("GPU_REPO_ROOT")
+        or os.environ.get("GPU_EMBED_REPO_ROOT")
+        or str(_run_step_module._default_repo_root())
+    ).resolve()
+    media_path = Path(
+        os.environ.get("KINFORM_MEDIA_PATH", "/mnt/webkinpred/media")
+    ).resolve()
+    tools_path = Path(
+        os.environ.get("KINFORM_TOOLS_PATH", str(repo_root / "tools"))
+    ).resolve()
+    _run_step_module.run_step(
+        step=step_key,
+        seq_ids=seq_ids,
+        repo_root=repo_root,
+        media_path=media_path,
+        tools_path=tools_path,
+        seq_id_to_seq=seq_id_to_seq or None,
+    )
 
 
 def _run_job(job_id: str) -> None:
