@@ -12,16 +12,14 @@
 #   these. `docker image prune -f` at the end cleans them up.
 #
 # How the cache is preserved:
-#   BuildKit reuses unchanged stages (each conda env is its own stage).
-#   Only stages whose inputs changed are rebuilt — the rest are skipped
-#   entirely. The --mount=type=cache mounts in the Dockerfile keep download
-#   caches (conda pkgs, pip wheels) across full rebuilds so you never
-#   re-download the same file twice.
+#   BuildKit reuses unchanged layers and pip download caches.
+#   Conda envs are now expected to come from a prebuilt env image
+#   (WEBKINPRED_ENVS_IMAGE), so regular worker deploys avoid rebuilding them.
 
 set -euo pipefail
 
 ENV="${1:-prod}"
-shift 2>/dev/null || true   # remaining args = specific services to rebuild
+shift 1 2>/dev/null || true   # remaining args = specific services to rebuild
 
 case "$ENV" in
   prod)
@@ -50,7 +48,11 @@ echo "==> Building and starting services (compose: $COMPOSE_FILE) ..."
 DOCKER_BUILDKIT=1 COMPOSE_DOCKER_CLI_BUILD=1 \
   sudo docker compose "${COMPOSE_ARGS[@]}" up -d --build --remove-orphans "$@"
 
-echo "==> Pruning dangling images to reclaim disk space ..."
-sudo docker image prune -f
+if [[ "${PRUNE_DANGLING_IMAGES:-0}" == "1" ]]; then
+  echo "==> Pruning dangling images to reclaim disk space ..."
+  sudo docker image prune -f
+else
+  echo "==> Skipping dangling image prune (set PRUNE_DANGLING_IMAGES=1 to enable)."
+fi
 
 echo "==> Done."
