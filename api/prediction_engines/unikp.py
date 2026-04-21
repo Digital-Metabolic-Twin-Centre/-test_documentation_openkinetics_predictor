@@ -11,6 +11,8 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+import logging
+
 from api.methods.base import PredictionError
 from api.models import Job
 from api.prediction_engines.subprocess_runner import run_prediction_subprocess
@@ -20,6 +22,8 @@ from api.prediction_engines.runtime_paths import (
     PYTHON_PATHS,
 )
 from api.services.gpu_embed_service import run_gpu_precompute_if_available
+
+_log = logging.getLogger(__name__)
 from api.utils.convert_to_mol import convert_to_mol, substrate_as_smiles
 from webKinPred.settings import MEDIA_ROOT
 
@@ -124,13 +128,18 @@ def unikp_predictions(
     if not valid_indices:
         return predictions, invalid_reasons
 
-    run_gpu_precompute_if_available(
+    _gpu = run_gpu_precompute_if_available(
         job_public_id=public_id,
         method_key="UniKP",
         target="kcat" if kinetics_type.upper() == "KCAT" else "Km",
         valid_sequences=valid_sequences,
         env=env,
     )
+    if _gpu.attempted and not _gpu.completed:
+        _log.warning(
+            "GPU precompute incomplete for UniKP job %s: %s (used_gpu=%s, failed=%s)",
+            public_id, _gpu.reason, _gpu.used_gpu, _gpu.failed,
+        )
 
     # ── Write CSV input file ──────────────────────────────────────────────────
     try:
