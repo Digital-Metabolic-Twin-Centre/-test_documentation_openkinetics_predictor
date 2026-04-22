@@ -100,6 +100,8 @@ def _kinform_env(repo_root: Path, media_path: Path, tools_path: Path) -> dict[st
     ).resolve()
     if t5_model_default.exists():
         env.setdefault("KINFORM_T5_MODEL_PATH", str(t5_model_default))
+    # GPU embed service should run embedding workloads on CUDA, not CPU fallback.
+    env.setdefault("KINFORM_REQUIRE_CUDA", "1")
     env.setdefault("GPU_REPO_ROOT", str(repo_root))
     return env
 

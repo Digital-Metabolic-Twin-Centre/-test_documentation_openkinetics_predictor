@@ -14,9 +14,17 @@ from .helpers import prepare_prots_input
 class Pseq2SitesTrainIter:
     def __init__(self, config):
         self.config = config
-        
+        raw = str(os.environ.get("KINFORM_REQUIRE_CUDA", "")).strip().lower()
+        require_cuda = raw in {"1", "true", "yes", "on"}
+        if require_cuda and not torch.cuda.is_available():
+            raise RuntimeError(
+                "CUDA is required for Pseq2Sites (KINFORM_REQUIRE_CUDA=1), "
+                "but no CUDA device is available."
+            )
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
         # build model
-        self.model = Pseq2Sites(self.config)
+        self.model = Pseq2Sites(self.config).to(self.device)
         
     def train(self, train_loader, validation_loader, save_path):
         self.model_save_path = save_path
@@ -32,7 +40,11 @@ class Pseq2SitesTrainIter:
             for batch in tqdm(train_loader):
                 
                 # prepare input
-                aa_feats, prot_feats, prot_masks, binding_sites, position_ids, chain_idx = prepare_prots_input(self.config, batch)
+                aa_feats, prot_feats, prot_masks, binding_sites, position_ids, chain_idx = prepare_prots_input(
+                    self.config,
+                    batch,
+                    device=self.device,
+                )
                 
                 self.optim.zero_grad()
                 
@@ -71,7 +83,11 @@ class Pseq2SitesTrainIter:
             
             for batch in tqdm(loader, total=len(loader)):
                 # prepare input
-                aa_feats, prot_feats, prot_masks, binding_sites, position_ids, chain_idx = prepare_prots_input(self.config, batch)
+                aa_feats, prot_feats, prot_masks, binding_sites, position_ids, chain_idx = prepare_prots_input(
+                    self.config,
+                    batch,
+                    device=self.device,
+                )
                 
                 # forward
                 pred_BS = self.model(aa_feats, prot_feats, prot_masks, position_ids, chain_idx)
@@ -85,8 +101,7 @@ class Pseq2SitesTrainIter:
     def run_test(self, loader, best_path):
         
         #checkpoint = torch.load(config["paths"]["model_path"])
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        checkpoint = torch.load(best_path + "/Pseq2Sites.pth", map_location=device)
+        checkpoint = torch.load(best_path + "/Pseq2Sites.pth", map_location=self.device)
         state_dict = checkpoint["state_dict"]
         self.model.load_state_dict(state_dict)
         
@@ -97,7 +112,12 @@ class Pseq2SitesTrainIter:
             
             for batch in tqdm(loader, total=len(loader)):
                 # prepare input
-                aa_feats, prot_feats, prot_masks, position_ids, chain_idx = prepare_prots_input(self.config, batch, training = False)
+                aa_feats, prot_feats, prot_masks, position_ids, chain_idx = prepare_prots_input(
+                    self.config,
+                    batch,
+                    training = False,
+                    device=self.device,
+                )
                 
                 # forward
                 _, pred_BS, _ = self.model(aa_feats, prot_feats, prot_masks, position_ids, chain_idx)              
@@ -115,10 +135,7 @@ class Pseq2SitesTrainIter:
         return loss        
         
     def calculate_weights(self, labels):
-        if torch.cuda.is_available():
-            labels_inverse = torch.abs(labels - torch.ones(labels.size()).cuda())
-        else:
-            labels_inverse = torch.abs(labels - torch.ones(labels.size()))
+        labels_inverse = torch.abs(labels - torch.ones_like(labels))
         negative_labels = labels_inverse
         
         P = torch.sum(labels)

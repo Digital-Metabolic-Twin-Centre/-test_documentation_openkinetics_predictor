@@ -29,7 +29,18 @@ def _weighted_mean(arr: np.ndarray, w: np.ndarray, normalize: bool = True) -> np
     return (arr * w[:, None]).sum(axis=0)
 
 
+def _require_cuda_if_requested(context: str) -> None:
+    raw = str(os.environ.get("KINFORM_REQUIRE_CUDA", "")).strip().lower()
+    require_cuda = raw in {"1", "true", "yes", "on"}
+    if require_cuda and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"CUDA is required for {context} (KINFORM_REQUIRE_CUDA=1), "
+            "but no CUDA device is available."
+        )
+
+
 def get_embeddings(seq_dict, batch_size=2, model=None, id_to_seq=None, setting='mean',all_layers=False, only_save=False, layer=None, weights_df: Optional[pd.DataFrame] = None, weights_key_col: str = "PDB", weights_col: str = "Pred_BS_Scores"):
+    _require_cuda_if_requested(f"{model} embedding")
     # Parse setting - can be combination like "mean+weighted"
     settings = set(s.strip() for s in setting.split("+"))
     valid_settings = {"mean", "residue", "weighted"}

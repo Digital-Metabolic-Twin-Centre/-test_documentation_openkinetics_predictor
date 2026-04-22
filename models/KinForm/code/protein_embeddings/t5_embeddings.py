@@ -83,6 +83,16 @@ def _cleanup_residue_files(residue_dir: Path, keys: List[str]) -> None:
         print(f"Removed {removed} residue embedding file(s) from {residue_dir}")
 
 
+def _require_cuda_if_requested(context: str) -> None:
+    raw = str(os.environ.get("KINFORM_REQUIRE_CUDA", "")).strip().lower()
+    require_cuda = raw in {"1", "true", "yes", "on"}
+    if require_cuda and not torch.cuda.is_available():
+        raise RuntimeError(
+            f"CUDA is required for {context} (KINFORM_REQUIRE_CUDA=1), "
+            "but no CUDA device is available."
+        )
+
+
 # --------------------------------------------------------------------------- #
 #                              EMBEDDING BACK-END                             #
 # --------------------------------------------------------------------------- #
@@ -98,6 +108,8 @@ def get_prot_t5_embeddings(
     weights_df: Optional[pd.DataFrame] = None,
     weights_key_col: str = "PDB",
     weights_col: str = "Pred_BS_Scores"):
+
+    _require_cuda_if_requested("ProtT5 embedding")
 
     # ----------------------- sanity checks -------------------------------- #
     # Parse setting - can be combination like "mean+weighted"
@@ -344,6 +356,7 @@ def _get_prot_t5_residue_multi_layer(
     for each L, but uses a single model load and a single forward pass per
     batch instead of one model load per layer.
     """
+    _require_cuda_if_requested("ProtT5 multi-layer residue embedding")
     precomputed_root = Path(os.environ.get("KINFORM_MEDIA_PATH")) / "sequence_info"
     assert all(k in id_to_seq and id_to_seq[k] == v for k, v in seq_dict.items()), (
         "Sequence mismatch between provided seq_dict and id_to_seq"

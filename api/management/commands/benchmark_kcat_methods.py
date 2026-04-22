@@ -51,6 +51,28 @@ PRODUCT_POOL = [
 ]
 DEFAULT_API_BASE_URL = "https://predictor.openkinetics.org/api/v1"
 GPU_OFFLOAD_KCAT_METHOD_IDS = {"KinForm-H", "KinForm-L", "UniKP", "TurNup", "CataPro", "EITLEM", "CatPred"}
+PREFERRED_METHOD_ORDER = [
+    "EITLEM",
+    "KinForm-L",
+    "KinForm-H",
+    "UniKP",
+    "TurNup",
+    "CataPro",
+    "CatPred",
+    "DLKcat",
+]
+METHOD_KEY_ALIASES = {
+    "eitlem": "EITLEM",
+    "kinforml": "KinForm-L",
+    "kinfroml": "KinForm-L",
+    "kinformh": "KinForm-H",
+    "kinfromh": "KinForm-H",
+    "unikp": "UniKP",
+    "turnup": "TurNup",
+    "catapro": "CataPro",
+    "catpred": "CatPred",
+    "dlkcat": "DLKcat",
+}
 
 
 @dataclass
@@ -239,15 +261,26 @@ class Command(BaseCommand):
         )
 
         if methods_filter:
-            requested = set(methods_filter)
-            unknown = sorted(requested - set(kcat_methods))
+            selected_keys: list[str] = []
+            unknown: list[str] = []
+            for requested_key in methods_filter:
+                resolved_key = self._resolve_method_key(
+                    token=requested_key,
+                    available_methods=kcat_methods,
+                )
+                if resolved_key is None:
+                    unknown.append(requested_key)
+                    continue
+                if resolved_key not in selected_keys:
+                    selected_keys.append(resolved_key)
+
             if unknown:
                 raise CommandError(
-                    "Unknown or non-kcat method key(s) for this API: " + ", ".join(unknown)
+                    "Unknown or non-kcat method key(s) for this API: " + ", ".join(sorted(unknown))
                 )
-            selected_keys = sorted(key for key in requested if key in kcat_methods)
+            selected_keys = self._order_method_keys(selected_keys)
         else:
-            selected_keys = sorted(kcat_methods)
+            selected_keys = self._order_method_keys(kcat_methods)
 
         run_seed = options["seed"]
         if run_seed is None:
@@ -937,6 +970,40 @@ class Command(BaseCommand):
             if maybe_result is not None:
                 return maybe_result
             time.sleep(poll_seconds)
+
+    def _normalize_method_key(self, method_key: str) -> str:
+        return "".join(ch for ch in method_key.lower() if ch.isalnum())
+
+    def _resolve_method_key(self, *, token: str, available_methods: list[str]) -> str | None:
+        token_normalized = self._normalize_method_key(token)
+        available_by_normalized = {
+            self._normalize_method_key(method_key): method_key for method_key in available_methods
+        }
+
+        if token in available_methods:
+            return token
+        if token_normalized in available_by_normalized:
+            return available_by_normalized[token_normalized]
+
+        alias_target = METHOD_KEY_ALIASES.get(token_normalized)
+        if not alias_target:
+            return None
+
+        alias_target_normalized = self._normalize_method_key(alias_target)
+        return available_by_normalized.get(alias_target_normalized)
+
+    def _order_method_keys(self, method_keys: list[str]) -> list[str]:
+        preferred_rank = {
+            method_key: idx for idx, method_key in enumerate(PREFERRED_METHOD_ORDER)
+        }
+
+        return sorted(
+            method_keys,
+            key=lambda method_key: (
+                preferred_rank.get(method_key, len(PREFERRED_METHOD_ORDER)),
+                method_key.lower(),
+            ),
+        )
 
     def _run_single_benchmark(
         self,
