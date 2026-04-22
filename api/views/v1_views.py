@@ -132,7 +132,7 @@ def api_list_methods(request):
           "repoUrl":           str,
           "moreInfo":          str,
           "supports":          list[str],   // e.g. ["kcat", "Km", "kcat/Km"]
-          "inputFormat":       str,         // "single" or "multi"
+          "inputFormat":       str,         // "single" or "multi" ("full reaction" is represented as "multi")
           "maxSeqLen":         int | null,  // null means no limit
           "requiredColumns":   list[str],   // includes "Protein Sequence"
           "substrateFormat":   str,
@@ -153,7 +153,7 @@ def api_list_methods(request):
         max_len = None if desc.max_seq_len == float("inf") else int(desc.max_seq_len)
         required_cols = ["Protein Sequence"] + list(desc.col_to_kwarg.keys())
         substrate_fmt = (
-            "Semicolon-separated SMILES or InChI strings"
+            "Semicolon-separated SMILES or InChI strings for Substrates and Products (full reaction)"
             if desc.input_format == "multi"
             else "SMILES or InChI"
         )
