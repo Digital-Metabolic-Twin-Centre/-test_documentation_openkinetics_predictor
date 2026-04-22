@@ -690,3 +690,49 @@ def run_kinform_parallel_pipeline(
         for state in workers.values():
             _terminate_worker(state)
             _cleanup_worker_inputs(state)
+
+
+def main() -> int:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Run KinForm parallel GPU embedding orchestrator.")
+    parser.add_argument(
+        "--seq-id-to-seq-file",
+        required=True,
+        help="Path to JSON mapping seq_id->sequence.",
+    )
+    parser.add_argument(
+        "--repo-root",
+        default=os.environ.get("GPU_REPO_ROOT", ""),
+        help="Repository root path (defaults to GPU_REPO_ROOT).",
+    )
+    parser.add_argument(
+        "--media-path",
+        default=os.environ.get("KINFORM_MEDIA_PATH", ""),
+        help="Media/cache root path (defaults to KINFORM_MEDIA_PATH).",
+    )
+    parser.add_argument(
+        "--job-id",
+        default="",
+        help="Optional job ID used for structured logs.",
+    )
+    args = parser.parse_args()
+
+    if not args.repo_root:
+        raise RuntimeError("Missing --repo-root and GPU_REPO_ROOT is not set.")
+    if not args.media_path:
+        raise RuntimeError("Missing --media-path and KINFORM_MEDIA_PATH is not set.")
+
+    seq_id_to_seq = json.loads(Path(args.seq_id_to_seq_file).read_text(encoding="utf-8"))
+    run_kinform_parallel_pipeline(
+        env=dict(os.environ),
+        repo_root=Path(args.repo_root).resolve(),
+        media_path=Path(args.media_path).resolve(),
+        seq_id_to_seq=seq_id_to_seq,
+        job_id=args.job_id or None,
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

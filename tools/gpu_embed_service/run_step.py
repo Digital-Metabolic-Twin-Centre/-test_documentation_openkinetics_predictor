@@ -306,15 +306,26 @@ def _run_kinform_t5_full(
         _run_kinform_t5_full_legacy_only(env, seq_file, id_to_seq_pkl, seq_map_json)
         return
 
-    from kinform_parallel_orchestrator import run_kinform_parallel_pipeline
+    orchestrator_script = (
+        Path(env["GPU_REPO_ROOT"]) / "tools" / "gpu_embed_service" / "kinform_parallel_orchestrator.py"
+    ).resolve()
+    _ensure_exists(orchestrator_script, "kinform parallel orchestrator script")
 
     try:
-        run_kinform_parallel_pipeline(
-            env=env,
-            repo_root=Path(env["GPU_REPO_ROOT"]).resolve(),
-            media_path=Path(env["KINFORM_MEDIA_PATH"]).resolve(),
-            seq_id_to_seq=seq_id_to_seq,
-            job_id=job_id,
+        _run(
+            [
+                env["KINFORM_T5_PATH"],
+                str(orchestrator_script),
+                "--seq-id-to-seq-file",
+                str(seq_map_json),
+                "--repo-root",
+                str(Path(env["GPU_REPO_ROOT"]).resolve()),
+                "--media-path",
+                str(Path(env["KINFORM_MEDIA_PATH"]).resolve()),
+                "--job-id",
+                str(job_id or ""),
+            ],
+            env,
         )
         return
     except Exception as exc:
