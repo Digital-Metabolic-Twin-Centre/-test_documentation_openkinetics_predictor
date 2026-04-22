@@ -5,7 +5,6 @@ import torch.optim as optimizer
 import pickle
 import os
 import random
-import transformers
 
 from .Encoders import Pseq2Sites
 from .helpers import prepare_prots_input
@@ -35,6 +34,7 @@ class Pseq2SitesTrainIter:
         
     def train(self, train_loader, validation_loader, save_path):
         self.model_save_path = save_path
+        import transformers
         
         # define optimizer
         self.optim = transformers.AdamW(self.model.parameters(), lr = 1e-3, weight_decay = 0.01)  
