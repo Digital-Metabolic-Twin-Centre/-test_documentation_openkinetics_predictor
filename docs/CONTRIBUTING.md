@@ -250,7 +250,7 @@ If your method uses PLM embeddings, read [PLM_EMBEDDING_CACHE.md](PLM_EMBEDDING_
 4. Build sparse step work with missing files only.
 5. Start embedding tracker before remote submission.
 6. Submit GPU job only when GPU health is online.
-7. Poll GPU job status until done, failed, or timeout.
+7. Poll GPU job status until done or failed.
 8. Re-check cache completeness.
 9. Continue to prediction subprocess.
 10. Keep fail-open fallback unless you have a strict fail-fast requirement.
@@ -288,7 +288,7 @@ Existing PLM caches:
 5. If you use a custom engine, call `run_gpu_precompute_if_available(...)` before `run_prediction_subprocess(...)`.
 6. If you use `SubprocessEngineConfig`, precompute is already called by `run_generic_subprocess_prediction(...)`.
 7. Add planner tests for mixed cache states.
-8. Add orchestration tests for timeout and fallback behaviour.
+8. Add orchestration tests for failed-job fallback behaviour.
 
 ### 4.7 Add a new embedding family (only when required)
 

@@ -1,101 +1,171 @@
-/* ═══════════════════════════════════════════════════════════════════════════
-   Job Tracker  —  trk__* namespace
-   Theme: deep indigo (#0b0920) · --card-background · neon borders
-   Fonts: Orbitron (timing hero) · Roboto / Roboto Mono (body)
-   ═══════════════════════════════════════════════════════════════════════════ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-/* ── AnimatedNumber ─────────────────────────────────────────────────────── */
-.trk-num { display: inline-block; }
+/* ──────────────────────────────────────────────────────────────────────────
+   Track Job Page (trk__* namespace)
+   Compact, high-contrast, indigo/purple palette
+   ────────────────────────────────────────────────────────────────────────── */
+
+.trk-page {
+  --trk-bg: #0f0c29;
+  --trk-surface: rgba(24, 21, 49, 0.9);
+  --trk-surface-2: rgba(28, 24, 57, 0.92);
+  --trk-surface-3: rgba(34, 29, 67, 0.94);
+  --trk-border: rgba(182, 170, 235, 0.3);
+  --trk-border-soft: rgba(182, 170, 235, 0.22);
+  --trk-text: #f1efff;
+  --trk-text-soft: #c3bbec;
+  --trk-text-dim: #9b93c7;
+  --trk-running: #8ea0ff;
+  --trk-ok: #58c48e;
+  --trk-err: #f06f6f;
+  --trk-warn: #e2bb72;
+  --trk-pending: #c4c0e0;
+  padding-top: 0.5rem;
+}
+
+/* ── Animated numbers ───────────────────────────────────────────────────── */
+.trk-num {
+  display: inline-block;
+}
 
 .trk-num--snap {
-  animation: num-snap 0.2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: trk-num-snap 0.24s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
-@keyframes num-snap {
-  0%   { transform: translateY(-7px); opacity: 0.3; }
-  60%  { transform: translateY(1.5px); }
-  100% { transform: translateY(0);     opacity: 1;   }
+@keyframes trk-num-snap {
+  0% {
+    transform: translateY(-5px);
+    opacity: 0.35;
+  }
+  65% {
+    transform: translateY(1px);
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
 }
 
-/* ── Utility: spin (refresh button) ────────────────────────────────────── */
-@keyframes spin { to { transform: rotate(360deg); } }
-.spin { animation: spin 0.7s linear infinite; display: inline-block; }
+@keyframes trk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: trk-spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+/* ── Shared card base overrides ─────────────────────────────────────────── */
+.trk-search.section-container,
+.trk.section-container {
+  border: 1px solid var(--trk-border);
+  border-radius: 14px;
+  background: var(--trk-surface);
+  box-shadow: none;
+  transition: border-color 0.18s ease;
+}
+
+.trk-search.section-container:hover,
+.trk.section-container:hover {
+  box-shadow: none;
+  border-color: rgba(197, 187, 246, 0.5);
+}
 
 /* ── Search form ────────────────────────────────────────────────────────── */
 .trk-search {
-  padding: 16px 18px;
-  background: var(--card-background);
+  padding: 0.8rem 0.9rem;
+  margin-bottom: 0.75rem !important;
 }
 
 .trk-search__lbl {
   display: block;
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.68rem;
+  margin-bottom: 0.45rem;
+  color: var(--trk-text-soft);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
-  margin-bottom: 8px;
 }
 
-.trk-search__row { display: flex; gap: 8px; }
+.trk-search__row {
+  display: flex;
+  gap: 0.5rem;
+}
 
 .trk-search__input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 5px;
-  color: rgba(255, 255, 255, 0.9);
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.875rem;
-  padding: 7px 12px;
+  min-width: 0;
+  background: rgba(20, 17, 46, 0.9);
+  border: 1px solid var(--trk-border-soft);
+  border-radius: 10px;
+  color: var(--trk-text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.85rem;
+  line-height: 1.2;
+  padding: 0.56rem 0.7rem;
   outline: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.16s ease, background-color 0.16s ease;
 }
-.trk-search__input::placeholder { color: rgba(255, 255, 255, 0.38); }
+
+.trk-search__input::placeholder {
+  color: rgba(195, 187, 236, 0.58);
+}
+
 .trk-search__input:focus {
-  border-color: rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(142, 160, 255, 0.6);
+  background: rgba(17, 15, 40, 0.96);
 }
 
 .trk-search__btn {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 5px;
-  color: rgba(255, 255, 255, 0.82);
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.8rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  padding: 7px 20px;
+  border: 1px solid rgba(166, 156, 220, 0.48);
+  border-radius: 10px;
+  background: rgba(35, 31, 72, 0.92);
+  color: var(--trk-text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.77rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.52rem 1rem;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.trk-search__btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.28);
+  transition: border-color 0.16s ease, background-color 0.16s ease;
 }
 
-/* ── Error alert ────────────────────────────────────────────────────────── */
+.trk-search__btn:hover {
+  border-color: rgba(197, 187, 246, 0.68);
+  background: rgba(45, 39, 88, 0.96);
+}
+
+.trk-search__hint {
+  margin: 0.45rem 0 0;
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+}
+
+/* ── Network alert ──────────────────────────────────────────────────────── */
 .trk-alert {
   display: flex;
   align-items: center;
-  gap: 7px;
-  background: rgba(251, 191, 36, 0.07);
-  border: 1px solid rgba(251, 191, 36, 0.22);
-  border-radius: 6px;
-  color: rgba(251, 191, 36, 0.9);
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.8rem;
-  padding: 8px 12px;
+  gap: 0.45rem;
+  border: 1px solid rgba(226, 187, 114, 0.4);
+  border-radius: 10px;
+  background: rgba(226, 187, 114, 0.12);
+  color: #f2d9a8;
+  padding: 0.52rem 0.68rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
 }
 
 /* ── Main tracker panel ─────────────────────────────────────────────────── */
 .trk {
-  padding: 0 !important;           /* override section-container default */
+  padding: 0 !important;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--card-background);
 }
 
 /* ── Identity bar ───────────────────────────────────────────────────────── */
@@ -103,312 +173,415 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px 11px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  gap: 12px;
+  gap: 0.75rem;
+  padding: 0.72rem 0.9rem;
+  border-bottom: 1px solid var(--trk-border-soft);
+  background: var(--trk-surface-2);
 }
 
-.trk__id { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.trk__id {
+  min-width: 0;
+}
 
 .trk__id-eyebrow {
-  font-family: 'Roboto', sans-serif;
+  display: block;
+  color: var(--trk-text-soft);
+  font-family: 'Space Grotesk', sans-serif;
   font-size: 0.62rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.11em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.50);
   line-height: 1;
 }
 
-.trk__id-row { display: flex; align-items: center; gap: 7px; }
+.trk__id-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.22rem;
+}
 
 .trk__id-code {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.95rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.9rem;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.9);
-  letter-spacing: 0.03em;
-  background: none;
+  color: var(--trk-text);
+  letter-spacing: 0.02em;
+  background: transparent;
   padding: 0;
 }
 
-.trk__bar-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.trk__bar-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
 
-/* ── Icon buttons (copy, refresh) ───────────────────────────────────────── */
 .trk__icon-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  color: rgba(255, 255, 255, 0.60);
-  padding: 4px 6px;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 1px solid var(--trk-border);
+  border-radius: 9px;
+  background: rgba(28, 23, 58, 0.92);
+  color: #d7d2f2;
+  padding: 0;
   cursor: pointer;
-  line-height: 1;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  transition: border-color 0.14s ease, background-color 0.14s ease, color 0.14s ease;
 }
+
 .trk__icon-btn:hover:not(:disabled) {
-  color: rgba(255, 255, 255, 0.88);
-  border-color: rgba(255, 255, 255, 0.26);
-  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(194, 186, 242, 0.66);
+  background: rgba(41, 34, 84, 0.96);
+  color: #ffffff;
 }
-.trk__icon-btn:disabled { opacity: 0.3; cursor: default; }
+
+.trk__icon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 
 /* ── Status badge ───────────────────────────────────────────────────────── */
 .trk__status {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 0.35rem;
   border: 1px solid currentColor;
-  border-radius: 4px;
-  padding: 3px 9px;
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.68rem;
+  border-radius: 999px;
+  padding: 0.23rem 0.56rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.67rem;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
 .trk__status-dot {
-  width: 5px; height: 5px;
-  border-radius: 50%;
+  width: 0.34rem;
+  height: 0.34rem;
+  border-radius: 999px;
   background: currentColor;
+  flex-shrink: 0;
 }
 
 .trk__status--processing {
-  color: #60a5fa;
-  border-color: rgba(96, 165, 250, 0.35);
-  background: rgba(96, 165, 250, 0.06);
+  color: var(--trk-running);
+  border-color: rgba(142, 160, 255, 0.45);
+  background: rgba(142, 160, 255, 0.16);
 }
+
 .trk__status--processing .trk__status-dot {
-  animation: pulse-blue 2s ease-in-out infinite;
+  animation: trk-dot-pulse 1.4s ease-in-out infinite;
 }
+
 .trk__status--completed {
-  color: #4ade80;
-  border-color: rgba(74, 222, 128, 0.35);
-  background: rgba(74, 222, 128, 0.06);
+  color: var(--trk-ok);
+  border-color: rgba(88, 196, 142, 0.45);
+  background: rgba(88, 196, 142, 0.14);
 }
+
 .trk__status--failed {
-  color: #f87171;
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.06);
+  color: var(--trk-err);
+  border-color: rgba(240, 111, 111, 0.45);
+  background: rgba(240, 111, 111, 0.14);
 }
+
 .trk__status--pending {
-  color: rgba(255, 255, 255, 0.55);
-  border-color: rgba(255, 255, 255, 0.14);
+  color: var(--trk-pending);
+  border-color: rgba(196, 192, 224, 0.38);
+  background: rgba(196, 192, 224, 0.11);
 }
 
-@keyframes pulse-blue {
-  0%, 100% { box-shadow: 0 0 3px #60a5fa; opacity: 1; }
-  50%       { box-shadow: 0 0 9px #60a5fa; opacity: 0.6; }
+@keyframes trk-dot-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
-/* ── Timing readouts (Orbitron) ─────────────────────────────────────────── */
+/* ── Timing blocks ──────────────────────────────────────────────────────── */
 .trk__timing {
-  display: flex;
-  align-items: stretch;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1px;
+  padding: 1px;
+  background: var(--trk-border-soft);
+}
+
+.trk__timing-div {
+  display: none;
 }
 
 .trk__clock {
-  flex: 1;
-  padding: 11px 16px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  padding: 0.66rem 0.82rem;
+  background: var(--trk-surface-3);
+  min-width: 0;
 }
 
 .trk__clock-lbl {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.62rem;
+  color: var(--trk-text-soft);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.61rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.50);
   line-height: 1;
 }
 
 .trk__clock-val {
-  font-family: 'Orbitron', monospace;
-  font-size: 1.15rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.9);
+  margin-top: 0.28rem;
+  color: var(--trk-text);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.03rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   line-height: 1.2;
 }
 
 .trk__clock-sub {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.42);
-  margin-top: 1px;
+  margin-top: 0.2rem;
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.68rem;
+  line-height: 1.3;
 }
 
-.trk__timing-div {
-  width: 1px;
-  background: rgba(255, 255, 255, 0.08);
-  align-self: stretch;
-  flex-shrink: 0;
-}
-
-/* ── Pending state ──────────────────────────────────────────────────────── */
+/* ── Pending indicator ──────────────────────────────────────────────────── */
 .trk__pending {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 13px 16px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  gap: 0.62rem;
+  padding: 0.58rem 0.82rem;
+  border-top: 1px solid var(--trk-border-soft);
+  border-bottom: 1px solid var(--trk-border-soft);
+  background: rgba(27, 23, 55, 0.9);
 }
 
-.trk__pending-dots { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+.trk__pending-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.24rem;
+}
 
 .trk__pending-dots span {
-  display: block;
-  width: 5px; height: 5px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.48);
-  animation: dot-bounce 1.4s ease-in-out infinite;
+  width: 0.32rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: #cbc5e9;
+  animation: trk-dot-bounce 1.2s ease-in-out infinite;
 }
-.trk__pending-dots span:nth-child(2) { animation-delay: 0.18s; }
-.trk__pending-dots span:nth-child(3) { animation-delay: 0.36s; }
 
-@keyframes dot-bounce {
-  0%, 80%, 100% { transform: translateY(0); }
-  40%           { transform: translateY(-5px); }
+.trk__pending-dots span:nth-child(2) {
+  animation-delay: 0.16s;
+}
+
+.trk__pending-dots span:nth-child(3) {
+  animation-delay: 0.32s;
+}
+
+@keyframes trk-dot-bounce {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.56;
+  }
+  40% {
+    transform: translateY(-3px);
+    opacity: 1;
+  }
 }
 
 .trk__pending-txt {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.62);
+  color: #e3def8;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.78rem;
+  line-height: 1.3;
 }
-.trk__pending-pos { color: rgba(255, 255, 255, 0.88); font-weight: 700; }
 
-/* ── Section wrapper ────────────────────────────────────────────────────── */
-.trk__section { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.trk__pending-pos {
+  color: #ffffff;
+}
+
+/* ── Prediction section wrapper ─────────────────────────────────────────── */
+.trk__section {
+  display: flex;
+  flex-direction: column;
+}
 
 .trk__section-hdr {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 16px 7px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
+  gap: 0.5rem;
+  padding: 0.6rem 0.82rem;
+  border-bottom: 1px solid var(--trk-border-soft);
+  background: rgba(26, 22, 53, 0.92);
 }
 
 .trk__section-title {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.66rem;
+  color: var(--trk-text-soft);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.63rem;
   font-weight: 700;
-  letter-spacing: 0.11em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.55);
 }
 
-/* ── Status chips ───────────────────────────────────────────────────────── */
-.trk__chips { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.trk__chips {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 .trk__chip {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.62rem;
+  border: 1px solid rgba(182, 170, 235, 0.34);
+  border-radius: 999px;
+  background: rgba(182, 170, 235, 0.12);
+  color: #ddd7f4;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.64rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 3px;
-  padding: 2px 7px;
+  letter-spacing: 0.03em;
+  padding: 0.13rem 0.5rem;
   white-space: nowrap;
 }
-.trk__chip--ok  { color: #4ade80; border-color: rgba(74, 222, 128, 0.28);  background: rgba(74, 222, 128, 0.05); }
-.trk__chip--run { color: #60a5fa; border-color: rgba(96, 165, 250, 0.28);  background: rgba(96, 165, 250, 0.05); }
-.trk__chip--err { color: #f87171; border-color: rgba(248, 113, 113, 0.28); background: rgba(248, 113, 113, 0.05); }
-.trk__chip--dim { color: rgba(255, 255, 255, 0.52); border-color: rgba(255, 255, 255, 0.09); }
 
-/* ── Empty state ────────────────────────────────────────────────────────── */
-.trk__empty {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.50);
-  padding: 20px 16px;
-  text-align: center;
+.trk__chip--ok {
+  color: var(--trk-ok);
+  border-color: rgba(88, 196, 142, 0.42);
+  background: rgba(88, 196, 142, 0.12);
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Stage rows
-   ════════════════════════════════════════════════════════════════════════════ */
-.trk__stage-list { display: flex; flex-direction: column; }
+.trk__chip--run {
+  color: var(--trk-running);
+  border-color: rgba(142, 160, 255, 0.42);
+  background: rgba(142, 160, 255, 0.14);
+}
+
+.trk__chip--err {
+  color: var(--trk-err);
+  border-color: rgba(240, 111, 111, 0.42);
+  background: rgba(240, 111, 111, 0.12);
+}
+
+.trk__chip--dim {
+  color: var(--trk-pending);
+  border-color: rgba(196, 192, 224, 0.38);
+  background: rgba(196, 192, 224, 0.11);
+}
+
+.trk__empty {
+  margin: 0.78rem;
+  border: 1px dashed rgba(182, 170, 235, 0.34);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+  color: var(--trk-text-dim);
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.78rem;
+}
+
+/* ── Stage cards ────────────────────────────────────────────────────────── */
+.trk__stage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.64rem 0.72rem 0.72rem;
+}
 
 .trk__stage {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--trk-border-soft);
+  border-radius: 11px;
+  background: rgba(23, 19, 51, 0.92);
+  overflow: hidden;
 }
-.trk__stage:last-child { border-bottom: none; }
 
-/* 3 px left stripe — colour signals stage status at a glance */
-.trk__stage-stripe { width: 3px; flex-shrink: 0; }
-.trk__stage--running   .trk__stage-stripe { background: #60a5fa; }
-.trk__stage--completed .trk__stage-stripe { background: #4ade80; }
-.trk__stage--failed    .trk__stage-stripe { background: #f87171; }
-.trk__stage--pending   .trk__stage-stripe { background: rgba(255, 255, 255, 0.1); }
+.trk__stage-stripe {
+  width: 3px;
+  flex-shrink: 0;
+}
+
+.trk__stage--running .trk__stage-stripe {
+  background: var(--trk-running);
+}
+
+.trk__stage--completed .trk__stage-stripe {
+  background: var(--trk-ok);
+}
+
+.trk__stage--failed .trk__stage-stripe {
+  background: var(--trk-err);
+}
+
+.trk__stage--pending .trk__stage-stripe {
+  background: rgba(196, 192, 224, 0.45);
+}
 
 .trk__stage-body {
   flex: 1;
   min-width: 0;
-  padding: 11px 14px 12px 12px;
+  padding: 0.58rem 0.62rem 0.64rem;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 0.5rem;
 }
 
-/* ── Stage header ───────────────────────────────────────────────────────── */
 .trk__stage-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
 .trk__stage-ident {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.42rem;
   min-width: 0;
   flex: 1;
 }
 
 .trk__stage-idx {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.63rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--trk-text-dim);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
   flex-shrink: 0;
-  letter-spacing: 0.02em;
 }
 
 .trk__stage-name {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.88);
-  white-space: nowrap;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--trk-text);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
-/* Method pill */
 .trk__stage-method {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.63rem;
-  font-weight: 500;
-  color: rgba(255, 255, 255, 0.50);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 3px;
-  padding: 2px 6px;
+  border: 1px solid rgba(182, 170, 235, 0.32);
+  border-radius: 999px;
+  background: rgba(182, 170, 235, 0.11);
+  color: #d5cef2;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 0.12rem 0.45rem;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -416,362 +589,441 @@
 .trk__stage-head-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.44rem;
   flex-shrink: 0;
 }
 
-/* Duration (shown only for completed stages) */
 .trk__stage-dur {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.48);
+  color: var(--trk-text-soft);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
   letter-spacing: 0.02em;
 }
 
-/* ── Inline state tag ───────────────────────────────────────────────────── */
 .trk__state {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.61rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 0.11rem 0.43rem;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.6rem;
   font-weight: 700;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  flex-shrink: 0;
-  padding: 2px 7px;
-  border-radius: 3px;
-  border: 1px solid currentColor;
 }
-.trk__state--running   { color: #60a5fa; border-color: rgba(96, 165, 250, 0.35);  background: rgba(96, 165, 250, 0.07); }
-.trk__state--completed { color: #4ade80; border-color: rgba(74, 222, 128, 0.35);  background: rgba(74, 222, 128, 0.07); }
-.trk__state--failed    { color: #f87171; border-color: rgba(248, 113, 113, 0.35); background: rgba(248, 113, 113, 0.07); }
-.trk__state--pending   { color: rgba(255, 255, 255, 0.50); border-color: rgba(255, 255, 255, 0.1); background: transparent; }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Prediction progress block
-   ════════════════════════════════════════════════════════════════════════════ */
+.trk__state--running {
+  color: var(--trk-running);
+  border-color: rgba(142, 160, 255, 0.45);
+  background: rgba(142, 160, 255, 0.14);
+}
+
+.trk__state--completed {
+  color: var(--trk-ok);
+  border-color: rgba(88, 196, 142, 0.45);
+  background: rgba(88, 196, 142, 0.12);
+}
+
+.trk__state--failed {
+  color: var(--trk-err);
+  border-color: rgba(240, 111, 111, 0.45);
+  background: rgba(240, 111, 111, 0.12);
+}
+
+.trk__state--pending {
+  color: var(--trk-pending);
+  border-color: rgba(196, 192, 224, 0.38);
+  background: rgba(196, 192, 224, 0.1);
+}
+
+/* ── Prediction progress ────────────────────────────────────────────────── */
 .trk__pred-block {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 0.35rem;
 }
 
-/* One-line meta strip: Input · Validated · Invalid */
 .trk__pred-meta {
   display: flex;
   align-items: center;
   gap: 0;
   flex-wrap: wrap;
-  row-gap: 4px;
+  row-gap: 0.22rem;
 }
 
 .trk__pred-meta-item {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
-  gap: 4px;
-  padding-right: 12px;
+  gap: 0.25rem;
+  padding-right: 0.58rem;
 }
-.trk__pred-meta-item:last-child { padding-right: 0; }
+
+.trk__pred-meta-item:last-child {
+  padding-right: 0;
+}
 
 .trk__pred-meta-k {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.50);
-}
-
-.trk__pred-meta-v {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.trk__pred-meta-item--warn .trk__pred-meta-v { color: #fbbf24; }
-
-/* Thin vertical divider between meta items */
-.trk__pred-meta-sep {
-  width: 1px;
-  height: 13px;
-  background: rgba(255, 255, 255, 0.1);
-  flex-shrink: 0;
-  margin: 0 12px 0 0;
-  align-self: center;
-}
-
-/* ════════════════════════════════════════════════════════════════════════════
-   Progress bar  (grid: label | track | fraction | pct)
-   The grid keeps all bars in a stage perfectly column-aligned.
-   ════════════════════════════════════════════════════════════════════════════ */
-.trk__prog {
-  display: grid;
-  grid-template-columns: 68px 1fr auto 36px;
-  align-items: center;
-  column-gap: 8px;
-}
-
-/* Smaller track height for the embedding bar */
-.trk__prog--sm .trk__prog-track { height: 3px; }
-
-.trk__prog-label {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.59rem;
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.57rem;
   font-weight: 700;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
+}
+
+.trk__pred-meta-v {
+  color: #e5e0ff;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.trk__pred-meta-item--warn .trk__pred-meta-v {
+  color: var(--trk-warn);
+}
+
+.trk__pred-meta-sep {
+  width: 1px;
+  height: 0.72rem;
+  margin-right: 0.58rem;
+  background: rgba(173, 164, 214, 0.35);
+}
+
+.trk__prog {
+  display: grid;
+  grid-template-columns: 72px 1fr auto 34px;
+  align-items: center;
+  column-gap: 0.44rem;
+}
+
+.trk__prog--sm .trk__prog-track {
+  height: 3px;
+}
+
+.trk__prog-label {
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   text-align: right;
   white-space: nowrap;
 }
 
 .trk__prog-track {
-  height: 4px;
-  background: rgba(255, 255, 255, 0.07);
-  border-radius: 2px;
-  overflow: hidden;
   position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(198, 190, 232, 0.22);
+  overflow: hidden;
 }
 
 .trk__prog-fill {
   height: 100%;
-  border-radius: 2px;
-  transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-  position: relative;
+  border-radius: inherit;
+  transition: width 0.32s ease;
 }
 
-/* Track colour variants */
-.trk__prog-track--ok  .trk__prog-fill { background: #4ade80; }
-.trk__prog-track--run .trk__prog-fill { background: #60a5fa; }
-.trk__prog-track--err .trk__prog-fill { background: #f87171; }
-.trk__prog-track--dim .trk__prog-fill { background: rgba(255, 255, 255, 0.18); }
-
-/* Animated shimmer at the leading edge while running */
-.trk__prog-track--run .trk__prog-fill::after {
-  content: '';
-  position: absolute;
-  top: 0; right: 0;
-  width: 32px; height: 100%;
-  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.45));
-  animation: prog-shimmer 1.5s ease-in-out infinite;
+.trk__prog-track--ok .trk__prog-fill {
+  background: var(--trk-ok);
 }
 
-@keyframes prog-shimmer {
-  0%, 100% { opacity: 0; }
-  50%       { opacity: 1; }
+.trk__prog-track--run .trk__prog-fill {
+  background: var(--trk-running);
+  animation: trk-run-active 1.25s ease-in-out infinite;
 }
 
-/* fraction (e.g. 58555 / 65830) */
-.trk__prog-frac {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.67rem;
-  color: rgba(255, 255, 255, 0.55);
+.trk__prog-track--err .trk__prog-fill {
+  background: var(--trk-err);
+}
+
+.trk__prog-track--dim .trk__prog-fill {
+  background: rgba(196, 192, 224, 0.55);
+}
+
+@keyframes trk-run-active {
+  0%,
+  100% {
+    opacity: 0.72;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.trk__prog-frac,
+.trk__prog-pct {
+  color: #d8d2f2;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.64rem;
   white-space: nowrap;
   text-align: right;
 }
 
-/* percentage (e.g. 87%) */
 .trk__prog-pct {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.68rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.65);
-  text-align: right;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Protein embedding block  (inline inside each stage)
-   ════════════════════════════════════════════════════════════════════════════ */
+/* ── Embedding block ────────────────────────────────────────────────────── */
 .trk__emb-block {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-left: 2px solid rgba(255, 255, 255, 0.07);
-  padding: 8px 0 0 10px;
-  margin-left: 1px;
+  margin-top: 0.15rem;
+  border: 1px solid rgba(182, 170, 235, 0.26);
+  border-left: 2px solid rgba(182, 170, 235, 0.34);
+  border-radius: 9px;
+  padding: 0.45rem 0.52rem;
+  background: rgba(27, 23, 57, 0.9);
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 0.45rem;
 }
 
-/* Left-border accent colour follows embedding state */
-.trk__emb-block--running   { border-left-color: rgba(96, 165, 250, 0.3); }
-.trk__emb-block--completed { border-left-color: rgba(74, 222, 128, 0.3); }
-.trk__emb-block--failed    { border-left-color: rgba(248, 113, 113, 0.3); }
-.trk__emb-block--pending   { border-left-color: rgba(255, 255, 255, 0.08); }
+.trk__emb-block--running {
+  border-left-color: rgba(142, 160, 255, 0.8);
+}
+
+.trk__emb-block--completed {
+  border-left-color: rgba(88, 196, 142, 0.8);
+}
+
+.trk__emb-block--failed {
+  border-left-color: rgba(240, 111, 111, 0.8);
+}
+
+.trk__emb-block--pending {
+  border-left-color: rgba(196, 192, 224, 0.7);
+}
 
 .trk__emb-block-hdr {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 0.45rem;
 }
 
 .trk__emb-block-title {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.61rem;
+  color: var(--trk-text-soft);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.58rem;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.50);
 }
 
-/* Placeholder shown for pending stages — avoids showing misleading zeros */
 .trk__emb-block-queued {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.73rem;
-  color: rgba(255, 255, 255, 0.42);
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
   font-style: italic;
 }
 
-/* ── Embedding equation (static, set at stage start) ───────────────────── */
-/*    Renders:  1,520 cached  +  65,830 to compute  =  67,350 total        */
 .trk__emb-eq {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 5px;
-  font-family: 'Roboto', sans-serif;
+  gap: 0.26rem;
 }
 
 .trk__emb-eq-part {
-  display: flex;
+  display: inline-flex;
   align-items: baseline;
-  gap: 4px;
+  gap: 0.22rem;
 }
 
 .trk__emb-eq-op {
-  font-size: 0.72rem;
-  color: rgba(255, 255, 255, 0.30);
-  font-weight: 400;
+  color: rgba(196, 192, 224, 0.62);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.68rem;
 }
 
 .trk__emb-eq-val {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.82rem;
+  color: #ddd7f7;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.74rem;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.62);
 }
 
 .trk__emb-eq-lbl {
-  font-size: 0.59rem;
+  color: var(--trk-text-dim);
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.53rem;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.40);
 }
 
-/* Total part is slightly brighter — it's the headline number */
-.trk__emb-eq-part--total .trk__emb-eq-val { color: rgba(255, 255, 255, 0.82); }
-.trk__emb-eq-part--total .trk__emb-eq-lbl { color: rgba(255, 255, 255, 0.52); }
+.trk__emb-eq-part--total .trk__emb-eq-val {
+  color: #f3f0ff;
+}
 
-/* ── Embedding live progress (computed + remaining, ticks every poll) ───── */
+.trk__emb-eq-part--total .trk__emb-eq-lbl {
+  color: #c7bee9;
+}
+
 .trk__emb-live {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0.28rem;
 }
 
-/* "8,676 remaining" shown below the bar, indented to align with the track */
 .trk__emb-remaining {
-  font-family: 'Roboto Mono', monospace;
-  font-size: 0.65rem;
-  color: rgba(255, 255, 255, 0.50);
-  /* 68px label width + 8px gap = 76px indent, aligning text under the track */
+  color: #bcb3df;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.62rem;
   padding-left: 76px;
 }
 
-/* ════════════════════════════════════════════════════════════════════════════
-   Completed banner + download
-   ════════════════════════════════════════════════════════════════════════════ */
+/* ── Completion / failure / skipped blocks ─────────────────────────────── */
 .trk__done {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-top: 1px solid rgba(74, 222, 128, 0.18);
-  background: rgba(74, 222, 128, 0.04);
+  gap: 0.7rem;
+  padding: 0.62rem 0.82rem;
+  border-top: 1px solid rgba(88, 196, 142, 0.36);
+  background: rgba(88, 196, 142, 0.14);
 }
 
 .trk__done-left {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.72);
+  gap: 0.44rem;
+  color: #d8efdf;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.76rem;
 }
 
-.trk__done-icon { color: #4ade80; flex-shrink: 0; }
+.trk__done-icon {
+  color: var(--trk-ok);
+  flex-shrink: 0;
+}
 
 .trk__download-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  background: rgba(74, 222, 128, 0.09);
-  border: 1px solid rgba(74, 222, 128, 0.28);
-  border-radius: 5px;
-  color: #4ade80;
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  padding: 6px 14px;
-  text-decoration: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-  transition: background 0.15s, border-color 0.15s;
-}
-.trk__download-btn:hover {
-  background: rgba(74, 222, 128, 0.16);
-  border-color: rgba(74, 222, 128, 0.45);
-  color: #4ade80;
-  text-decoration: none;
-}
-
-/* ── Skipped rows (partial failures) ────────────────────────────────────── */
-.trk__expandable {
-  border-top: 1px solid rgba(251, 191, 36, 0.14);
-  padding: 10px 16px;
-  background: rgba(251, 191, 36, 0.03);
-}
-
-/* ── Failed banner ──────────────────────────────────────────────────────── */
-.trk__fail {
-  border-top: 1px solid rgba(248, 113, 113, 0.18);
-  background: rgba(248, 113, 113, 0.04);
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.trk__fail-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.76rem;
+  gap: 0.34rem;
+  border: 1px solid rgba(88, 196, 142, 0.55);
+  border-radius: 9px;
+  background: #174030;
+  color: #d8f8e5;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.71rem;
   font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: #f87171;
+  padding: 0.42rem 0.72rem;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.trk__download-btn:hover {
+  border-color: rgba(115, 220, 171, 0.72);
+  background: #1d523e;
+  color: #e8fff1;
+  text-decoration: none;
+}
+
+.trk__expandable {
+  border-top: 1px solid rgba(226, 187, 114, 0.34);
+  background: rgba(226, 187, 114, 0.1);
+  padding: 0.55rem 0.82rem;
+}
+
+.trk__fail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  border-top: 1px solid rgba(240, 111, 111, 0.38);
+  background: rgba(240, 111, 111, 0.13);
+  padding: 0.62rem 0.82rem;
+}
+
+.trk__fail-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.36rem;
+  color: #ffb3b3;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .trk__fail-body {
-  font-family: 'Roboto', sans-serif;
-  font-size: 0.82rem;
-  color: rgba(255, 255, 255, 0.68);
-  line-height: 1.55;
-  padding-left: 22px;
+  color: #f5d0d0;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.76rem;
+  line-height: 1.42;
+  padding-left: 1.16rem;
 }
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
-@media (max-width: 576px) {
-  .trk__bar   { flex-wrap: wrap; gap: 8px; }
-  .trk__timing { flex-direction: column; }
-  .trk__timing-div { width: 100%; height: 1px; }
-  .trk__done  { flex-direction: column; align-items: flex-start; }
+@media (max-width: 991.98px) {
+  .trk-page {
+    padding-top: 0.35rem;
+  }
 
-  /* On small screens, hide the fraction to save space; label+track+pct still readable */
-  .trk__prog-frac { display: none; }
-  .trk__prog { grid-template-columns: 60px 1fr 34px; }
+  .trk__timing {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 767.98px) {
+  .trk-search {
+    padding: 0.7rem 0.72rem;
+  }
+
+  .trk-search__row {
+    flex-direction: column;
+  }
+
+  .trk-search__btn {
+    width: 100%;
+  }
+
+  .trk__bar {
+    flex-wrap: wrap;
+    padding: 0.65rem 0.75rem;
+  }
+
+  .trk__bar-right {
+    margin-left: auto;
+  }
+
+  .trk__section-hdr {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trk__chips {
+    justify-content: flex-start;
+  }
+
+  .trk__stage-list {
+    padding: 0.55rem;
+    gap: 0.5rem;
+  }
+
+  .trk__prog {
+    grid-template-columns: 62px 1fr 32px;
+  }
+
+  .trk__prog-frac {
+    display: none;
+  }
+
+  .trk__emb-remaining {
+    padding-left: 66px;
+  }
+
+  .trk__done {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .trk__download-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }

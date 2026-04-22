@@ -37,7 +37,7 @@ Only missing work is sent to the GPU service.
 
 - Embedding generation is precompute.
 - Prediction inference consumes cached artefacts.
-- If GPU precompute fails or times out, local prediction continues and computes missing artefacts.
+- If GPU precompute fails, local prediction continues and computes missing artefacts.
 
 ## 3. Current method-by-method behaviour
 
@@ -197,7 +197,7 @@ Flow:
 Fallback behaviour:
 
 - Default is fail-open.
-- Local prediction continues on timeout, failure, or unreachable GPU.
+- Local prediction continues on failure or unreachable GPU.
 - Set `GPU_EMBED_FAIL_CLOSED=1` only if fail-fast is required.
 
 ## 6. GPU service API contract
@@ -364,7 +364,7 @@ Orchestration tests:
 
 - tracker starts before remote submission
 - request payload includes only sparse missing `step_work`
-- timeout and failure fallback
+- failure fallback
 - post-check catches remote done with missing artefacts
 
 API tests:
@@ -379,7 +379,6 @@ Backend environment keys:
 - `GPU_EMBED_SERVICE_URL`
 - `GPU_EMBED_SERVICE_TOKEN`
 - `GPU_EMBED_HEALTH_TTL_SECONDS`
-- `GPU_EMBED_JOB_TIMEOUT_SECONDS`
 - `GPU_EMBED_FAIL_CLOSED`
 
 GPU host env setup:

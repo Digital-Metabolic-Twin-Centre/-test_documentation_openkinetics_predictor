@@ -15,15 +15,16 @@ import './styles/App.css';
 
 function AppContent() {
   const location = useLocation();
+  const isTrackPage = location.pathname.startsWith('/track-job');
   const showGpuStatus = location.pathname === '/' || location.pathname.startsWith('/track-job');
-  const gpuLayout = location.pathname.startsWith('/track-job') ? 'track' : 'home';
+  const gpuLayout = isTrackPage ? 'track' : 'home';
 
   return (
     <>
       <ProteinBackground />
-      <div className="app-container">
+      <div className={`app-container${isTrackPage ? ' app-container--track' : ''}`}>
         <Header />
-        <main className="main-content">
+        <main className={`main-content${isTrackPage ? ' main-content--track' : ''}`}>
           {showGpuStatus && <GpuStatus layout={gpuLayout} />}
           <Routes>
             <Route path="/" element={<JobSubmissionForm />} />

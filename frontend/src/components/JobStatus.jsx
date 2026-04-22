@@ -93,7 +93,6 @@ function StageRow({ stage, idx }) {
             </span>
           </div>
         </div>
-
         {/* ── Prediction progress (only once we have real data) ── */}
         {isActive && hasPredData && (
           <div className="trk__pred-block">
@@ -423,7 +422,7 @@ function JobStatus() {
   }, [normalizedStages]);
 
   return (
-    <Container className="mt-1 pb-5">
+    <Container className="trk-page pb-4">
       <Row className="justify-content-center">
         <Col md={10} lg={9}>
 
@@ -442,6 +441,7 @@ function JobStatus() {
                 />
                 <button type="submit" className="trk-search__btn">Track</button>
               </div>
+              <p className="trk-search__hint">Your last job ID is saved locally in this browser.</p>
             </form>
           )}
 
