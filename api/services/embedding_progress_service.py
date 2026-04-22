@@ -206,11 +206,26 @@ def start_embedding_tracking(
         )
         return False
 
-    # Active-method-only semantics: one tracker per job.
     with _TRACKERS_LOCK:
-        previous = _TRACKERS.pop(job_public_id, None)
-        if previous is not None:
-            previous.stop(final_state="done")
+        existing = _TRACKERS.get(job_public_id)
+
+        # If the same stage is already being actively tracked (e.g. GPU precompute
+        # started a tracker and the prediction subprocess calls us again for the
+        # same method/target), reuse the running tracker rather than restarting.
+        # Restarting would call _prepare_plan() on a filesystem that already has
+        # some GPU-written files, inflating cached_already and resetting computed.
+        if (
+            existing is not None
+            and existing.method_key == method_key
+            and existing.target == target
+            and not existing._stop_event.is_set()
+        ):
+            return True
+
+        # Different stage starting, or previous tracker already stopped — replace it.
+        if existing is not None:
+            _TRACKERS.pop(job_public_id, None)
+            existing.stop(final_state="done")
 
         tracker = _EmbeddingTracker(job_public_id=job_public_id, plan=plan)
         _TRACKERS[job_public_id] = tracker
@@ -291,6 +306,11 @@ def _expected_paths_by_seq(
     )
 
 
+def _path_is_ready(path_str: str) -> bool:
+    path = Path(path_str)
+    return path.is_file() and path.stat().st_size > 0
+
+
 def _prepare_plan(
     *,
     method_key: str,
@@ -322,7 +342,7 @@ def _prepare_plan(
     need_computation = 0
 
     for seq_id, paths in expected.items():
-        missing = {p for p in paths if not Path(p).exists()}
+        missing = {p for p in paths if not _path_is_ready(p)}
         cached_already += len(paths) - len(missing)
         need_computation += len(missing)
 
