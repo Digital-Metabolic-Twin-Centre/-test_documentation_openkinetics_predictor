@@ -143,38 +143,52 @@ function StageRow({ stage, idx }) {
             </div>
 
             {embPending ? (
-              // Don't show zeros for a stage that hasn't started yet — it's misleading.
+              // Avoid showing misleading zeros for a stage that hasn't started yet.
               <div className="trk__emb-block-queued">
                 Metrics will appear once this stage begins
               </div>
             ) : (
               <>
-                {/* Five stats in a compact horizontal strip */}
-                <div className="trk__emb-stats">
-                  {[
-                    { k: 'Total',      v: embTotal     },
-                    { k: 'Pre-cached', v: embCached    },
-                    { k: 'To Compute', v: embNeed      },
-                    { k: 'Computed',   v: embComputed  },
-                    { k: 'Remaining',  v: embRemaining },
-                  ].map(({ k, v }) => (
-                    <div className="trk__emb-stat" key={k}>
-                      <span className="trk__emb-stat-k">{k}</span>
-                      <span className="trk__emb-stat-v"><AnimatedNumber value={v} /></span>
-                    </div>
-                  ))}
+                {/*
+                  Static equation: shows how the total is composed.
+                  These three numbers are fixed from the moment the stage starts
+                  and will not change while the job runs.
+                */}
+                <div className="trk__emb-eq">
+                  <span className="trk__emb-eq-part">
+                    <span className="trk__emb-eq-val"><AnimatedNumber value={embCached} /></span>
+                    <span className="trk__emb-eq-lbl">cached</span>
+                  </span>
+                  <span className="trk__emb-eq-op">+</span>
+                  <span className="trk__emb-eq-part">
+                    <span className="trk__emb-eq-val"><AnimatedNumber value={embNeed} /></span>
+                    <span className="trk__emb-eq-lbl">to compute</span>
+                  </span>
+                  <span className="trk__emb-eq-op">=</span>
+                  <span className="trk__emb-eq-part trk__emb-eq-part--total">
+                    <span className="trk__emb-eq-val"><AnimatedNumber value={embTotal} /></span>
+                    <span className="trk__emb-eq-lbl">total</span>
+                  </span>
                 </div>
-                {/* Computing progress bar (only when there is something to compute) */}
+
+                {/* Live progress: computed and remaining tick every poll cycle */}
                 {embNeed > 0 && (
-                  <div className="trk__prog trk__prog--sm">
-                    <span className="trk__prog-label">Computing</span>
-                    <div className={`trk__prog-track trk__prog-track--${embMod}`}>
-                      <div className="trk__prog-fill" style={{ width: `${embPct}%` }} />
+                  <div className="trk__emb-live">
+                    <div className="trk__prog trk__prog--sm">
+                      <span className="trk__prog-label">Computing</span>
+                      <div className={`trk__prog-track trk__prog-track--${embMod}`}>
+                        <div className="trk__prog-fill" style={{ width: `${embPct}%` }} />
+                      </div>
+                      <span className="trk__prog-frac">
+                        <AnimatedNumber value={embComputed} />&thinsp;/&thinsp;<AnimatedNumber value={embNeed} />
+                      </span>
+                      <span className="trk__prog-pct"><AnimatedNumber value={embPct} />%</span>
                     </div>
-                    <span className="trk__prog-frac">
-                      <AnimatedNumber value={embComputed} />&thinsp;/&thinsp;<AnimatedNumber value={embNeed} />
-                    </span>
-                    <span className="trk__prog-pct"><AnimatedNumber value={embPct} />%</span>
+                    {embEs !== 'completed' && embRemaining > 0 && (
+                      <div className="trk__emb-remaining">
+                        <AnimatedNumber value={embRemaining} /> remaining
+                      </div>
+                    )}
                   </div>
                 )}
               </>
