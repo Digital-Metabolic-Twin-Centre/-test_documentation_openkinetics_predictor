@@ -19,8 +19,7 @@ Minimal FastAPI service for remote GPU embedding offload.
   "target": "kcat",
   "profile": "kinform_full",
   "step_work": {
-    "kinform_esm2_layers": ["seq_1", "seq_2"],
-    "kinform_prott5_layers": ["seq_2"]
+    "kinform_t5_full": ["seq_1", "seq_2"]
   },
   "seq_id_to_seq": {
     "seq_1": "MPE...",
@@ -45,6 +44,20 @@ Minimal FastAPI service for remote GPU embedding offload.
   - Default: `/tmp/webkinpred-gpu-embed/jobs`
 - `GPU_EMBED_ERROR_LOG_TAIL_LINES`: number of worker-log lines included in API errors.
   - Default: `120`
+- `KINFORM_PARALLEL_STREAM_ENABLE`: enable KinForm in-memory streaming pipeline.
+  - Default: `0` (guarded rollout)
+- `KINFORM_PARALLEL_STREAM_ALLOW_LEGACY_FALLBACK`: fallback to legacy file-polling pipeline if stream mode errors.
+  - Default: `1`
+- `KINFORM_PARALLEL_RESIDUE_CACHE_GB`: GPU-side residue cache budget in GB.
+  - Default: `4`
+- `KINFORM_PARALLEL_SPILL_DIR`: first spill target for overflow residue matrices.
+  - Default: `/dev/shm/webkinpred-kinform`
+- `KINFORM_PARALLEL_SPILL_FALLBACK_DIR`: fallback spill target when primary spill directory cannot be used.
+  - Default: `/tmp/webkinpred-kinform`
+- `KINFORM_PARALLEL_PSEQ_STREAM_BATCH_SIZE`: Pseq2Sites streaming micro-batch size.
+  - Default: `8`
+- `KINFORM_PARALLEL_STREAM_SOCKET_DIR`: Unix socket directory for orchestrator-worker stream IPC.
+  - Default: `/tmp/webkinpred-gpu-embed/kinform`
 
 If no step command is configured for a step, it is treated as a no-op.
 
@@ -53,10 +66,9 @@ If no step command is configured for a step, it is treated as a no-op.
 Use the bundled step runner so jobs write real cache artifacts:
 
 ```bash
-export GPU_EMBED_STEP_CMD_KINFORM_PSEQ2SITES="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step kinform_pseq2sites --seq-ids '{seq_ids}'"
+export GPU_EMBED_STEP_CMD_KINFORM_T5_FULL="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step kinform_t5_full --seq-ids '{seq_ids}' --seq-id-to-seq-file '{seq_id_to_seq_file}' --job-id '{job_id}'"
 export GPU_EMBED_STEP_CMD_KINFORM_ESM2_LAYERS="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step kinform_esm2_layers --seq-ids '{seq_ids}'"
 export GPU_EMBED_STEP_CMD_KINFORM_ESMC_LAYERS="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step kinform_esmc_layers --seq-ids '{seq_ids}'"
-export GPU_EMBED_STEP_CMD_KINFORM_PROTT5_LAYERS="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step kinform_prott5_layers --seq-ids '{seq_ids}'"
 export GPU_EMBED_STEP_CMD_PROT_T5_MEAN="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step prot_t5_mean --seq-ids '{seq_ids}'"
 export GPU_EMBED_STEP_CMD_TURNUP_ESM1B="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step turnup_esm1b --seq-ids '{seq_ids}'"
 ```

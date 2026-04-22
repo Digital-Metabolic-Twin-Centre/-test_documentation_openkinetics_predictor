@@ -5,11 +5,18 @@ import argparse
 import csv
 import json
 import os
+import sys
 import tempfile
 import time
 from pathlib import Path
 
 import numpy as np
+
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools.gpu_embed_service.kinform_stream_ipc import StreamClient
 
 
 def _read_binding_site_rows(path: Path) -> dict[str, str]:
@@ -72,7 +79,6 @@ def merge_binding_site_rows_atomic(path: Path, updates: dict[str, str]) -> None:
 def _prepare_runtime():
     here = Path(__file__).resolve().parent
     pseq_root = (here / "Pseq2Sites").resolve()
-    import sys
 
     if str(pseq_root) not in sys.path:
         sys.path.insert(0, str(pseq_root))
@@ -104,8 +110,6 @@ def _resolve_features(residue_dir: Path, seq_id: str, sequence: str) -> np.ndarr
             return None
         return np.load(seq_path).astype(np.float32, copy=False)
 
-    # Multi-chain fallback:
-    # Prefer chain-specific files when present; otherwise use <seq_id>.npy.
     chain_features: list[np.ndarray] = []
     for idx, _ in enumerate(parts):
         chain_path = residue_dir / f"{seq_id}__c{idx}.npy"
@@ -158,34 +162,39 @@ def _predict_binding_scores(
     return pred_rows
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Streaming Pseq2Sites GPU worker")
-    parser.add_argument("--seq-id-to-seq-file", required=True, type=str)
-    parser.add_argument("--binding-sites-path", required=True, type=str)
-    parser.add_argument("--poll-interval-seconds", default=0.5, type=float)
-    parser.add_argument("--batch-size", default=8, type=int)
-    args = parser.parse_args()
+def _decode_array_payload(header: dict, payload: bytes) -> np.ndarray:
+    dtype = np.dtype(str(header.get("dtype", "float32")))
+    shape_raw = header.get("shape")
+    if not isinstance(shape_raw, list) or not shape_raw:
+        raise ValueError("Invalid stream shape header")
+    shape = tuple(int(x) for x in shape_raw)
+    arr = np.frombuffer(payload, dtype=dtype)
+    expected = int(np.prod(shape))
+    if arr.size != expected:
+        raise ValueError(f"Payload element mismatch: got={arr.size} expected={expected}")
+    return arr.reshape(shape).astype(np.float32, copy=False)
 
-    seq_id_to_seq = json.loads(Path(args.seq_id_to_seq_file).read_text(encoding="utf-8"))
-    if not seq_id_to_seq:
-        print("PSEQ_STREAM no sequence IDs provided.")
-        return 0
 
+def _score_text_to_float_array(score_text: str) -> np.ndarray:
+    vals = [float(x) for x in score_text.split(",") if x.strip()]
+    return np.asarray(vals, dtype=np.float32)
+
+
+def _run_legacy_polling(
+    *,
+    seq_id_to_seq: dict[str, str],
+    binding_sites_path: Path,
+    poll_interval_seconds: float,
+    batch_size: int,
+    trainiter,
+    config: dict,
+    PocketDatasetCls,
+    DataloaderFn,
+    prepare_prots_input_fn,
+) -> int:
     media_path = Path(os.environ["KINFORM_MEDIA_PATH"]).resolve()
-    binding_sites_path = Path(args.binding_sites_path).resolve()
     residue_dir = (media_path / "sequence_info" / "prot_t5_last" / "residue_vecs").resolve()
     residue_dir.mkdir(parents=True, exist_ok=True)
-
-    pseq_root, load_cfg, TrainIterCls, PocketDatasetCls, DataloaderFn, prepare_prots_input_fn = _prepare_runtime()
-    config_path = (pseq_root / "configuration_temp.yml").resolve()
-    config = load_cfg(str(config_path))
-    model_path = (pseq_root / "results" / "model").resolve()
-    config["paths"]["model_path"] = str(model_path)
-    config["train"]["batch_size"] = max(1, int(args.batch_size))
-
-    print(f"PSEQ_STREAM loading model from {model_path}")
-    trainiter = _load_model_once(config, model_path, TrainIterCls)
-    print(f"PSEQ_STREAM model loaded on device={trainiter.device}")
 
     existing = _read_binding_site_rows(binding_sites_path)
     pending: dict[str, str] = {
@@ -204,7 +213,7 @@ def main() -> int:
                 ready_feats[seq_id] = feats
 
         if not ready_feats:
-            time.sleep(max(0.05, float(args.poll_interval_seconds)))
+            time.sleep(max(0.05, float(poll_interval_seconds)))
             continue
 
         ready_map = {sid: pending[sid] for sid in ready_feats}
@@ -216,7 +225,7 @@ def main() -> int:
             PocketDatasetCls=PocketDatasetCls,
             DataloaderFn=DataloaderFn,
             prepare_prots_input_fn=prepare_prots_input_fn,
-            batch_size=max(1, int(args.batch_size)),
+            batch_size=max(1, int(batch_size)),
         )
         merge_binding_site_rows_atomic(binding_sites_path, pred_rows)
         for seq_id in pred_rows:
@@ -228,6 +237,201 @@ def main() -> int:
 
     print("PSEQ_STREAM completed all pending sequence IDs.")
     return 0
+
+
+def _run_stream_mode(
+    *,
+    seq_id_to_seq: dict[str, str],
+    binding_sites_path: Path,
+    batch_size: int,
+    stream_socket: str,
+    stream_job_id: str,
+    worker_name: str,
+    trainiter,
+    config: dict,
+    PocketDatasetCls,
+    DataloaderFn,
+    prepare_prots_input_fn,
+) -> int:
+    stream = StreamClient(stream_socket)
+    stream.send(
+        {
+            "type": "PSEQ_REGISTER",
+            "worker": worker_name,
+            "job_id": stream_job_id,
+        },
+        b"",
+    )
+
+    existing = _read_binding_site_rows(binding_sites_path)
+    pending: dict[str, str] = {
+        sid: seq for sid, seq in seq_id_to_seq.items() if sid not in existing
+    }
+    if not pending:
+        stream.send(
+            {
+                "type": "WORKER_DONE",
+                "worker": worker_name,
+                "job_id": stream_job_id,
+            },
+            b"",
+        )
+        print("PSEQ_STREAM all sequence IDs already present in binding-site cache.")
+        stream.close()
+        return 0
+
+    print(f"PSEQ_STREAM pending_count={len(pending)}")
+    buffer_feats: dict[str, np.ndarray] = {}
+    buffer_seqs: dict[str, str] = {}
+
+    def flush_buffer() -> int:
+        nonlocal buffer_feats, buffer_seqs
+        if not buffer_feats:
+            return 0
+        ready_map = {sid: buffer_seqs[sid] for sid in buffer_feats}
+        pred_rows = _predict_binding_scores(
+            trainiter=trainiter,
+            config=config,
+            seq_id_to_seq=ready_map,
+            seq_id_to_feats=buffer_feats,
+            PocketDatasetCls=PocketDatasetCls,
+            DataloaderFn=DataloaderFn,
+            prepare_prots_input_fn=prepare_prots_input_fn,
+            batch_size=max(1, int(batch_size)),
+        )
+        merge_binding_site_rows_atomic(binding_sites_path, pred_rows)
+        for seq_id, score_text in pred_rows.items():
+            pending.pop(seq_id, None)
+            arr = _score_text_to_float_array(score_text)
+            stream.send(
+                {
+                    "type": "BS_READY",
+                    "worker": worker_name,
+                    "job_id": stream_job_id,
+                    "seq_id": seq_id,
+                    "dtype": "float32",
+                    "shape": [int(arr.shape[0])],
+                },
+                arr.tobytes(order="C"),
+            )
+        wrote = len(pred_rows)
+        buffer_feats = {}
+        buffer_seqs = {}
+        print(f"PSEQ_STREAM wrote={wrote} remaining={len(pending)} cache={binding_sites_path}")
+        return wrote
+
+    try:
+        while pending:
+            try:
+                header, payload = stream.recv(timeout_seconds=0.2)
+            except TimeoutError:
+                flush_buffer()
+                continue
+            evt_type = str(header.get("type", "")).strip().upper()
+            if evt_type == "PSEQ_RESIDUE":
+                seq_id = str(header.get("seq_id", "")).strip()
+                if not seq_id or seq_id not in pending:
+                    continue
+                arr = _decode_array_payload(header, payload)
+                buffer_feats[seq_id] = arr
+                buffer_seqs[seq_id] = str(header.get("sequence", pending[seq_id]))
+                if len(buffer_feats) >= max(1, int(batch_size)):
+                    flush_buffer()
+                continue
+
+            if evt_type == "PSEQ_FINISH":
+                flush_buffer()
+                if pending:
+                    missing = sorted(pending.keys())
+                    raise RuntimeError(f"Received PSEQ_FINISH with pending sequence IDs: {missing}")
+                break
+
+        stream.send(
+            {
+                "type": "WORKER_DONE",
+                "worker": worker_name,
+                "job_id": stream_job_id,
+            },
+            b"",
+        )
+        print("PSEQ_STREAM completed all pending sequence IDs.")
+        return 0
+    except Exception as exc:
+        try:
+            stream.send(
+                {
+                    "type": "WORKER_ERROR",
+                    "worker": worker_name,
+                    "job_id": stream_job_id,
+                    "message": str(exc),
+                },
+                b"",
+            )
+        except Exception:
+            pass
+        raise
+    finally:
+        stream.close()
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Streaming Pseq2Sites GPU worker")
+    parser.add_argument("--seq-id-to-seq-file", required=True, type=str)
+    parser.add_argument("--binding-sites-path", required=True, type=str)
+    parser.add_argument("--poll-interval-seconds", default=0.5, type=float)
+    parser.add_argument("--batch-size", default=8, type=int)
+    parser.add_argument("--stream-mode", action="store_true")
+    parser.add_argument("--stream-socket", default="", type=str)
+    parser.add_argument("--stream-job-id", default="", type=str)
+    parser.add_argument("--worker-name", default="pseq2sites", type=str)
+    args = parser.parse_args()
+
+    seq_id_to_seq = json.loads(Path(args.seq_id_to_seq_file).read_text(encoding="utf-8"))
+    if not seq_id_to_seq:
+        print("PSEQ_STREAM no sequence IDs provided.")
+        return 0
+
+    binding_sites_path = Path(args.binding_sites_path).resolve()
+
+    pseq_root, load_cfg, TrainIterCls, PocketDatasetCls, DataloaderFn, prepare_prots_input_fn = _prepare_runtime()
+    config_path = (pseq_root / "configuration_temp.yml").resolve()
+    config = load_cfg(str(config_path))
+    model_path = (pseq_root / "results" / "model").resolve()
+    config["paths"]["model_path"] = str(model_path)
+    config["train"]["batch_size"] = max(1, int(args.batch_size))
+
+    print(f"PSEQ_STREAM loading model from {model_path}")
+    trainiter = _load_model_once(config, model_path, TrainIterCls)
+    print(f"PSEQ_STREAM model loaded on device={trainiter.device}")
+
+    if args.stream_mode:
+        if not args.stream_socket:
+            raise RuntimeError("--stream-socket is required when --stream-mode is enabled")
+        return _run_stream_mode(
+            seq_id_to_seq=seq_id_to_seq,
+            binding_sites_path=binding_sites_path,
+            batch_size=max(1, int(args.batch_size)),
+            stream_socket=args.stream_socket,
+            stream_job_id=args.stream_job_id,
+            worker_name=args.worker_name,
+            trainiter=trainiter,
+            config=config,
+            PocketDatasetCls=PocketDatasetCls,
+            DataloaderFn=DataloaderFn,
+            prepare_prots_input_fn=prepare_prots_input_fn,
+        )
+
+    return _run_legacy_polling(
+        seq_id_to_seq=seq_id_to_seq,
+        binding_sites_path=binding_sites_path,
+        poll_interval_seconds=max(0.05, float(args.poll_interval_seconds)),
+        batch_size=max(1, int(args.batch_size)),
+        trainiter=trainiter,
+        config=config,
+        PocketDatasetCls=PocketDatasetCls,
+        DataloaderFn=DataloaderFn,
+        prepare_prots_input_fn=prepare_prots_input_fn,
+    )
 
 
 if __name__ == "__main__":

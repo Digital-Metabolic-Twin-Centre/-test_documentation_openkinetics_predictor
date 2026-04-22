@@ -143,6 +143,28 @@ class KinFormParallelOrchestratorTests(unittest.TestCase):
                 residue = media / "sequence_info" / root_name / "residue_vecs" / f"{seq_id}.npy"
                 self.assertFalse(residue.exists(), f"residue file should be cleaned: {residue}")
 
+    def test_stream_mode_falls_back_to_file_polling_when_torch_unavailable(self):
+        env = {
+            "KINFORM_PARALLEL_STREAM_ENABLE": "1",
+            "KINFORM_PARALLEL_STREAM_ALLOW_LEGACY_FALLBACK": "1",
+        }
+        called = {"legacy": 0}
+
+        def _fake_legacy(**kwargs):
+            called["legacy"] += 1
+
+        with patch.object(kpo, "torch", None):
+            with patch.object(kpo, "_run_kinform_parallel_pipeline_file_polling", side_effect=_fake_legacy):
+                kpo.run_kinform_parallel_pipeline(
+                    env=env,
+                    repo_root=Path("/tmp"),
+                    media_path=Path("/tmp"),
+                    seq_id_to_seq={"sid_1": "ACDE"},
+                    job_id="job_stream_fallback",
+                )
+
+        self.assertEqual(called["legacy"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,14 +5,30 @@ import csv
 import json
 import os
 import pickle
+import queue
 import shlex
+import socket
 import subprocess
+import sys
 import tempfile
+import threading
 import time
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Iterable
 
 import numpy as np
+try:
+    import torch
+except Exception:  # pragma: no cover - depends on runtime env
+    torch = None  # type: ignore
+
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from tools.gpu_embed_service.kinform_stream_ipc import recv_frame, send_frame
 
 
 _T5_FAMILY = "t5"
@@ -37,6 +53,16 @@ def _env_bool(name: str, default: bool) -> bool:
     if value in {"0", "false", "no", "off"}:
         return False
     return default
+
+
+def _env_float(name: str, default: float) -> float:
+    raw = os.environ.get(name)
+    if raw is None:
+        return float(default)
+    try:
+        return float(raw)
+    except Exception:
+        return float(default)
 
 
 def _log_level_value(name: str) -> int:
@@ -139,6 +165,36 @@ def weighted_mean_from_residue(residue_embedding: np.ndarray, weights: np.ndarra
     return vec.astype(np.float32)
 
 
+def weighted_mean_from_residue_gpu(
+    residue_embedding: torch.Tensor,
+    weights: np.ndarray,
+    *,
+    device: torch.device,
+) -> np.ndarray:
+    if torch is None:
+        raise RuntimeError("torch is required for GPU weighted derivation.")
+    if residue_embedding.ndim != 2:
+        raise ValueError(f"Expected 2D residue embedding tensor, got shape {tuple(residue_embedding.shape)}")
+    if residue_embedding.device != device:
+        residue_embedding = residue_embedding.to(device)
+    if residue_embedding.dtype != torch.float32:
+        residue_embedding = residue_embedding.float()
+
+    w = torch.as_tensor(weights, dtype=torch.float32, device=device)
+    if w.ndim != 1:
+        raise ValueError(f"Expected 1D weights tensor, got shape {tuple(w.shape)}")
+    if residue_embedding.shape[0] != w.shape[0]:
+        raise ValueError(
+            f"Weight length ({w.shape[0]}) != residue length ({residue_embedding.shape[0]})"
+        )
+    denom = torch.sum(w)
+    if float(denom.item()) <= 0.0:
+        raise ValueError("Binding-site weights sum to zero; cannot normalize.")
+    normalized = w / denom
+    out = torch.sum(residue_embedding * normalized.unsqueeze(1), dim=0)
+    return out.detach().cpu().numpy().astype(np.float32, copy=False)
+
+
 def _save_array_atomic(path: Path, arr: np.ndarray) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".npy", dir=str(path.parent))
@@ -227,6 +283,337 @@ class ArtifactTargets:
         return missing, total
 
 
+ResidueKey = tuple[str, str, str]
+
+
+@dataclass
+class ResidueEntry:
+    nbytes: int
+    tensor: torch.Tensor | None = None
+    spill_path: Path | None = None
+
+
+class ResidueCache:
+    def __init__(
+        self,
+        *,
+        max_bytes: int,
+        spill_dir: Path,
+        spill_fallback_dir: Path,
+        device: torch.device,
+        env: dict[str, str],
+        job_id: str | None,
+    ) -> None:
+        self.max_bytes = max(1, int(max_bytes))
+        self.spill_dir = spill_dir
+        self.spill_fallback_dir = spill_fallback_dir
+        self.device = device
+        self.env = env
+        self.job_id = job_id
+        self.entries: OrderedDict[ResidueKey, ResidueEntry] = OrderedDict()
+        self._gpu_bytes = 0
+
+    @property
+    def gpu_bytes(self) -> int:
+        return self._gpu_bytes
+
+    def has(self, key: ResidueKey) -> bool:
+        return key in self.entries
+
+    def keys(self) -> Iterable[ResidueKey]:
+        return tuple(self.entries.keys())
+
+    def put(self, key: ResidueKey, residue: np.ndarray) -> None:
+        if residue.dtype != np.float32:
+            residue = residue.astype(np.float32, copy=False)
+
+        tensor = torch.as_tensor(residue, dtype=torch.float32, device=self.device)
+        nbytes = int(tensor.numel() * tensor.element_size())
+
+        if key in self.entries:
+            self.remove(key)
+
+        self._ensure_budget_for(nbytes)
+
+        self.entries[key] = ResidueEntry(nbytes=nbytes, tensor=tensor, spill_path=None)
+        self.entries.move_to_end(key)
+        self._gpu_bytes += nbytes
+
+    def _ensure_budget_for(self, incoming_nbytes: int) -> None:
+        while self._gpu_bytes + incoming_nbytes > self.max_bytes and self.entries:
+            evict_key, evict_entry = next(iter(self.entries.items()))
+            if evict_entry.tensor is None:
+                # Already spilled; move on to next entry.
+                self.entries.move_to_end(evict_key)
+                continue
+            spill_path = self._spill_key(evict_key, evict_entry)
+            evict_entry.spill_path = spill_path
+            evict_entry.tensor = None
+            self._gpu_bytes -= evict_entry.nbytes
+            self.entries[evict_key] = evict_entry
+            self.entries.move_to_end(evict_key)
+            _log(
+                self.env,
+                "debug",
+                f"spilled residue key={evict_key} path={spill_path}",
+                job_id=self.job_id,
+            )
+
+    def _spill_key(self, key: ResidueKey, entry: ResidueEntry) -> Path:
+        family, root, seq_id = key
+        rel_name = f"{family}__{root}__{seq_id}.npy"
+        for base in (self.spill_dir, self.spill_fallback_dir):
+            try:
+                base.mkdir(parents=True, exist_ok=True)
+                path = base / rel_name
+                assert entry.tensor is not None
+                arr = entry.tensor.detach().cpu().numpy().astype(np.float32, copy=False)
+                _save_array_atomic(path, arr)
+                return path
+            except Exception:
+                continue
+        raise RuntimeError(f"Could not spill residue for key={key} to any spill directory.")
+
+    def get_tensor(self, key: ResidueKey) -> torch.Tensor:
+        entry = self.entries.get(key)
+        if entry is None:
+            raise KeyError(key)
+        self.entries.move_to_end(key)
+
+        if entry.tensor is not None:
+            if entry.tensor.device != self.device:
+                entry.tensor = entry.tensor.to(self.device)
+            return entry.tensor
+
+        if entry.spill_path is None or not entry.spill_path.exists():
+            raise RuntimeError(f"Spill file missing for residue key={key}")
+
+        arr = np.load(entry.spill_path).astype(np.float32, copy=False)
+        tensor = torch.as_tensor(arr, dtype=torch.float32, device=self.device)
+        nbytes = int(tensor.numel() * tensor.element_size())
+        entry.nbytes = nbytes
+        self._ensure_budget_for(nbytes)
+        entry.tensor = tensor
+        self._gpu_bytes += nbytes
+        self.entries[key] = entry
+        self.entries.move_to_end(key)
+        return tensor
+
+    def get_numpy(self, key: ResidueKey) -> np.ndarray:
+        tensor = self.get_tensor(key)
+        return tensor.detach().cpu().numpy().astype(np.float32, copy=False)
+
+    def remove(self, key: ResidueKey) -> None:
+        entry = self.entries.pop(key, None)
+        if entry is None:
+            return
+        if entry.tensor is not None:
+            self._gpu_bytes -= entry.nbytes
+            entry.tensor = None
+        if entry.spill_path is not None:
+            _remove_path_if_exists(entry.spill_path)
+            entry.spill_path = None
+
+    def clear(self) -> None:
+        for key in list(self.entries.keys()):
+            self.remove(key)
+
+
+@dataclass
+class WorkerState:
+    name: str
+    attempts: int = 0
+    process: subprocess.Popen | None = None
+    tmp_inputs_dir: Path | None = None
+    active_seq_ids: set[str] = field(default_factory=set)
+
+    def running(self) -> bool:
+        return self.process is not None and self.process.poll() is None
+
+
+@dataclass
+class _ServerClient:
+    sock: socket.socket
+    send_lock: threading.Lock = field(default_factory=threading.Lock)
+
+
+class StreamEventServer:
+    def __init__(self, socket_path: Path) -> None:
+        self.socket_path = socket_path
+        self.events: queue.Queue[tuple[str, int, dict | None, bytes | None]] = queue.Queue()
+        self._sock: socket.socket | None = None
+        self._stop = threading.Event()
+        self._lock = threading.Lock()
+        self._clients: dict[int, _ServerClient] = {}
+        self._accept_thread: threading.Thread | None = None
+        self._client_threads: dict[int, threading.Thread] = {}
+        self._next_client_id = 1
+
+    def start(self) -> None:
+        self.socket_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.socket_path.exists():
+            self.socket_path.unlink(missing_ok=True)
+
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(str(self.socket_path))
+        sock.listen(16)
+        sock.settimeout(0.2)
+        self._sock = sock
+
+        self._accept_thread = threading.Thread(target=self._accept_loop, name="kinform-stream-accept", daemon=True)
+        self._accept_thread.start()
+
+    def _accept_loop(self) -> None:
+        assert self._sock is not None
+        while not self._stop.is_set():
+            try:
+                conn, _ = self._sock.accept()
+            except socket.timeout:
+                continue
+            except Exception:
+                if self._stop.is_set():
+                    return
+                continue
+
+            conn.settimeout(None)
+            with self._lock:
+                client_id = self._next_client_id
+                self._next_client_id += 1
+                self._clients[client_id] = _ServerClient(sock=conn)
+            self.events.put(("connect", client_id, None, None))
+
+            thread = threading.Thread(
+                target=self._client_loop,
+                args=(client_id, conn),
+                name=f"kinform-stream-client-{client_id}",
+                daemon=True,
+            )
+            with self._lock:
+                self._client_threads[client_id] = thread
+            thread.start()
+
+    def _client_loop(self, client_id: int, conn: socket.socket) -> None:
+        try:
+            while not self._stop.is_set():
+                header, payload = recv_frame(conn)
+                self.events.put(("event", client_id, header, payload))
+        except EOFError:
+            pass
+        except Exception as exc:
+            self.events.put(("error", client_id, {"error": str(exc)}, None))
+        finally:
+            self.events.put(("disconnect", client_id, None, None))
+            with self._lock:
+                client = self._clients.pop(client_id, None)
+                self._client_threads.pop(client_id, None)
+            if client is not None:
+                try:
+                    client.sock.close()
+                except Exception:
+                    pass
+
+    def send(self, client_id: int, header: dict, payload: bytes = b"") -> None:
+        with self._lock:
+            client = self._clients.get(client_id)
+        if client is None:
+            raise RuntimeError(f"Stream client {client_id} is not connected.")
+        with client.send_lock:
+            send_frame(client.sock, header, payload)
+
+    def recv_event(self, timeout_seconds: float) -> tuple[str, int, dict | None, bytes | None] | None:
+        try:
+            return self.events.get(timeout=max(0.0, timeout_seconds))
+        except queue.Empty:
+            return None
+
+    def drain_events(self) -> list[tuple[str, int, dict | None, bytes | None]]:
+        out: list[tuple[str, int, dict | None, bytes | None]] = []
+        while True:
+            try:
+                out.append(self.events.get_nowait())
+            except queue.Empty:
+                return out
+
+    def close(self) -> None:
+        self._stop.set()
+
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except Exception:
+                pass
+            self._sock = None
+
+        with self._lock:
+            clients = list(self._clients.values())
+            self._clients.clear()
+        for client in clients:
+            try:
+                client.sock.close()
+            except Exception:
+                pass
+
+        if self._accept_thread is not None:
+            self._accept_thread.join(timeout=1.0)
+        for thread in list(self._client_threads.values()):
+            thread.join(timeout=1.0)
+
+        if self.socket_path.exists():
+            self.socket_path.unlink(missing_ok=True)
+
+
+def _to_seq_subset(seq_id_to_seq: dict[str, str], seq_ids: set[str]) -> dict[str, str]:
+    return {sid: seq_id_to_seq[sid] for sid in seq_id_to_seq if sid in seq_ids}
+
+
+def _write_worker_inputs(seq_id_to_seq: dict[str, str]) -> tuple[Path, Path, Path]:
+    tmp_dir = Path(tempfile.mkdtemp(prefix="kinform_parallel_worker_"))
+    seq_file = tmp_dir / "seq_ids.txt"
+    id_to_seq_pkl = tmp_dir / "id_to_seq.pkl"
+    seq_map_json = tmp_dir / "seq_id_to_seq.json"
+
+    with seq_file.open("w", encoding="utf-8") as handle:
+        for seq_id in seq_id_to_seq:
+            handle.write(f"{seq_id}\n")
+
+    with id_to_seq_pkl.open("wb") as handle:
+        pickle.dump(seq_id_to_seq, handle, protocol=4)
+
+    seq_map_json.write_text(json.dumps(seq_id_to_seq), encoding="utf-8")
+    return seq_file, id_to_seq_pkl, seq_map_json
+
+
+def _start_worker(cmd: list[str], env: dict[str, str]) -> subprocess.Popen:
+    print("+", " ".join(shlex.quote(c) for c in cmd))
+    return subprocess.Popen(cmd, env=env)
+
+
+def _terminate_worker(state: WorkerState) -> None:
+    if state.process is None:
+        return
+    if state.process.poll() is None:
+        state.process.terminate()
+        try:
+            state.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            state.process.kill()
+            state.process.wait(timeout=10)
+    state.process = None
+
+
+def _cleanup_worker_inputs(state: WorkerState) -> None:
+    if state.tmp_inputs_dir is None:
+        return
+    tmp_dir = state.tmp_inputs_dir
+    state.tmp_inputs_dir = None
+    try:
+        for child in tmp_dir.glob("*"):
+            child.unlink(missing_ok=True)
+        tmp_dir.rmdir()
+    except OSError:
+        pass
+
+
 def _derive_mean_if_ready(
     *,
     targets: ArtifactTargets,
@@ -282,33 +669,7 @@ def _derive_weighted_if_ready(
         return False
 
 
-def _to_seq_subset(seq_id_to_seq: dict[str, str], seq_ids: set[str]) -> dict[str, str]:
-    return {sid: seq_id_to_seq[sid] for sid in seq_id_to_seq if sid in seq_ids}
-
-
-def _write_worker_inputs(seq_id_to_seq: dict[str, str]) -> tuple[Path, Path, Path]:
-    tmp_dir = Path(tempfile.mkdtemp(prefix="kinform_parallel_worker_"))
-    seq_file = tmp_dir / "seq_ids.txt"
-    id_to_seq_pkl = tmp_dir / "id_to_seq.pkl"
-    seq_map_json = tmp_dir / "seq_id_to_seq.json"
-
-    with seq_file.open("w", encoding="utf-8") as handle:
-        for seq_id in seq_id_to_seq:
-            handle.write(f"{seq_id}\n")
-
-    with id_to_seq_pkl.open("wb") as handle:
-        pickle.dump(seq_id_to_seq, handle, protocol=4)
-
-    seq_map_json.write_text(json.dumps(seq_id_to_seq), encoding="utf-8")
-    return seq_file, id_to_seq_pkl, seq_map_json
-
-
-def _start_worker(cmd: list[str], env: dict[str, str]) -> subprocess.Popen:
-    print("+", " ".join(shlex.quote(c) for c in cmd))
-    return subprocess.Popen(cmd, env=env)
-
-
-def _needs_t5_worker_seq_ids(
+def _needs_t5_worker_seq_ids_file(
     *,
     targets: ArtifactTargets,
     bs_scores: dict[str, np.ndarray],
@@ -338,7 +699,7 @@ def _needs_t5_worker_seq_ids(
     return out
 
 
-def _needs_esm_worker_seq_ids(
+def _needs_esm_worker_seq_ids_file(
     *,
     family: str,
     targets: ArtifactTargets,
@@ -371,45 +732,7 @@ def _needs_pseq_worker_seq_ids(
     return {seq_id for seq_id in targets.binding_site_targets if seq_id not in bs_scores}
 
 
-@dataclass
-class WorkerState:
-    name: str
-    attempts: int = 0
-    process: subprocess.Popen | None = None
-    tmp_inputs_dir: Path | None = None
-    active_seq_ids: set[str] = field(default_factory=set)
-
-    def running(self) -> bool:
-        return self.process is not None and self.process.poll() is None
-
-
-def _terminate_worker(state: WorkerState) -> None:
-    if state.process is None:
-        return
-    if state.process.poll() is None:
-        state.process.terminate()
-        try:
-            state.process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            state.process.kill()
-            state.process.wait(timeout=10)
-    state.process = None
-
-
-def _cleanup_worker_inputs(state: WorkerState) -> None:
-    if state.tmp_inputs_dir is None:
-        return
-    tmp_dir = state.tmp_inputs_dir
-    state.tmp_inputs_dir = None
-    try:
-        for child in tmp_dir.glob("*"):
-            child.unlink(missing_ok=True)
-        tmp_dir.rmdir()
-    except OSError:
-        pass
-
-
-def run_kinform_parallel_pipeline(
+def _run_kinform_parallel_pipeline_file_polling(
     *,
     env: dict[str, str],
     repo_root: Path,
@@ -431,7 +754,6 @@ def run_kinform_parallel_pipeline(
     score_cache = BindingSiteScoreCache(binding_sites_path)
     weighted_retry_errors: dict[tuple[str, str, str], int] = {}
 
-    # Fast-path: nothing missing for this batch.
     if targets.all_done(score_cache.read()):
         _log(env, "info", "All KinForm artifacts already exist; skipping parallel pipeline.", job_id=job_id)
         return
@@ -456,11 +778,11 @@ def run_kinform_parallel_pipeline(
 
     def needed_ids(worker_name: str, bs_scores: dict[str, np.ndarray]) -> set[str]:
         if worker_name == _T5_FAMILY:
-            return _needs_t5_worker_seq_ids(targets=targets, bs_scores=bs_scores)
+            return _needs_t5_worker_seq_ids_file(targets=targets, bs_scores=bs_scores)
         if worker_name == _ESM2_FAMILY:
-            return _needs_esm_worker_seq_ids(family=_ESM2_FAMILY, targets=targets)
+            return _needs_esm_worker_seq_ids_file(family=_ESM2_FAMILY, targets=targets)
         if worker_name == _ESMC_FAMILY:
-            return _needs_esm_worker_seq_ids(family=_ESMC_FAMILY, targets=targets)
+            return _needs_esm_worker_seq_ids_file(family=_ESMC_FAMILY, targets=targets)
         if worker_name == _PSEQ_WORKER:
             return _needs_pseq_worker_seq_ids(targets=targets, bs_scores=bs_scores)
         return set()
@@ -593,7 +915,6 @@ def run_kinform_parallel_pipeline(
             )
         return True
 
-    # Initial launch.
     scores = score_cache.read()
     for name in workers:
         launch_worker(name, scores)
@@ -646,14 +967,12 @@ def run_kinform_parallel_pipeline(
                 if poll_worker(name, scores):
                     had_activity = True
 
-            # Launch any worker that is currently idle and still needed.
             for name, state in workers.items():
                 if state.process is None:
                     if launch_worker(name, scores):
                         had_activity = True
 
             if all(state.process is None for state in workers.values()) and not had_activity:
-                # No worker can make progress and artifacts are still missing.
                 missing_fragments = []
                 for family in (_T5_FAMILY, _ESM2_FAMILY, _ESMC_FAMILY):
                     mw, tw = targets.missing_weighted_count(family)
@@ -690,6 +1009,616 @@ def run_kinform_parallel_pipeline(
         for state in workers.values():
             _terminate_worker(state)
             _cleanup_worker_inputs(state)
+
+
+def _safe_job_slug(job_id: str | None) -> str:
+    if not job_id:
+        return "job"
+    return "".join(ch if ch.isalnum() else "_" for ch in job_id)[:32] or "job"
+
+
+def _decode_array(header: dict, payload: bytes) -> np.ndarray:
+    dtype = np.dtype(str(header.get("dtype", "float32")))
+    shape_raw = header.get("shape")
+    if not isinstance(shape_raw, list) or not shape_raw:
+        raise ValueError("Invalid shape in stream header.")
+    shape = tuple(int(x) for x in shape_raw)
+    arr = np.frombuffer(payload, dtype=dtype)
+    expected = int(np.prod(shape))
+    if arr.size != expected:
+        raise ValueError(f"Payload element count mismatch: got {arr.size}, expected {expected}")
+    return arr.reshape(shape).astype(np.float32, copy=False)
+
+
+def _derive_weighted_from_cache_if_ready(
+    *,
+    targets: ArtifactTargets,
+    family: str,
+    root: str,
+    seq_id: str,
+    bs_scores: dict[str, np.ndarray],
+    weighted_retry_errors: dict[tuple[str, str, str], int],
+    residue_cache: ResidueCache,
+    device: torch.device,
+) -> bool:
+    if seq_id not in targets.weighted_targets.get((family, root), set()):
+        return False
+
+    weighted_path = _artifact_path(targets.media_path, root, "weighted", seq_id)
+    if weighted_path.exists():
+        residue_cache.remove((family, root, seq_id))
+        return False
+
+    key = (family, root, seq_id)
+    if not residue_cache.has(key):
+        return False
+
+    weights = bs_scores.get(seq_id)
+    if weights is None:
+        return False
+
+    try:
+        residue_tensor = residue_cache.get_tensor(key)
+        weighted_vec = weighted_mean_from_residue_gpu(residue_tensor, weights, device=device)
+        _save_array_atomic(weighted_path, weighted_vec)
+        residue_cache.remove(key)
+        _remove_path_if_exists(_artifact_path(targets.media_path, root, "residue", seq_id))
+        weighted_retry_errors.pop((family, root, seq_id), None)
+        return True
+    except Exception:
+        weighted_retry_errors[key] = weighted_retry_errors.get(key, 0) + 1
+        if weighted_retry_errors[key] > 1:
+            raise
+        return False
+
+
+def _run_kinform_parallel_pipeline_stream(
+    *,
+    env: dict[str, str],
+    repo_root: Path,
+    media_path: Path,
+    seq_id_to_seq: dict[str, str],
+    job_id: str | None,
+) -> None:
+    if torch is None:
+        raise RuntimeError("torch is required for KinForm stream mode.")
+    seq_ids = list(seq_id_to_seq.keys())
+    if not seq_ids:
+        _log(env, "info", "No sequence IDs provided to KinForm stream pipeline.", job_id=job_id)
+        return
+
+    require_cuda = _env_bool("KINFORM_REQUIRE_CUDA", True)
+    if require_cuda and not torch.cuda.is_available():
+        raise RuntimeError("CUDA is required for KinForm stream mode (KINFORM_REQUIRE_CUDA=1).")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    binding_sites_path = (media_path / "pseq2sites" / "binding_sites_all.tsv").resolve()
+    targets = ArtifactTargets(
+        seq_ids=seq_ids,
+        media_path=media_path,
+        binding_sites_path=binding_sites_path,
+    )
+    score_cache = BindingSiteScoreCache(binding_sites_path)
+    bs_scores: dict[str, np.ndarray] = dict(score_cache.read())
+
+    if targets.all_done(bs_scores):
+        _log(env, "info", "All KinForm artifacts already exist; skipping stream pipeline.", job_id=job_id)
+        return
+
+    max_gb = _env_float("KINFORM_PARALLEL_RESIDUE_CACHE_GB", 4.0)
+    max_bytes = int(max_gb * 1024 * 1024 * 1024)
+    spill_base = Path(env.get("KINFORM_PARALLEL_SPILL_DIR", "/dev/shm/webkinpred-kinform")).resolve()
+    spill_fallback_base = Path(
+        env.get("KINFORM_PARALLEL_SPILL_FALLBACK_DIR", "/tmp/webkinpred-kinform")
+    ).resolve()
+    job_slug = _safe_job_slug(job_id)
+    residue_cache = ResidueCache(
+        max_bytes=max_bytes,
+        spill_dir=spill_base / job_slug,
+        spill_fallback_dir=spill_fallback_base / job_slug,
+        device=device,
+        env=env,
+        job_id=job_id,
+    )
+
+    socket_dir = Path(env.get("KINFORM_PARALLEL_STREAM_SOCKET_DIR", "/tmp/webkinpred-gpu-embed/kinform")).resolve()
+    socket_name = f"{job_slug}_{os.getpid()}_{int(time.time() * 1000) % 1000000}.sock"
+    socket_path = socket_dir / socket_name
+    server = StreamEventServer(socket_path)
+    server.start()
+
+    t5_script = (repo_root / "models" / "KinForm" / "code" / "protein_embeddings" / "t5_embeddings.py").resolve()
+    prot_script = (repo_root / "models" / "KinForm" / "code" / "protein_embeddings" / "prot_embeddings.py").resolve()
+    pseq_stream_script = (
+        repo_root
+        / "models"
+        / "KinForm"
+        / "code"
+        / "pseq2sites"
+        / "pseq2sites_stream_worker.py"
+    ).resolve()
+
+    workers: dict[str, WorkerState] = {
+        _T5_FAMILY: WorkerState(name=_T5_FAMILY),
+        _ESM2_FAMILY: WorkerState(name=_ESM2_FAMILY),
+        _ESMC_FAMILY: WorkerState(name=_ESMC_FAMILY),
+        _PSEQ_WORKER: WorkerState(name=_PSEQ_WORKER),
+    }
+    weighted_retry_errors: dict[tuple[str, str, str], int] = {}
+
+    pseq_client_id: int | None = None
+    sent_to_pseq: set[str] = set()
+
+    def has_residue(family: str, root: str, seq_id: str) -> bool:
+        return residue_cache.has((family, root, seq_id))
+
+    def needed_ids(worker_name: str) -> set[str]:
+        if worker_name == _PSEQ_WORKER:
+            return {sid for sid in targets.binding_site_targets if sid not in bs_scores}
+
+        if worker_name == _T5_FAMILY:
+            out: set[str] = set()
+            for sid in seq_ids:
+                needs = False
+                for root in _FAMILY_ROOTS[_T5_FAMILY]:
+                    mean_missing = (
+                        sid in targets.mean_targets[(_T5_FAMILY, root)]
+                        and not _artifact_path(media_path, root, "mean", sid).exists()
+                    )
+                    weighted_missing = (
+                        sid in targets.weighted_targets[(_T5_FAMILY, root)]
+                        and not _artifact_path(media_path, root, "weighted", sid).exists()
+                    )
+                    if mean_missing or (weighted_missing and not has_residue(_T5_FAMILY, root, sid)):
+                        needs = True
+                        break
+                if not needs and sid in targets.binding_site_targets and sid not in bs_scores:
+                    if not has_residue(_T5_FAMILY, "prot_t5_last", sid):
+                        needs = True
+                if needs:
+                    out.add(sid)
+            return out
+
+        family = _ESM2_FAMILY if worker_name == _ESM2_FAMILY else _ESMC_FAMILY
+        out: set[str] = set()
+        for sid in seq_ids:
+            needs = False
+            for root in _FAMILY_ROOTS[family]:
+                mean_missing = (
+                    sid in targets.mean_targets[(family, root)]
+                    and not _artifact_path(media_path, root, "mean", sid).exists()
+                )
+                weighted_missing = (
+                    sid in targets.weighted_targets[(family, root)]
+                    and not _artifact_path(media_path, root, "weighted", sid).exists()
+                )
+                if mean_missing or (weighted_missing and not has_residue(family, root, sid)):
+                    needs = True
+                    break
+            if needs:
+                out.add(sid)
+        return out
+
+    def build_cmd(worker_name: str, seq_subset: dict[str, str], seq_file: Path, id_to_seq_pkl: Path, seq_map_json: Path) -> list[str]:
+        common_stream = [
+            "--stream-mode",
+            "--stream-socket",
+            str(socket_path),
+            "--stream-job-id",
+            str(job_id or ""),
+            "--worker-name",
+            worker_name,
+        ]
+        if _env_bool("KINFORM_PARALLEL_STREAM_LEGACY_RESIDUE_WRITE", False):
+            common_stream.append("--legacy-residue-write")
+
+        if worker_name == _T5_FAMILY:
+            return [
+                env["KINFORM_T5_PATH"],
+                str(t5_script),
+                "--seq_file",
+                str(seq_file),
+                "--id_to_seq_file",
+                str(id_to_seq_pkl),
+                "--batch_size",
+                "1",
+                "--setting",
+                "residue+mean",
+                "--layers",
+                "19",
+                "None",
+                *common_stream,
+            ]
+        if worker_name == _ESM2_FAMILY:
+            return [
+                env["KINFORM_ESM_PATH"],
+                str(prot_script),
+                "--seq_file",
+                str(seq_file),
+                "--models",
+                "esm2",
+                "--layers",
+                "26",
+                "29",
+                "--setting",
+                "residue+mean",
+                "--id_to_seq_file",
+                str(id_to_seq_pkl),
+                "--batch_size",
+                "1",
+                *common_stream,
+            ]
+        if worker_name == _ESMC_FAMILY:
+            return [
+                env["KINFORM_ESMC_PATH"],
+                str(prot_script),
+                "--seq_file",
+                str(seq_file),
+                "--models",
+                "esmc",
+                "--layers",
+                "24",
+                "32",
+                "--setting",
+                "residue+mean",
+                "--id_to_seq_file",
+                str(id_to_seq_pkl),
+                "--batch_size",
+                "1",
+                *common_stream,
+            ]
+        if worker_name == _PSEQ_WORKER:
+            batch_size = int(_env_float("KINFORM_PARALLEL_PSEQ_STREAM_BATCH_SIZE", 8.0))
+            return [
+                env["KINFORM_PSEQ2SITES_PATH"],
+                str(pseq_stream_script),
+                "--seq-id-to-seq-file",
+                str(seq_map_json),
+                "--binding-sites-path",
+                str(binding_sites_path),
+                "--batch-size",
+                str(max(1, batch_size)),
+                "--stream-mode",
+                "--stream-socket",
+                str(socket_path),
+                "--stream-job-id",
+                str(job_id or ""),
+                "--worker-name",
+                worker_name,
+            ]
+        raise RuntimeError(f"Unknown KinForm worker '{worker_name}'.")
+
+    def launch_worker(worker_name: str) -> bool:
+        nonlocal sent_to_pseq
+        state = workers[worker_name]
+        seq_ids_to_run = needed_ids(worker_name)
+        if not seq_ids_to_run:
+            return False
+        if state.attempts >= 2:
+            raise RuntimeError(
+                f"{worker_name} exhausted retries with remaining seq_ids={sorted(seq_ids_to_run)}"
+            )
+        seq_subset = _to_seq_subset(seq_id_to_seq, seq_ids_to_run)
+        seq_file, id_to_seq_pkl, seq_map_json = _write_worker_inputs(seq_subset)
+        state.tmp_inputs_dir = seq_file.parent
+        cmd = build_cmd(worker_name, seq_subset, seq_file, id_to_seq_pkl, seq_map_json)
+        state.process = _start_worker(cmd, env)
+        state.active_seq_ids = set(seq_ids_to_run)
+        if worker_name == _PSEQ_WORKER:
+            # New Pseq2Sites process needs fresh residue dispatch for any unresolved IDs.
+            sent_to_pseq = set()
+        state.attempts += 1
+        _log(
+            env,
+            "info",
+            f"launched worker={worker_name} attempt={state.attempts} seq_count={len(seq_ids_to_run)}",
+            job_id=job_id,
+        )
+        return True
+
+    def poll_worker(worker_name: str) -> bool:
+        state = workers[worker_name]
+        if state.process is None:
+            return False
+        rc = state.process.poll()
+        if rc is None:
+            return False
+
+        _cleanup_worker_inputs(state)
+        state.process = None
+
+        remaining = needed_ids(worker_name)
+        if rc == 0 and not remaining:
+            _log(env, "info", f"worker={worker_name} completed.", job_id=job_id)
+            return True
+
+        if rc != 0:
+            _log(
+                env,
+                "warn",
+                f"worker={worker_name} failed rc={rc}; remaining_seq_count={len(remaining)}",
+                job_id=job_id,
+            )
+        else:
+            _log(
+                env,
+                "warn",
+                f"worker={worker_name} exited but artifacts still missing; remaining_seq_count={len(remaining)}",
+                job_id=job_id,
+            )
+
+        if remaining and state.attempts < 2:
+            launch_worker(worker_name)
+            return True
+
+        if remaining:
+            raise RuntimeError(
+                f"worker={worker_name} failed after retry; remaining seq_ids={sorted(remaining)}"
+            )
+        return True
+
+    def try_send_t5_to_pseq(seq_id: str) -> bool:
+        nonlocal pseq_client_id
+        if pseq_client_id is None:
+            return False
+        if seq_id in sent_to_pseq:
+            return False
+        if seq_id not in targets.binding_site_targets or seq_id in bs_scores:
+            return False
+        key: ResidueKey = (_T5_FAMILY, "prot_t5_last", seq_id)
+        if not residue_cache.has(key):
+            return False
+
+        arr = residue_cache.get_numpy(key)
+        payload = arr.astype(np.float32, copy=False).tobytes(order="C")
+        header = {
+            "type": "PSEQ_RESIDUE",
+            "job_id": job_id or "",
+            "seq_id": seq_id,
+            "sequence": seq_id_to_seq.get(seq_id, ""),
+            "dtype": "float32",
+            "shape": [int(x) for x in arr.shape],
+        }
+        server.send(pseq_client_id, header, payload)
+        sent_to_pseq.add(seq_id)
+        return True
+
+    def attempt_weighted_for_seq(seq_id: str) -> int:
+        derived = 0
+        for family, roots in _FAMILY_ROOTS.items():
+            for root in roots:
+                if _derive_weighted_from_cache_if_ready(
+                    targets=targets,
+                    family=family,
+                    root=root,
+                    seq_id=seq_id,
+                    bs_scores=bs_scores,
+                    weighted_retry_errors=weighted_retry_errors,
+                    residue_cache=residue_cache,
+                    device=device,
+                ):
+                    derived += 1
+        return derived
+
+    # Initial launch for all 4 workers.
+    for name in workers:
+        launch_worker(name)
+
+    progress_interval_seconds = 10.0
+    last_progress_ts = 0.0
+
+    try:
+        while True:
+            had_activity = False
+            derived_weighted = 0
+
+            event = server.recv_event(timeout_seconds=0.2)
+            pending_events: list[tuple[str, int, dict | None, bytes | None]] = []
+            if event is not None:
+                pending_events.append(event)
+            pending_events.extend(server.drain_events())
+
+            for kind, client_id, header, payload in pending_events:
+                had_activity = True
+                if kind == "disconnect":
+                    if pseq_client_id == client_id:
+                        pseq_client_id = None
+                    continue
+
+                if kind == "error":
+                    _log(env, "warn", f"stream client={client_id} error={header}", job_id=job_id)
+                    continue
+
+                if kind != "event" or header is None:
+                    continue
+
+                evt_type = str(header.get("type", "")).strip().upper()
+                if evt_type == "PSEQ_REGISTER":
+                    pseq_client_id = client_id
+                    _log(env, "info", f"pseq stream client registered id={client_id}", job_id=job_id)
+                    continue
+
+                if evt_type == "WORKER_ERROR":
+                    worker_name = str(header.get("worker", "unknown"))
+                    msg = str(header.get("message", "worker reported error"))
+                    _log(env, "warn", f"worker={worker_name} stream error={msg}", job_id=job_id)
+                    continue
+
+                if evt_type == "WORKER_DONE":
+                    worker_name = str(header.get("worker", "unknown"))
+                    _log(env, "debug", f"worker={worker_name} emitted WORKER_DONE", job_id=job_id)
+                    continue
+
+                if evt_type == "RESIDUE_READY":
+                    family = str(header.get("family", "")).strip().lower()
+                    root = str(header.get("root", "")).strip()
+                    seq_id = str(header.get("seq_id", "")).strip()
+                    if not family or not root or not seq_id:
+                        raise RuntimeError(f"Invalid RESIDUE_READY header: {header}")
+                    if payload is None:
+                        raise RuntimeError("RESIDUE_READY missing payload")
+
+                    arr = _decode_array(header, payload)
+                    key: ResidueKey = (family, root, seq_id)
+                    residue_cache.put(key, arr)
+
+                    mean_path = _artifact_path(media_path, root, "mean", seq_id)
+                    if not mean_path.exists() and seq_id in targets.mean_targets.get((family, root), set()):
+                        _save_array_atomic(mean_path, arr.mean(axis=0).astype(np.float32))
+
+                    if family == _T5_FAMILY and root == "prot_t5_last":
+                        try_send_t5_to_pseq(seq_id)
+
+                    if seq_id in bs_scores:
+                        derived_weighted += attempt_weighted_for_seq(seq_id)
+                    continue
+
+                if evt_type == "BS_READY":
+                    seq_id = str(header.get("seq_id", "")).strip()
+                    if not seq_id:
+                        raise RuntimeError(f"Invalid BS_READY header: {header}")
+                    if payload is None:
+                        raise RuntimeError("BS_READY missing payload")
+                    weights_arr = _decode_array(header, payload).reshape(-1)
+                    bs_scores[seq_id] = weights_arr.astype(np.float64, copy=False)
+                    derived_weighted += attempt_weighted_for_seq(seq_id)
+                    continue
+
+            # keep scores refreshed from shared tsv for resilience/resume
+            tsv_scores = score_cache.read()
+            for sid, w in tsv_scores.items():
+                if sid not in bs_scores:
+                    bs_scores[sid] = w
+
+            # Send any queued T5-last residues once pseq client is connected.
+            if pseq_client_id is not None:
+                for sid in list(needed_ids(_PSEQ_WORKER)):
+                    if try_send_t5_to_pseq(sid):
+                        had_activity = True
+
+            # Opportunistically derive weighted vectors for all ids that already have BS.
+            for sid in seq_ids:
+                if sid in bs_scores:
+                    derived_weighted += attempt_weighted_for_seq(sid)
+
+            if derived_weighted:
+                had_activity = True
+                _log(env, "debug", f"derived weighted={derived_weighted} this iteration", job_id=job_id)
+
+            if targets.all_done(bs_scores):
+                if pseq_client_id is not None:
+                    try:
+                        server.send(
+                            pseq_client_id,
+                            {
+                                "type": "PSEQ_FINISH",
+                                "job_id": job_id or "",
+                            },
+                            b"",
+                        )
+                    except Exception:
+                        pass
+                _log(env, "info", "all target artifacts are complete.", job_id=job_id)
+                break
+
+            for name in workers:
+                if poll_worker(name):
+                    had_activity = True
+
+            for name, state in workers.items():
+                if state.process is None:
+                    if launch_worker(name):
+                        had_activity = True
+
+            if all(state.process is None for state in workers.values()) and not had_activity:
+                missing_fragments = []
+                for family in (_T5_FAMILY, _ESM2_FAMILY, _ESMC_FAMILY):
+                    mw, tw = targets.missing_weighted_count(family)
+                    mm, tm = targets.missing_mean_count(family)
+                    missing_fragments.append(f"{family}:weighted={mw}/{tw},mean={mm}/{tm}")
+                bs_missing = len(_needs_pseq_worker_seq_ids(targets=targets, bs_scores=bs_scores))
+                missing_fragments.append(f"binding_sites_missing={bs_missing}/{len(targets.binding_site_targets)}")
+                missing_fragments.append(f"residue_cache_keys={len(tuple(residue_cache.keys()))}")
+                raise RuntimeError("KinForm stream pipeline stalled: " + " ".join(missing_fragments))
+
+            now = time.monotonic()
+            if now - last_progress_ts >= progress_interval_seconds:
+                last_progress_ts = now
+                bs_ready = len(targets.binding_site_targets) - len(
+                    _needs_pseq_worker_seq_ids(targets=targets, bs_scores=bs_scores)
+                )
+                bs_total = len(targets.binding_site_targets)
+                t5_w_missing, t5_w_total = targets.missing_weighted_count(_T5_FAMILY)
+                esm2_w_missing, esm2_w_total = targets.missing_weighted_count(_ESM2_FAMILY)
+                esmc_w_missing, esmc_w_total = targets.missing_weighted_count(_ESMC_FAMILY)
+                _log(
+                    env,
+                    "info",
+                    (
+                        f"progress bs={bs_ready}/{bs_total} "
+                        f"weighted_t5={t5_w_total - t5_w_missing}/{t5_w_total} "
+                        f"weighted_esm2={esm2_w_total - esm2_w_missing}/{esm2_w_total} "
+                        f"weighted_esmc={esmc_w_total - esmc_w_missing}/{esmc_w_total} "
+                        f"gpu_residue_cache_gb={residue_cache.gpu_bytes / (1024 ** 3):.3f}"
+                    ),
+                    job_id=job_id,
+                )
+    finally:
+        for state in workers.values():
+            _terminate_worker(state)
+            _cleanup_worker_inputs(state)
+        residue_cache.clear()
+        server.close()
+
+
+def run_kinform_parallel_pipeline(
+    *,
+    env: dict[str, str],
+    repo_root: Path,
+    media_path: Path,
+    seq_id_to_seq: dict[str, str],
+    job_id: str | None = None,
+) -> None:
+    stream_enabled = _env_bool("KINFORM_PARALLEL_STREAM_ENABLE", False)
+    stream_allow_fallback = _env_bool("KINFORM_PARALLEL_STREAM_ALLOW_LEGACY_FALLBACK", True)
+
+    if not stream_enabled:
+        _run_kinform_parallel_pipeline_file_polling(
+            env=env,
+            repo_root=repo_root,
+            media_path=media_path,
+            seq_id_to_seq=seq_id_to_seq,
+            job_id=job_id,
+        )
+        return
+
+    try:
+        _run_kinform_parallel_pipeline_stream(
+            env=env,
+            repo_root=repo_root,
+            media_path=media_path,
+            seq_id_to_seq=seq_id_to_seq,
+            job_id=job_id,
+        )
+    except Exception as exc:
+        if not stream_allow_fallback:
+            raise
+        _log(
+            env,
+            "warn",
+            (
+                "KINFORM_PARALLEL_FALLBACK "
+                f"stream_reason={exc.__class__.__name__}:{exc}"
+            ),
+            job_id=job_id,
+        )
+        _run_kinform_parallel_pipeline_file_polling(
+            env=env,
+            repo_root=repo_root,
+            media_path=media_path,
+            seq_id_to_seq=seq_id_to_seq,
+            job_id=job_id,
+        )
 
 
 def main() -> int:
