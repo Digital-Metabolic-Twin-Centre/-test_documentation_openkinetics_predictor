@@ -4,7 +4,6 @@ import json
 import os
 import queue
 import shlex
-import shlex
 import shutil
 import subprocess
 import sys
@@ -14,11 +13,9 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, Header, HTTPException, Query
 from fastapi import FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
@@ -47,7 +44,6 @@ class EmbedJobStatus(BaseModel):
     started_at: float | None = None
     finished_at: float | None = None
     worker_log_path: str | None = None
-    worker_log_path: str | None = None
     error: str | None = None
 
 
@@ -57,7 +53,6 @@ class _JobState:
     status: str = "queued"
     started_at: float | None = None
     finished_at: float | None = None
-    worker_log_path: str | None = None
     worker_log_path: str | None = None
     error: str | None = None
 
@@ -78,45 +73,6 @@ def _parse_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
-
-
-def _worker_log_dir() -> Path:
-    configured = str(os.environ.get("GPU_EMBED_JOB_LOG_DIR", "")).strip()
-    candidates: list[Path] = []
-    if configured:
-        candidates.append(Path(configured))
-    candidates.append(Path("/tmp/webkinpred-gpu-embed/jobs"))
-    for candidate in candidates:
-        try:
-            candidate.mkdir(parents=True, exist_ok=True)
-            return candidate.resolve()
-        except OSError:
-            continue
-    raise RuntimeError("Unable to create worker log directory.")
-
-
-def _job_log_path(job_id: str) -> Path:
-    return (_worker_log_dir() / f"{job_id}.log").resolve()
-
-
-def _append_job_log(log_path: Path, message: str) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    ts = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%fZ")
-    with log_path.open("a", encoding="utf-8") as handle:
-        handle.write(f"{ts} {message}\n")
-
-
-def _read_log_tail(log_path: Path, max_lines: int = 120) -> str:
-    if max_lines <= 0:
-        return ""
-    try:
-        text = log_path.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return ""
-    lines = text.splitlines()
-    if not lines:
-        return ""
-    return "\n".join(lines[-max_lines:])
 
 
 def _worker_log_dir() -> Path:
@@ -265,57 +221,7 @@ def _run_command(
         except ValueError:
             max_tail_lines = 120
         tail = _read_log_tail(log_path, max_lines=max_tail_lines)
-def _run_command(
-    cmd: str | list[str],
-    *,
-    env: dict[str, str],
-    log_path: Path,
-    shell: bool,
-) -> None:
-    display_cmd = cmd if isinstance(cmd, str) else " ".join(shlex.quote(part) for part in cmd)
-    _append_job_log(log_path, f"$ {display_cmd}")
-
-    proc = subprocess.Popen(
-        cmd,
-        shell=shell,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        bufsize=1,
-    )
-    assert proc.stdout is not None
-    assert proc.stderr is not None
-
-    lock = threading.Lock()
-
-    def _reader(stream, label: str) -> None:
-        for line in iter(stream.readline, ""):
-            line = line.rstrip("\n")
-            if not line:
-                continue
-            with lock:
-                _append_job_log(log_path, f"[{label}] {line}")
-        stream.close()
-
-    t_out = threading.Thread(target=_reader, args=(proc.stdout, "stdout"), daemon=True)
-    t_err = threading.Thread(target=_reader, args=(proc.stderr, "stderr"), daemon=True)
-    t_out.start()
-    t_err.start()
-    rc = proc.wait()
-    t_out.join()
-    t_err.join()
-
-    if rc != 0:
-        max_tail_lines_raw = str(os.environ.get("GPU_EMBED_ERROR_LOG_TAIL_LINES", "120")).strip()
-        try:
-            max_tail_lines = max(20, min(2000, int(max_tail_lines_raw)))
-        except ValueError:
-            max_tail_lines = 120
-        tail = _read_log_tail(log_path, max_lines=max_tail_lines)
         raise RuntimeError(
-            f"step command failed (rc={rc}); worker log: {log_path}\n"
-            f"--- worker log tail ---\n{tail}"
             f"step command failed (rc={rc}); worker log: {log_path}\n"
             f"--- worker log tail ---\n{tail}"
         )
@@ -328,10 +234,9 @@ def _execute_step(
     *,
     job_id: str | None = None,
     log_path: Path,
-    log_path: Path,
 ) -> None:
     # If an override command is configured, use it.
-    # Available format args: {step_key}, {seq_ids}, {seq_count}, {seq_id_to_seq_file}
+    # Available format args: {step_key}, {seq_ids}, {seq_count}, {seq_id_to_seq_file}, {job_id}
     env_key = f"GPU_EMBED_STEP_CMD_{step_key.upper()}"
     cmd = str(os.environ.get(env_key, "")).strip()
 
@@ -340,8 +245,6 @@ def _execute_step(
         seq_count = len(seq_ids)
         step_seq_map = {sid: seq_id_to_seq[sid] for sid in seq_ids if sid in seq_id_to_seq}
         tmp_file: str | None = None
-        cmd_env = dict(os.environ)
-        cmd_env.setdefault("PYTHONUNBUFFERED", "1")
         cmd_env = dict(os.environ)
         cmd_env.setdefault("PYTHONUNBUFFERED", "1")
         try:
@@ -354,17 +257,13 @@ def _execute_step(
                 seq_count=seq_count,
                 seq_id_to_seq_file=tmp_file,
                 job_id=job_id or "",
-                job_id=job_id or "",
             )
-            _run_command(cmd, env=cmd_env, log_path=log_path, shell=True)
             _run_command(cmd, env=cmd_env, log_path=log_path, shell=True)
         finally:
             if tmp_file and os.path.exists(tmp_file):
                 os.unlink(tmp_file)
         return
 
-    # No override: execute builtin run_step as a subprocess so worker logs
-    # stream into the dedicated job log file.
     # No override: execute builtin run_step as a subprocess so worker logs
     # stream into the dedicated job log file.
     repo_root = Path(
@@ -381,9 +280,12 @@ def _execute_step(
     step_seq_map = {sid: seq_id_to_seq[sid] for sid in seq_ids if sid in seq_id_to_seq}
     cmd_env = dict(os.environ)
     cmd_env.setdefault("PYTHONUNBUFFERED", "1")
+
+    seq_id_to_seq_file = ""
     with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as fh:
         json.dump(step_seq_map, fh)
         seq_id_to_seq_file = fh.name
+
     try:
         _run_command(
             [
@@ -419,11 +321,7 @@ def _run_job(job_id: str) -> None:
         state.status = "running"
         state.started_at = time.time()
         log_path_str = state.worker_log_path
-    if not log_path_str:
-        raise RuntimeError(f"Missing worker log path for job {job_id}.")
-    log_path = Path(log_path_str)
-    _append_job_log(log_path, f"JOB_START job_id={job_id}")
-        log_path_str = state.worker_log_path
+
     if not log_path_str:
         raise RuntimeError(f"Missing worker log path for job {job_id}.")
     log_path = Path(log_path_str)
@@ -447,30 +345,16 @@ def _run_job(job_id: str) -> None:
                 log_path=log_path,
             )
             _append_job_log(log_path, f"STEP_DONE job_id={job_id} step={step_key}")
-            _append_job_log(
-                log_path,
-                f"STEP_START job_id={job_id} step={step_key} seq_count={len(seq_ids)}",
-            )
-            _execute_step(
-                step_key,
-                seq_ids,
-                req.seq_id_to_seq,
-                job_id=job_id,
-                log_path=log_path,
-            )
-            _append_job_log(log_path, f"STEP_DONE job_id={job_id} step={step_key}")
 
         with _jobs_lock:
             state.status = "done"
             state.finished_at = time.time()
-        _append_job_log(log_path, f"JOB_DONE job_id={job_id}")
         _append_job_log(log_path, f"JOB_DONE job_id={job_id}")
     except Exception as exc:
         with _jobs_lock:
             state.status = "failed"
             state.error = str(exc)
             state.finished_at = time.time()
-        _append_job_log(log_path, f"JOB_FAILED job_id={job_id} error={exc}")
         _append_job_log(log_path, f"JOB_FAILED job_id={job_id} error={exc}")
 
 
@@ -503,7 +387,6 @@ def _status_payload(job_id: str, state: _JobState) -> EmbedJobStatus:
         step_work=state.request.step_work,
         started_at=state.started_at,
         finished_at=state.finished_at,
-        worker_log_path=state.worker_log_path,
         worker_log_path=state.worker_log_path,
         error=state.error,
     )
@@ -539,9 +422,7 @@ def submit_embed_job(payload: EmbedJobRequest, authorization: str | None = Heade
     worker_log_path = _job_log_path(job_id)
     _append_job_log(worker_log_path, f"JOB_QUEUED job_id={job_id}")
     state = _JobState(request=payload, worker_log_path=str(worker_log_path))
-    worker_log_path = _job_log_path(job_id)
-    _append_job_log(worker_log_path, f"JOB_QUEUED job_id={job_id}")
-    state = _JobState(request=payload, worker_log_path=str(worker_log_path))
+
     with _jobs_lock:
         _jobs[job_id] = state
     _job_queue.put(job_id)
@@ -572,36 +453,14 @@ def get_embed_job_logs(
         if state is None:
             raise HTTPException(status_code=404, detail="job not found")
         log_path_str = state.worker_log_path
+
     if not log_path_str:
         raise HTTPException(status_code=404, detail="worker log not found")
+
     log_path = Path(log_path_str)
     if not log_path.exists():
         raise HTTPException(status_code=404, detail="worker log not found")
-    return {
-        "job_id": job_id,
-        "log_path": str(log_path),
-        "tail_lines": tail,
-        "log_tail": _read_log_tail(log_path, max_lines=tail),
-    }
 
-
-@app.get("/embed/jobs/{job_id}/logs")
-def get_embed_job_logs(
-    job_id: str,
-    tail: int = Query(default=200, ge=1, le=5000),
-    authorization: str | None = Header(default=None),
-) -> dict:
-    _require_auth(authorization)
-    with _jobs_lock:
-        state = _jobs.get(job_id)
-        if state is None:
-            raise HTTPException(status_code=404, detail="job not found")
-        log_path_str = state.worker_log_path
-    if not log_path_str:
-        raise HTTPException(status_code=404, detail="worker log not found")
-    log_path = Path(log_path_str)
-    if not log_path.exists():
-        raise HTTPException(status_code=404, detail="worker log not found")
     return {
         "job_id": job_id,
         "log_path": str(log_path),
