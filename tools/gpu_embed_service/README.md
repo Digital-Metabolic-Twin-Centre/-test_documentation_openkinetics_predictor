@@ -7,6 +7,7 @@ Minimal FastAPI service for remote GPU embedding offload.
 - `GET /health`
 - `POST /embed/jobs`
 - `GET /embed/jobs/{job_id}`
+- `GET /embed/jobs/{job_id}/logs?tail=200`
 
 ## Request Shape
 
@@ -38,6 +39,12 @@ Minimal FastAPI service for remote GPU embedding offload.
     - `{step_key}`
     - `{seq_ids}` (comma-separated)
     - `{seq_count}`
+    - `{seq_id_to_seq_file}` (JSON file path with seq_id -> sequence map)
+    - `{job_id}`
+- `GPU_EMBED_JOB_LOG_DIR`: directory for dedicated per-job worker logs.
+  - Default: `/tmp/webkinpred-gpu-embed/jobs`
+- `GPU_EMBED_ERROR_LOG_TAIL_LINES`: number of worker-log lines included in API errors.
+  - Default: `120`
 
 If no step command is configured for a step, it is treated as a no-op.
 
@@ -53,6 +60,18 @@ export GPU_EMBED_STEP_CMD_KINFORM_PROTT5_LAYERS="/usr/bin/python3 /path/to/webKi
 export GPU_EMBED_STEP_CMD_PROT_T5_MEAN="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step prot_t5_mean --seq-ids '{seq_ids}'"
 export GPU_EMBED_STEP_CMD_TURNUP_ESM1B="/usr/bin/python3 /path/to/webKinPred/tools/gpu_embed_service/run_step.py --step turnup_esm1b --seq-ids '{seq_ids}'"
 ```
+
+## Worker Logs
+
+Worker stdout/stderr are streamed in real time to per-job log files (not mixed with access logs).
+
+You can read the path from:
+
+- `GET /embed/jobs/{job_id}` → `worker_log_path`
+
+or fetch tail lines directly:
+
+- `GET /embed/jobs/{job_id}/logs?tail=500`
 
 ## Run
 

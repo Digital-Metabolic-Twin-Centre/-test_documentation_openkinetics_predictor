@@ -601,6 +601,7 @@ def main() -> int:
     parser.add_argument("--repo-root", default=os.environ.get("GPU_EMBED_REPO_ROOT", ""))
     parser.add_argument("--media-path", default=os.environ.get("KINFORM_MEDIA_PATH", ""))
     parser.add_argument("--tools-path", default=os.environ.get("KINFORM_TOOLS_PATH", ""))
+    parser.add_argument("--job-id", default=os.environ.get("GPU_EMBED_JOB_ID", ""))
     parser.add_argument(
         "--seq-id-to-seq-json",
         default="",
@@ -631,6 +632,7 @@ def main() -> int:
         media_path=media_path,
         tools_path=tools_path,
         seq_id_to_seq=seq_id_to_seq,
+        job_id=(args.job_id or None),
     )
     return 0
 
