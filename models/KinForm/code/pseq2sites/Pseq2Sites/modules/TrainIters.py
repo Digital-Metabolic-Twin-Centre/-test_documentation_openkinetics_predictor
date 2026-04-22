@@ -1,5 +1,4 @@
 import numpy as np
-from tqdm import tqdm
 import torch
 import torch.nn as nn
 import torch.optim as optimizer
@@ -10,6 +9,14 @@ import transformers
 
 from .Encoders import Pseq2Sites
 from .helpers import prepare_prots_input
+
+try:
+    from tqdm import tqdm
+except Exception:
+    # Fallback for minimal/runtime envs where tqdm (or its metadata deps)
+    # is unavailable. Keeps iteration semantics without progress bars.
+    def tqdm(iterable, *args, **kwargs):  # type: ignore
+        return iterable
 
 class Pseq2SitesTrainIter:
     def __init__(self, config):
