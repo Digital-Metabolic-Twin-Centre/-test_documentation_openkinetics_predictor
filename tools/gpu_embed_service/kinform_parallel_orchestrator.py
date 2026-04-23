@@ -43,6 +43,18 @@ _FAMILY_ROOTS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _timing_stage_for_worker(worker_name: str) -> str:
+    if worker_name == _T5_FAMILY:
+        return "prot_t5_residue"
+    if worker_name == _ESM2_FAMILY:
+        return "esm_residue"
+    if worker_name == _ESMC_FAMILY:
+        return "esmc_residue"
+    if worker_name == _PSEQ_WORKER:
+        return "pseq2sites_preds"
+    return worker_name
+
+
 def _env_bool(name: str, default: bool) -> bool:
     raw = os.environ.get(name)
     if raw is None:
@@ -436,6 +448,9 @@ class WorkerState:
     process: subprocess.Popen | None = None
     tmp_inputs_dir: Path | None = None
     active_seq_ids: set[str] = field(default_factory=set)
+    started_at_monotonic: float | None = None
+    active_seq_count: int = 0
+    elapsed_seconds_total: float = 0.0
 
     def running(self) -> bool:
         return self.process is not None and self.process.poll() is None
@@ -1090,6 +1105,7 @@ def _run_kinform_parallel_pipeline_stream(
     seq_id_to_seq: dict[str, str],
     job_id: str | None,
 ) -> None:
+    pipeline_started_at = time.monotonic()
     if torch is None:
         raise RuntimeError("torch is required for KinForm stream mode.")
     seq_ids = list(seq_id_to_seq.keys())
@@ -1155,6 +1171,20 @@ def _run_kinform_parallel_pipeline_stream(
         _PSEQ_WORKER: WorkerState(name=_PSEQ_WORKER),
     }
     weighted_retry_errors: dict[tuple[str, str, str], int] = {}
+    weighted_compute_count_total = 0
+    weighted_compute_seconds_total = 0.0
+    weighted_compute_count_by_family: dict[str, int] = {
+        _T5_FAMILY: 0,
+        _ESM2_FAMILY: 0,
+        _ESMC_FAMILY: 0,
+    }
+    weighted_compute_seconds_by_family: dict[str, float] = {
+        _T5_FAMILY: 0.0,
+        _ESM2_FAMILY: 0.0,
+        _ESMC_FAMILY: 0.0,
+    }
+    first_bs_ready_at: float | None = None
+    first_weighted_ready_at: float | None = None
 
     pseq_client_id: int | None = None
     sent_to_pseq: set[str] = set()
@@ -1314,6 +1344,8 @@ def _run_kinform_parallel_pipeline_stream(
         cmd = build_cmd(worker_name, seq_subset, seq_file, id_to_seq_pkl, seq_map_json)
         state.process = _start_worker(cmd, env)
         state.active_seq_ids = set(seq_ids_to_run)
+        state.active_seq_count = len(seq_ids_to_run)
+        state.started_at_monotonic = time.monotonic()
         if worker_name == _PSEQ_WORKER:
             # New Pseq2Sites process needs fresh residue dispatch for any unresolved IDs.
             sent_to_pseq = set()
@@ -1333,6 +1365,24 @@ def _run_kinform_parallel_pipeline_stream(
         rc = state.process.poll()
         if rc is None:
             return False
+
+        elapsed_s = 0.0
+        if state.started_at_monotonic is not None:
+            elapsed_s = max(0.0, time.monotonic() - state.started_at_monotonic)
+            state.elapsed_seconds_total += elapsed_s
+        stage_name = _timing_stage_for_worker(worker_name)
+        _log(
+            env,
+            "info",
+            (
+                f"KINFORM_TIMING stage={stage_name} "
+                f"attempt={state.attempts} seq_count={state.active_seq_count} "
+                f"attempt_elapsed_s={elapsed_s:.3f} rc={rc}"
+            ),
+            job_id=job_id,
+        )
+        state.started_at_monotonic = None
+        state.active_seq_count = 0
 
         _cleanup_worker_inputs(state)
         state.process = None
@@ -1394,9 +1444,13 @@ def _run_kinform_parallel_pipeline_stream(
         return True
 
     def attempt_weighted_for_seq(seq_id: str) -> int:
+        nonlocal weighted_compute_count_total
+        nonlocal weighted_compute_seconds_total
+        nonlocal first_weighted_ready_at
         derived = 0
         for family, roots in _FAMILY_ROOTS.items():
             for root in roots:
+                started = time.monotonic()
                 if _derive_weighted_from_cache_if_ready(
                     targets=targets,
                     family=family,
@@ -1407,7 +1461,16 @@ def _run_kinform_parallel_pipeline_stream(
                     residue_cache=residue_cache,
                     device=device,
                 ):
+                    elapsed = max(0.0, time.monotonic() - started)
                     derived += 1
+                    weighted_compute_count_total += 1
+                    weighted_compute_seconds_total += elapsed
+                    weighted_compute_count_by_family[family] = weighted_compute_count_by_family.get(family, 0) + 1
+                    weighted_compute_seconds_by_family[family] = (
+                        weighted_compute_seconds_by_family.get(family, 0.0) + elapsed
+                    )
+                    if first_weighted_ready_at is None:
+                        first_weighted_ready_at = time.monotonic()
         return derived
 
     # Initial launch for all 4 workers.
@@ -1489,6 +1552,8 @@ def _run_kinform_parallel_pipeline_stream(
                         raise RuntimeError(f"Invalid BS_READY header: {header}")
                     if payload is None:
                         raise RuntimeError("BS_READY missing payload")
+                    if first_bs_ready_at is None:
+                        first_bs_ready_at = time.monotonic()
                     weights_arr = _decode_array(header, payload).reshape(-1)
                     bs_scores[seq_id] = weights_arr.astype(np.float64, copy=False)
                     derived_weighted += attempt_weighted_for_seq(seq_id)
@@ -1569,11 +1634,69 @@ def _run_kinform_parallel_pipeline_stream(
                         f"weighted_t5={t5_w_total - t5_w_missing}/{t5_w_total} "
                         f"weighted_esm2={esm2_w_total - esm2_w_missing}/{esm2_w_total} "
                         f"weighted_esmc={esmc_w_total - esmc_w_missing}/{esmc_w_total} "
+                        f"weighted_calc_count={weighted_compute_count_total} "
+                        f"weighted_calc_s={weighted_compute_seconds_total:.3f} "
+                        f"weighted_calc_avg_ms={(weighted_compute_seconds_total * 1000.0 / weighted_compute_count_total) if weighted_compute_count_total else 0.0:.3f} "
                         f"gpu_residue_cache_gb={residue_cache.gpu_bytes / (1024 ** 3):.3f}"
                     ),
                     job_id=job_id,
                 )
     finally:
+        total_elapsed_s = max(0.0, time.monotonic() - pipeline_started_at)
+        _log(
+            env,
+            "info",
+            f"KINFORM_TIMING stage=pipeline_total elapsed_s={total_elapsed_s:.3f}",
+            job_id=job_id,
+        )
+        if first_bs_ready_at is not None:
+            _log(
+                env,
+                "info",
+                (
+                    "KINFORM_TIMING stage=pseq2sites_preds "
+                    f"first_bs_ready_latency_s={max(0.0, first_bs_ready_at - pipeline_started_at):.3f}"
+                ),
+                job_id=job_id,
+            )
+        if first_weighted_ready_at is not None:
+            _log(
+                env,
+                "info",
+                (
+                    "KINFORM_TIMING stage=weighted_average "
+                    f"first_weighted_latency_s={max(0.0, first_weighted_ready_at - pipeline_started_at):.3f}"
+                ),
+                job_id=job_id,
+            )
+        _log(
+            env,
+            "info",
+            (
+                "KINFORM_TIMING stage=weighted_average "
+                f"count_total={weighted_compute_count_total} "
+                f"elapsed_s={weighted_compute_seconds_total:.3f} "
+                f"avg_ms={(weighted_compute_seconds_total * 1000.0 / weighted_compute_count_total) if weighted_compute_count_total else 0.0:.3f} "
+                f"count_t5={weighted_compute_count_by_family.get(_T5_FAMILY, 0)} "
+                f"count_esm2={weighted_compute_count_by_family.get(_ESM2_FAMILY, 0)} "
+                f"count_esmc={weighted_compute_count_by_family.get(_ESMC_FAMILY, 0)}"
+            ),
+            job_id=job_id,
+        )
+        for worker_name, state in workers.items():
+            in_flight_s = 0.0
+            if state.started_at_monotonic is not None:
+                in_flight_s = max(0.0, time.monotonic() - state.started_at_monotonic)
+            elapsed_total_s = state.elapsed_seconds_total + in_flight_s
+            _log(
+                env,
+                "info",
+                (
+                    f"KINFORM_TIMING stage={_timing_stage_for_worker(worker_name)} "
+                    f"attempts={state.attempts} elapsed_total_s={elapsed_total_s:.3f}"
+                ),
+                job_id=job_id,
+            )
         for state in workers.values():
             _terminate_worker(state)
             _cleanup_worker_inputs(state)

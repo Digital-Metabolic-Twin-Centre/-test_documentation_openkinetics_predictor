@@ -31,6 +31,7 @@ import pickle
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional
 
@@ -468,6 +469,8 @@ def _stream_prot_t5_residue_mean_multi_layer(
     legacy_residue_write: bool = False,
 ) -> None:
     _require_cuda_if_requested("ProtT5 stream embedding")
+    stage_name = "prot_t5_residue"
+    stage_started_at = time.monotonic()
     precomputed_root = Path(os.environ.get("KINFORM_MEDIA_PATH")) / "sequence_info"
     assert all(k in id_to_seq and id_to_seq[k] == v for k, v in seq_dict.items()), (
         "Sequence mismatch between provided seq_dict and id_to_seq"
@@ -493,9 +496,16 @@ def _stream_prot_t5_residue_mean_multi_layer(
     keys = list(seq_dict.keys())
     if not keys:
         return
+    layers_per_sequence = len(layers)
+    total_items = len(keys) * layers_per_sequence
+    show_progress = str(os.environ.get("KINFORM_STREAM_TQDM", "")).strip().lower() in {"1", "true", "yes", "on"}
+    emitted_items = 0
+    last_progress_at = stage_started_at
+    progress_interval_seconds = 10.0
 
     stream = StreamClient(stream_socket)
     try:
+        model_load_started_at = time.monotonic()
         print(f"Loading ProtT5-XL UniRef50 from {PROTT5XL_MODEL_PATH}...")
         local_only = bool(os.environ.get("KINFORM_MEDIA_PATH"))
         tokenizer = T5Tokenizer.from_pretrained(
@@ -516,9 +526,18 @@ def _stream_prot_t5_residue_mean_multi_layer(
         model = model.to(device)
         print(f"Using device: {device}")
         print(f"Model parameters: {sum(p.numel() for p in model.parameters()) // 1e6:,} M")
+        model_load_elapsed_s = max(0.0, time.monotonic() - model_load_started_at)
+        print(
+            f"KINFORM_TIMING stage={stage_name} model_load_s={model_load_elapsed_s:.3f} "
+            f"seq_count={len(keys)} layer_count={layers_per_sequence}"
+        )
 
         batches = [keys[i:i + batch_size] for i in range(0, len(keys), batch_size)]
-        for batch_keys in tqdm(batches, desc="ProtT5 stream batches"):
+        for batch_keys in tqdm(
+            batches,
+            desc="ProtT5 stream batches",
+            disable=not show_progress,
+        ):
             batch_seqs = [seq_dict[k] for k in batch_keys]
             batch_strs = [" ".join(list(re.sub(r"[UZOB]", "X", s))) for s in batch_seqs]
             token_data = tokenizer(
@@ -553,10 +572,21 @@ def _stream_prot_t5_residue_mean_multi_layer(
                         "shape": [int(x) for x in residue_emb.shape],
                     }
                     stream.send(header, residue_emb.tobytes(order="C"))
+                    emitted_items += 1
 
             del token_data, outputs, hidden_states
             torch.cuda.empty_cache()
             gc.collect()
+
+            now = time.monotonic()
+            if now - last_progress_at >= progress_interval_seconds:
+                elapsed_s = max(0.0, now - stage_started_at)
+                rate = (emitted_items / elapsed_s) if elapsed_s > 0 else 0.0
+                print(
+                    f"KINFORM_TIMING stage={stage_name} progress items={emitted_items}/{total_items} "
+                    f"elapsed_s={elapsed_s:.3f} rate_items_per_s={rate:.3f}"
+                )
+                last_progress_at = now
 
         stream.send(
             {
@@ -565,6 +595,12 @@ def _stream_prot_t5_residue_mean_multi_layer(
                 "job_id": stream_job_id,
             },
             b"",
+        )
+        total_elapsed_s = max(0.0, time.monotonic() - stage_started_at)
+        rate = (emitted_items / total_elapsed_s) if total_elapsed_s > 0 else 0.0
+        print(
+            f"KINFORM_TIMING stage={stage_name} summary items={emitted_items}/{total_items} "
+            f"elapsed_s={total_elapsed_s:.3f} rate_items_per_s={rate:.3f}"
         )
     except Exception as exc:
         try:

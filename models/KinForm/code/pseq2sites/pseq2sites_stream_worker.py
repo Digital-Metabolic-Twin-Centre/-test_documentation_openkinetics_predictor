@@ -255,6 +255,8 @@ def _run_stream_mode(
     DataloaderFn,
     prepare_prots_input_fn,
 ) -> int:
+    stage_name = "pseq2sites_preds"
+    stage_started_at = time.monotonic()
     stream = StreamClient(stream_socket)
     stream.send(
         {
@@ -278,11 +280,11 @@ def _run_stream_mode(
             },
             b"",
         )
-        print("PSEQ_STREAM all sequence IDs already present in binding-site cache.")
+        print(f"KINFORM_TIMING stage={stage_name} summary pending=0 elapsed_s=0.000")
         stream.close()
         return 0
 
-    print(f"PSEQ_STREAM pending_count={len(pending)}")
+    print(f"KINFORM_TIMING stage={stage_name} pending_count={len(pending)}")
 
     queue_size_raw = str(os.environ.get("KINFORM_PARALLEL_PSEQ_STREAM_QUEUE_SIZE", "")).strip()
     if queue_size_raw:
@@ -354,9 +356,16 @@ def _run_stream_mode(
     )
     pending_persist_rows: dict[str, str] = {}
     last_persist = time.monotonic()
+    infer_total_s = 0.0
+    infer_batches = 0
+    infer_rows_total = 0
+    persist_total_s = 0.0
+    persist_ops = 0
+    first_residue_received_at: float | None = None
+    first_pred_completed_at: float | None = None
 
     def persist_rows(*, force: bool) -> int:
-        nonlocal pending_persist_rows, last_persist
+        nonlocal pending_persist_rows, last_persist, persist_total_s, persist_ops
         if not pending_persist_rows:
             return 0
         now = time.monotonic()
@@ -366,16 +375,20 @@ def _run_stream_mode(
         started = time.monotonic()
         merge_binding_site_rows_atomic(binding_sites_path, pending_persist_rows)
         wrote = len(pending_persist_rows)
+        persist_elapsed_s = max(0.0, time.monotonic() - started)
+        persist_total_s += persist_elapsed_s
+        persist_ops += 1
         pending_persist_rows = {}
         last_persist = time.monotonic()
         print(
-            f"PSEQ_STREAM persisted={wrote} cache={binding_sites_path} "
-            f"persist_s={last_persist - started:.3f}"
+            f"KINFORM_TIMING stage={stage_name} persist rows={wrote} "
+            f"persist_s={persist_elapsed_s:.3f}"
         )
         return wrote
 
     def flush_buffer() -> int:
         nonlocal buffer_feats, buffer_seqs, pending_persist_rows
+        nonlocal infer_total_s, infer_batches, infer_rows_total, first_pred_completed_at
         if not buffer_feats:
             return 0
         ready_map = {sid: buffer_seqs[sid] for sid in buffer_feats}
@@ -391,6 +404,8 @@ def _run_stream_mode(
             batch_size=max(1, int(batch_size)),
         )
         infer_elapsed = time.monotonic() - infer_started
+        infer_total_s += infer_elapsed
+        infer_batches += 1
         pending_persist_rows.update(pred_rows)
         persist_rows(force=False)
         for seq_id, score_text in pred_rows.items():
@@ -408,16 +423,19 @@ def _run_stream_mode(
                 arr.tobytes(order="C"),
             )
         wrote = len(pred_rows)
+        infer_rows_total += wrote
+        if wrote and first_pred_completed_at is None:
+            first_pred_completed_at = time.monotonic()
         buffer_feats = {}
         buffer_seqs = {}
         print(
-            f"PSEQ_STREAM wrote={wrote} remaining={len(pending)} cache={binding_sites_path} "
+            f"KINFORM_TIMING stage={stage_name} infer_batch rows={wrote} remaining={len(pending)} "
             f"infer_s={infer_elapsed:.3f}"
         )
         return wrote
 
     def handle_queue_item(item) -> None:
-        nonlocal finish_received, last_buffer_add
+        nonlocal finish_received, last_buffer_add, first_residue_received_at
         kind, seq_id, sequence, payload_obj = item
         if kind == "residue":
             if seq_id not in pending:
@@ -427,6 +445,8 @@ def _run_stream_mode(
             buffer_feats[seq_id] = payload_obj
             buffer_seqs[seq_id] = sequence or pending[seq_id]
             last_buffer_add = time.monotonic()
+            if first_residue_received_at is None:
+                first_residue_received_at = last_buffer_add
             return
         if kind == "finish":
             finish_received = True
@@ -488,7 +508,25 @@ def _run_stream_mode(
             },
             b"",
         )
-        print("PSEQ_STREAM completed all pending sequence IDs.")
+        total_elapsed_s = max(0.0, time.monotonic() - stage_started_at)
+        infer_avg_ms = (infer_total_s * 1000.0 / infer_rows_total) if infer_rows_total else 0.0
+        first_residue_latency_s = (
+            max(0.0, first_residue_received_at - stage_started_at)
+            if first_residue_received_at is not None
+            else -1.0
+        )
+        first_pred_latency_s = (
+            max(0.0, first_pred_completed_at - stage_started_at)
+            if first_pred_completed_at is not None
+            else -1.0
+        )
+        print(
+            f"KINFORM_TIMING stage={stage_name} summary rows={infer_rows_total} "
+            f"infer_batches={infer_batches} infer_total_s={infer_total_s:.3f} "
+            f"infer_avg_ms_per_seq={infer_avg_ms:.3f} persist_ops={persist_ops} "
+            f"persist_total_s={persist_total_s:.3f} first_residue_latency_s={first_residue_latency_s:.3f} "
+            f"first_pred_latency_s={first_pred_latency_s:.3f} elapsed_s={total_elapsed_s:.3f}"
+        )
         return 0
     except Exception as exc:
         try:
@@ -541,9 +579,14 @@ def main() -> int:
     config["paths"]["model_path"] = str(model_path)
     config["train"]["batch_size"] = max(1, int(args.batch_size))
 
+    model_load_started_at = time.monotonic()
     print(f"PSEQ_STREAM loading model from {model_path}")
     trainiter = _load_model_once(config, model_path, TrainIterCls)
-    print(f"PSEQ_STREAM model loaded on device={trainiter.device}")
+    print(
+        "KINFORM_TIMING stage=pseq2sites_preds "
+        f"model_load_s={max(0.0, time.monotonic() - model_load_started_at):.3f} "
+        f"device={trainiter.device}"
+    )
 
     if args.stream_mode:
         if not args.stream_socket:

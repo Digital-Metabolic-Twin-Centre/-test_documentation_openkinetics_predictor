@@ -3,6 +3,7 @@ import numpy as np
 import os
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Dict, Optional
 from tqdm import tqdm
@@ -493,6 +494,13 @@ def stream_embeddings_multi_layer(
     _require_cuda_if_requested(f"{model} stream embedding")
     assert model in {"esm2", "esmc"}, "stream mode currently supports esm2/esmc only"
     assert all(key in id_to_seq and id_to_seq[key] == value for key, value in seq_dict.items())
+    stage_name = "esm_residue" if model == "esm2" else "esmc_residue"
+    stage_started_at = time.monotonic()
+    show_progress = str(os.environ.get("KINFORM_STREAM_TQDM", "")).strip().lower() in {"1", "true", "yes", "on"}
+    items_total = len(seq_dict) * len(layers)
+    emitted_items = 0
+    last_progress_at = stage_started_at
+    progress_interval_seconds = 10.0
 
     precomputed_root = Path(os.environ.get("KINFORM_MEDIA_PATH")) / "sequence_info"
     layer_mean_dirs = {}
@@ -512,6 +520,7 @@ def stream_embeddings_multi_layer(
     stream = StreamClient(stream_socket)
     try:
         import esm
+        model_load_started_at = time.monotonic()
         torch.cuda.empty_cache()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -521,10 +530,18 @@ def stream_embeddings_multi_layer(
             model_obj.eval()
             model_obj = model_obj.to(device)
             print(f"Using device: {device}")
+            print(
+                f"KINFORM_TIMING stage={stage_name} model_load_s={max(0.0, time.monotonic() - model_load_started_at):.3f} "
+                f"seq_count={len(seq_dict)} layer_count={len(layers)}"
+            )
 
             keys = list(seq_dict.keys())
             batches = [keys[i:i + batch_size] for i in range(0, len(keys), batch_size)]
-            for batch_keys in tqdm(batches, desc=f"ESM2 stream layers {layers}"):
+            for batch_keys in tqdm(
+                batches,
+                desc=f"ESM2 stream layers {layers}",
+                disable=not show_progress,
+            ):
                 data = [(k, seq_dict[k]) for k in batch_keys]
                 _, _, batch_tokens = batch_converter(data)
                 batch_tokens = batch_tokens.to(device)
@@ -550,9 +567,19 @@ def stream_embeddings_multi_layer(
                             "shape": [int(x) for x in residue_emb.shape],
                         }
                         stream.send(header, residue_emb.tobytes(order="C"))
+                        emitted_items += 1
                 del batch_tokens, results
                 gc.collect()
                 torch.cuda.empty_cache()
+                now = time.monotonic()
+                if now - last_progress_at >= progress_interval_seconds:
+                    elapsed_s = max(0.0, now - stage_started_at)
+                    rate = (emitted_items / elapsed_s) if elapsed_s > 0 else 0.0
+                    print(
+                        f"KINFORM_TIMING stage={stage_name} progress items={emitted_items}/{items_total} "
+                        f"elapsed_s={elapsed_s:.3f} rate_items_per_s={rate:.3f}"
+                    )
+                    last_progress_at = now
             del model_obj
             gc.collect()
         else:
@@ -562,8 +589,16 @@ def stream_embeddings_multi_layer(
             model_obj = ESMC.from_pretrained("esmc_600m").to(device)
             model_obj.eval()
             config = LogitsConfig(sequence=True, return_hidden_states=True, return_embeddings=True)
+            print(
+                f"KINFORM_TIMING stage={stage_name} model_load_s={max(0.0, time.monotonic() - model_load_started_at):.3f} "
+                f"seq_count={len(seq_dict)} layer_count={len(layers)}"
+            )
 
-            for key in tqdm(list(seq_dict.keys()), desc=f"ESM-C stream layers {layers}"):
+            for key in tqdm(
+                list(seq_dict.keys()),
+                desc=f"ESM-C stream layers {layers}",
+                disable=not show_progress,
+            ):
                 sequence = seq_dict[key]
                 protein = ESMProtein(sequence=sequence)
                 tensor = model_obj.encode(protein)
@@ -588,6 +623,16 @@ def stream_embeddings_multi_layer(
                         "shape": [int(x) for x in residue_emb.shape],
                     }
                     stream.send(header, residue_emb.tobytes(order="C"))
+                    emitted_items += 1
+                now = time.monotonic()
+                if now - last_progress_at >= progress_interval_seconds:
+                    elapsed_s = max(0.0, now - stage_started_at)
+                    rate = (emitted_items / elapsed_s) if elapsed_s > 0 else 0.0
+                    print(
+                        f"KINFORM_TIMING stage={stage_name} progress items={emitted_items}/{items_total} "
+                        f"elapsed_s={elapsed_s:.3f} rate_items_per_s={rate:.3f}"
+                    )
+                    last_progress_at = now
             del model_obj
             gc.collect()
 
@@ -598,6 +643,12 @@ def stream_embeddings_multi_layer(
                 "job_id": stream_job_id,
             },
             b"",
+        )
+        total_elapsed_s = max(0.0, time.monotonic() - stage_started_at)
+        rate = (emitted_items / total_elapsed_s) if total_elapsed_s > 0 else 0.0
+        print(
+            f"KINFORM_TIMING stage={stage_name} summary items={emitted_items}/{items_total} "
+            f"elapsed_s={total_elapsed_s:.3f} rate_items_per_s={rate:.3f}"
         )
     except Exception as exc:
         try:
