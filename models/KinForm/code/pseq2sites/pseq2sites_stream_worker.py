@@ -10,6 +10,7 @@ import sys
 import tempfile
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import numpy as np
@@ -331,6 +332,12 @@ def _run_stream_mode(
             queue_size = max(32, int(batch_size) * 8)
     else:
         queue_size = max(32, int(batch_size) * 8)
+    queue_size_cap_raw = str(os.environ.get("KINFORM_PARALLEL_PSEQ_STREAM_QUEUE_SIZE_CAP", "256")).strip()
+    try:
+        queue_size_cap = max(16, int(queue_size_cap_raw))
+    except Exception:
+        queue_size_cap = 256
+    queue_size = min(queue_size, queue_size_cap)
 
     recv_queue: queue.Queue = queue.Queue(maxsize=queue_size)
     recv_stop = threading.Event()
@@ -368,8 +375,16 @@ def _run_stream_mode(
                     _queue_put(("finish", "", "", None))
                     return
         except Exception as exc:
-            receiver_exc.append(str(exc))
-            _queue_put(("error", "", "", str(exc)))
+            detail = f"{exc.__class__.__name__}: {exc!r}"
+            receiver_exc.append(detail)
+            try:
+                print(
+                    f"PSEQ_STREAM receiver_exception detail={detail} "
+                    f"traceback={traceback.format_exc().strip()}"
+                )
+            except Exception:
+                pass
+            _queue_put(("error", "", "", detail))
 
     receiver_thread = threading.Thread(
         target=_receiver_loop,
