@@ -479,6 +479,38 @@ def get_embeddings_multi_layer(
     return result
 
 
+class _BackgroundWriter:
+    """Drains (path, arr) write jobs on a background thread so inference never blocks on SSHFS."""
+
+    def __init__(self) -> None:
+        import queue as _q
+        import threading as _t
+        self._q: _q.Queue = _q.Queue()
+        self._exc: Optional[BaseException] = None
+        self._thread = _t.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while True:
+            item = self._q.get()
+            if item is None:
+                return
+            path, arr = item
+            try:
+                _save_array_atomic(path, arr)
+            except Exception as exc:
+                self._exc = exc
+
+    def submit(self, path: Path, arr: np.ndarray) -> None:
+        self._q.put((path, arr.copy()))
+
+    def join(self) -> None:
+        self._q.put(None)
+        self._thread.join()
+        if self._exc is not None:
+            raise self._exc
+
+
 def stream_embeddings_multi_layer(
     seq_dict,
     *,
@@ -518,6 +550,7 @@ def stream_embeddings_multi_layer(
             layer_residue_dirs[layer] = residue_dir
 
     stream = StreamClient(stream_socket)
+    bg_writer = _BackgroundWriter()
     try:
         import esm
         model_load_started_at = time.monotonic()
@@ -552,9 +585,9 @@ def stream_embeddings_multi_layer(
                     for layer in layers:
                         residue_emb = token_reps[layer][i, 1:len(seq) + 1].cpu().numpy().astype(np.float32, copy=False)
                         mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                        _save_array_atomic(layer_mean_dirs[layer] / f"{label}.npy", mean_vec)
+                        bg_writer.submit(layer_mean_dirs[layer] / f"{label}.npy", mean_vec)
                         if legacy_residue_write:
-                            _save_array_atomic(layer_residue_dirs[layer] / f"{label}.npy", residue_emb)
+                            bg_writer.submit(layer_residue_dirs[layer] / f"{label}.npy", residue_emb)
                         header = {
                             "type": "RESIDUE_READY",
                             "worker": worker_name,
@@ -608,9 +641,9 @@ def stream_embeddings_multi_layer(
                     layer_emb = layer_emb.squeeze(0).to(torch.float32).cpu().numpy()
                     residue_emb = layer_emb[1:-1].astype(np.float32, copy=False)
                     mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                    _save_array_atomic(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
+                    bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
                     if legacy_residue_write:
-                        _save_array_atomic(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
+                        bg_writer.submit(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
                     header = {
                         "type": "RESIDUE_READY",
                         "worker": worker_name,
@@ -636,6 +669,7 @@ def stream_embeddings_multi_layer(
             del model_obj
             gc.collect()
 
+        bg_writer.join()
         stream.send(
             {
                 "type": "WORKER_DONE",

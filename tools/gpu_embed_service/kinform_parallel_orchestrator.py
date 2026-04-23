@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import concurrent.futures
 import csv
 import json
 import os
@@ -185,9 +186,9 @@ def weighted_mean_from_residue(residue_embedding: np.ndarray, weights: np.ndarra
     denom = float(np.sum(weights))
     if denom <= 0.0:
         raise ValueError("Binding-site weights sum to zero; cannot normalize.")
-    normalized = weights.astype(np.float64) / denom
-    vec = (residue_embedding.astype(np.float64) * normalized[:, None]).sum(axis=0)
-    return vec.astype(np.float32)
+    normalized = weights.astype(np.float32) / denom
+    vec = (residue_embedding.astype(np.float32) * normalized[:, None]).sum(axis=0)
+    return vec.astype(np.float32, copy=False)
 
 
 def weighted_mean_from_residue_gpu(
@@ -241,6 +242,33 @@ def _remove_path_if_exists(path: Path) -> None:
         pass
 
 
+class AsyncWriter:
+    """Background thread pool for non-blocking SSHFS writes."""
+
+    def __init__(self, max_workers: int = 4) -> None:
+        self._pool = concurrent.futures.ThreadPoolExecutor(
+            max_workers=max_workers,
+            thread_name_prefix="kinform-writer",
+        )
+        self._futures: list[concurrent.futures.Future] = []
+        self._lock = threading.Lock()
+
+    def submit(self, path: Path, arr: np.ndarray) -> None:
+        arr_copy = arr.copy()
+        f = self._pool.submit(_save_array_atomic, path, arr_copy)
+        with self._lock:
+            self._futures.append(f)
+
+    def join(self) -> None:
+        with self._lock:
+            futures, self._futures = list(self._futures), []
+        for f in futures:
+            f.result()
+
+    def shutdown(self) -> None:
+        self._pool.shutdown(wait=True)
+
+
 @dataclass
 class ArtifactTargets:
     seq_ids: list[str]
@@ -251,20 +279,29 @@ class ArtifactTargets:
     binding_site_targets: set[str] = field(default_factory=set)
 
     def __post_init__(self) -> None:
+        checks: list[tuple[tuple[str, str], str, str, Path]] = []
         for family, roots in _FAMILY_ROOTS.items():
             for root in roots:
                 key = (family, root)
-                weighted_missing = set()
-                mean_missing = set()
+                self.weighted_targets[key] = set()
+                self.mean_targets[key] = set()
                 for seq_id in self.seq_ids:
-                    weighted_path = _artifact_path(self.media_path, root, "weighted", seq_id)
-                    mean_path = _artifact_path(self.media_path, root, "mean", seq_id)
-                    if not weighted_path.exists():
-                        weighted_missing.add(seq_id)
-                    if not mean_path.exists():
-                        mean_missing.add(seq_id)
-                self.weighted_targets[key] = weighted_missing
-                self.mean_targets[key] = mean_missing
+                    checks.append((key, seq_id, "weighted", _artifact_path(self.media_path, root, "weighted", seq_id)))
+                    checks.append((key, seq_id, "mean", _artifact_path(self.media_path, root, "mean", seq_id)))
+
+        def _check(item: tuple) -> tuple:
+            key, seq_id, kind, path = item
+            return (key, seq_id, kind, path.exists())
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=32, thread_name_prefix="kinform-stat") as pool:
+            results = list(pool.map(_check, checks))
+
+        for key, seq_id, kind, exists in results:
+            if not exists:
+                if kind == "weighted":
+                    self.weighted_targets[key].add(seq_id)
+                else:
+                    self.mean_targets[key].add(seq_id)
 
         seen = _read_binding_site_scores(self.binding_sites_path)
         self.binding_site_targets = {sid for sid in self.seq_ids if sid not in seen}
@@ -1113,6 +1150,53 @@ def _derive_weighted_from_cache_if_ready(
         return False
 
 
+def _stream_all_done(
+    targets: ArtifactTargets,
+    bs_scores: dict[str, np.ndarray],
+    submitted_paths: set[Path],
+) -> bool:
+    for (family, root), missing_ids in targets.weighted_targets.items():
+        for seq_id in missing_ids:
+            if _artifact_path(targets.media_path, root, "weighted", seq_id) not in submitted_paths:
+                return False
+    for (family, root), missing_ids in targets.mean_targets.items():
+        for seq_id in missing_ids:
+            if _artifact_path(targets.media_path, root, "mean", seq_id) not in submitted_paths:
+                return False
+    for seq_id in targets.binding_site_targets:
+        if seq_id not in bs_scores:
+            return False
+    return True
+
+
+def _stream_missing_weighted_count(
+    targets: ArtifactTargets, family: str, submitted_paths: set[Path]
+) -> tuple[int, int]:
+    missing, total = 0, 0
+    for (fam, root), target_ids in targets.weighted_targets.items():
+        if fam != family:
+            continue
+        total += len(target_ids)
+        for seq_id in target_ids:
+            if _artifact_path(targets.media_path, root, "weighted", seq_id) not in submitted_paths:
+                missing += 1
+    return missing, total
+
+
+def _stream_missing_mean_count(
+    targets: ArtifactTargets, family: str, submitted_paths: set[Path]
+) -> tuple[int, int]:
+    missing, total = 0, 0
+    for (fam, root), target_ids in targets.mean_targets.items():
+        if fam != family:
+            continue
+        total += len(target_ids)
+        for seq_id in target_ids:
+            if _artifact_path(targets.media_path, root, "mean", seq_id) not in submitted_paths:
+                missing += 1
+    return missing, total
+
+
 def _run_kinform_parallel_pipeline_stream(
     *,
     env: dict[str, str],
@@ -1146,9 +1230,12 @@ def _run_kinform_parallel_pipeline_stream(
     )
     bs_scores: dict[str, np.ndarray] = dict(score_cache.read())
 
-    if targets.all_done(bs_scores):
+    if _stream_all_done(targets, bs_scores, set()):
         _log(env, "info", "All KinForm artifacts already exist; skipping stream pipeline.", job_id=job_id)
         return
+
+    async_writer = AsyncWriter(max_workers=4)
+    submitted_paths: set[Path] = set()
 
     max_gb = _env_float("KINFORM_PARALLEL_RESIDUE_CACHE_GB", 4.0)
     max_bytes = int(max_gb * 1024 * 1024 * 1024)
@@ -1209,8 +1296,8 @@ def _run_kinform_parallel_pipeline_stream(
     pseq_client_lock = threading.Lock()
     sent_to_pseq: set[str] = set()
     queued_to_pseq: set[str] = set()
-    pseq_sends_per_tick = max(1, int(_env_float("KINFORM_PARALLEL_PSEQ_SENDS_PER_TICK", 4.0)))
-    pseq_send_queue_size = max(4, int(_env_float("KINFORM_PARALLEL_PSEQ_SEND_QUEUE_SIZE", 16.0)))
+    pseq_sends_per_tick = max(1, int(_env_float("KINFORM_PARALLEL_PSEQ_SENDS_PER_TICK", 10000.0)))
+    pseq_send_queue_size = max(4, int(_env_float("KINFORM_PARALLEL_PSEQ_SEND_QUEUE_SIZE", 256.0)))
     pseq_send_queue: queue.Queue[tuple[str, dict, bytes] | None] = queue.Queue(maxsize=pseq_send_queue_size)
     pseq_send_results: queue.Queue[tuple[str, str, str]] = queue.Queue()
     pseq_sender_stop = threading.Event()
@@ -1303,13 +1390,15 @@ def _run_kinform_parallel_pipeline_stream(
             for sid in seq_ids:
                 needs = False
                 for root in _FAMILY_ROOTS[_T5_FAMILY]:
+                    mean_path = _artifact_path(media_path, root, "mean", sid)
+                    weighted_path = _artifact_path(media_path, root, "weighted", sid)
                     mean_missing = (
                         sid in targets.mean_targets[(_T5_FAMILY, root)]
-                        and not _artifact_path(media_path, root, "mean", sid).exists()
+                        and mean_path not in submitted_paths
                     )
                     weighted_missing = (
                         sid in targets.weighted_targets[(_T5_FAMILY, root)]
-                        and not _artifact_path(media_path, root, "weighted", sid).exists()
+                        and weighted_path not in submitted_paths
                     )
                     if mean_missing or (weighted_missing and not has_residue(_T5_FAMILY, root, sid)):
                         needs = True
@@ -1326,13 +1415,15 @@ def _run_kinform_parallel_pipeline_stream(
         for sid in seq_ids:
             needs = False
             for root in _FAMILY_ROOTS[family]:
+                mean_path = _artifact_path(media_path, root, "mean", sid)
+                weighted_path = _artifact_path(media_path, root, "weighted", sid)
                 mean_missing = (
                     sid in targets.mean_targets[(family, root)]
-                    and not _artifact_path(media_path, root, "mean", sid).exists()
+                    and mean_path not in submitted_paths
                 )
                 weighted_missing = (
                     sid in targets.weighted_targets[(family, root)]
-                    and not _artifact_path(media_path, root, "weighted", sid).exists()
+                    and weighted_path not in submitted_paths
                 )
                 if mean_missing or (weighted_missing and not has_residue(family, root, sid)):
                     needs = True
@@ -1363,7 +1454,7 @@ def _run_kinform_parallel_pipeline_stream(
                 "--id_to_seq_file",
                 str(id_to_seq_pkl),
                 "--batch_size",
-                "1",
+                "4",
                 "--setting",
                 "residue+mean",
                 "--layers",
@@ -1387,7 +1478,7 @@ def _run_kinform_parallel_pipeline_stream(
                 "--id_to_seq_file",
                 str(id_to_seq_pkl),
                 "--batch_size",
-                "1",
+                "4",
                 *common_stream,
             ]
         if worker_name == _ESMC_FAMILY:
@@ -1406,7 +1497,7 @@ def _run_kinform_parallel_pipeline_stream(
                 "--id_to_seq_file",
                 str(id_to_seq_pkl),
                 "--batch_size",
-                "1",
+                "4",
                 *common_stream,
             ]
         if worker_name == _PSEQ_WORKER:
@@ -1579,17 +1670,25 @@ def _run_kinform_parallel_pipeline_stream(
         derived = 0
         for family, roots in _FAMILY_ROOTS.items():
             for root in roots:
+                if seq_id not in targets.weighted_targets.get((family, root), set()):
+                    continue
+                weighted_path = _artifact_path(media_path, root, "weighted", seq_id)
+                if weighted_path in submitted_paths:
+                    continue
+                key: ResidueKey = (family, root, seq_id)
+                if not residue_cache.has(key):
+                    continue
+                weights = bs_scores.get(seq_id)
+                if weights is None:
+                    continue
                 started = time.monotonic()
-                if _derive_weighted_from_cache_if_ready(
-                    targets=targets,
-                    family=family,
-                    root=root,
-                    seq_id=seq_id,
-                    bs_scores=bs_scores,
-                    weighted_retry_errors=weighted_retry_errors,
-                    residue_cache=residue_cache,
-                    device=device,
-                ):
+                try:
+                    residue_arr = residue_cache.get_numpy(key)
+                    weighted_vec = weighted_mean_from_residue(residue_arr, weights)
+                    residue_cache.remove(key)
+                    submitted_paths.add(weighted_path)
+                    async_writer.submit(weighted_path, weighted_vec)
+                    weighted_retry_errors.pop((family, root, seq_id), None)
                     elapsed = max(0.0, time.monotonic() - started)
                     derived += 1
                     weighted_compute_count_total += 1
@@ -1600,6 +1699,10 @@ def _run_kinform_parallel_pipeline_stream(
                     )
                     if first_weighted_ready_at is None:
                         first_weighted_ready_at = time.monotonic()
+                except Exception:
+                    weighted_retry_errors[key] = weighted_retry_errors.get(key, 0) + 1
+                    if weighted_retry_errors.get(key, 0) > 1:
+                        raise
         return derived
 
     # Initial launch for all 4 workers.
@@ -1671,8 +1774,11 @@ def _run_kinform_parallel_pipeline_stream(
                     residue_cache.put(key, arr)
 
                     mean_path = _artifact_path(media_path, root, "mean", seq_id)
-                    if not mean_path.exists() and seq_id in targets.mean_targets.get((family, root), set()):
-                        _save_array_atomic(mean_path, arr.mean(axis=0).astype(np.float32))
+                    if (mean_path not in submitted_paths
+                            and seq_id in targets.mean_targets.get((family, root), set())):
+                        mean_vec = arr.mean(axis=0).astype(np.float32)
+                        submitted_paths.add(mean_path)
+                        async_writer.submit(mean_path, mean_vec)
 
                     if family == _T5_FAMILY and root == "prot_t5_last":
                         try_queue_t5_to_pseq(seq_id)
@@ -1725,7 +1831,7 @@ def _run_kinform_parallel_pipeline_stream(
                 had_activity = True
                 _log(env, "debug", f"derived weighted={derived_weighted} this iteration", job_id=job_id)
 
-            if targets.all_done(bs_scores):
+            if _stream_all_done(targets, bs_scores, submitted_paths):
                 current_pseq_client = get_pseq_client_id()
                 if current_pseq_client is not None:
                     try:
@@ -1754,10 +1860,10 @@ def _run_kinform_parallel_pipeline_stream(
             if all(state.process is None for state in workers.values()) and not had_activity:
                 missing_fragments = []
                 for family in (_T5_FAMILY, _ESM2_FAMILY, _ESMC_FAMILY):
-                    mw, tw = targets.missing_weighted_count(family)
-                    mm, tm = targets.missing_mean_count(family)
+                    mw, tw = _stream_missing_weighted_count(targets, family, submitted_paths)
+                    mm, tm = _stream_missing_mean_count(targets, family, submitted_paths)
                     missing_fragments.append(f"{family}:weighted={mw}/{tw},mean={mm}/{tm}")
-                bs_missing = len(_needs_pseq_worker_seq_ids(targets=targets, bs_scores=bs_scores))
+                bs_missing = len({sid for sid in targets.binding_site_targets if sid not in bs_scores})
                 missing_fragments.append(f"binding_sites_missing={bs_missing}/{len(targets.binding_site_targets)}")
                 missing_fragments.append(f"residue_cache_keys={len(tuple(residue_cache.keys()))}")
                 raise RuntimeError("KinForm stream pipeline stalled: " + " ".join(missing_fragments))
@@ -1766,12 +1872,12 @@ def _run_kinform_parallel_pipeline_stream(
             if now - last_progress_ts >= progress_interval_seconds:
                 last_progress_ts = now
                 bs_ready = len(targets.binding_site_targets) - len(
-                    _needs_pseq_worker_seq_ids(targets=targets, bs_scores=bs_scores)
+                    {sid for sid in targets.binding_site_targets if sid not in bs_scores}
                 )
                 bs_total = len(targets.binding_site_targets)
-                t5_w_missing, t5_w_total = targets.missing_weighted_count(_T5_FAMILY)
-                esm2_w_missing, esm2_w_total = targets.missing_weighted_count(_ESM2_FAMILY)
-                esmc_w_missing, esmc_w_total = targets.missing_weighted_count(_ESMC_FAMILY)
+                t5_w_missing, t5_w_total = _stream_missing_weighted_count(targets, _T5_FAMILY, submitted_paths)
+                esm2_w_missing, esm2_w_total = _stream_missing_weighted_count(targets, _ESM2_FAMILY, submitted_paths)
+                esmc_w_missing, esmc_w_total = _stream_missing_weighted_count(targets, _ESMC_FAMILY, submitted_paths)
                 _log(
                     env,
                     "info",
@@ -1858,6 +1964,8 @@ def _run_kinform_parallel_pipeline_stream(
             pseq_sender_thread.join(timeout=2.0)
         residue_cache.clear()
         server.close()
+        async_writer.join()
+        async_writer.shutdown()
 
 
 def run_kinform_parallel_pipeline(

@@ -457,6 +457,38 @@ def _get_prot_t5_residue_multi_layer(
     gc.collect()
 
 
+class _BackgroundWriter:
+    """Drains (path, arr) write jobs on a background thread so inference never blocks on SSHFS."""
+
+    def __init__(self) -> None:
+        import queue as _q
+        import threading as _t
+        self._q: _q.Queue = _q.Queue()
+        self._exc: Optional[BaseException] = None
+        self._thread = _t.Thread(target=self._loop, daemon=True)
+        self._thread.start()
+
+    def _loop(self) -> None:
+        while True:
+            item = self._q.get()
+            if item is None:
+                return
+            path, arr = item
+            try:
+                _save_array_atomic(path, arr)
+            except Exception as exc:
+                self._exc = exc
+
+    def submit(self, path: Path, arr: np.ndarray) -> None:
+        self._q.put((path, arr.copy()))
+
+    def join(self) -> None:
+        self._q.put(None)
+        self._thread.join()
+        if self._exc is not None:
+            raise self._exc
+
+
 def _stream_prot_t5_residue_mean_multi_layer(
     seq_dict: Dict[str, str],
     *,
@@ -504,6 +536,7 @@ def _stream_prot_t5_residue_mean_multi_layer(
     progress_interval_seconds = 10.0
 
     stream = StreamClient(stream_socket)
+    bg_writer = _BackgroundWriter()
     try:
         model_load_started_at = time.monotonic()
         print(f"Loading ProtT5-XL UniRef50 from {PROTT5XL_MODEL_PATH}...")
@@ -555,10 +588,10 @@ def _stream_prot_t5_residue_mean_multi_layer(
                     layer_tensor = hidden_states[-1] if layer is None else hidden_states[layer + 1]
                     residue_emb = layer_tensor[idx, :L].float().cpu().numpy().astype(np.float32, copy=False)
                     mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                    _save_array_atomic(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
+                    bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
 
                     if legacy_residue_write:
-                        _save_array_atomic(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
+                        bg_writer.submit(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
 
                     header = {
                         "type": "RESIDUE_READY",
@@ -588,6 +621,7 @@ def _stream_prot_t5_residue_mean_multi_layer(
                 )
                 last_progress_at = now
 
+        bg_writer.join()
         stream.send(
             {
                 "type": "WORKER_DONE",
