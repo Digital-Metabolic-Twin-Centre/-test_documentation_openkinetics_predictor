@@ -287,7 +287,7 @@ def get_prot_t5_embeddings(
             add_special_tokens=True,
         ).to(device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = model(**token_data)
         hidden_states: Tuple[torch.Tensor, ...] = outputs.hidden_states  # len=25, 0=embeddings
 
@@ -435,7 +435,7 @@ def _get_prot_t5_residue_multi_layer(
             batch_strs, return_tensors="pt", padding=True, add_special_tokens=True,
         ).to(device)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             outputs = model(**token_data)
         hidden_states: Tuple[torch.Tensor, ...] = outputs.hidden_states  # len=25
 
@@ -507,6 +507,12 @@ def _stream_prot_t5_residue_mean_multi_layer(
     assert all(k in id_to_seq and id_to_seq[k] == v for k, v in seq_dict.items()), (
         "Sequence mismatch between provided seq_dict and id_to_seq"
     )
+    write_mean_files = str(os.environ.get("KINFORM_STREAM_WRITE_MEAN_FILES", "1")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     layer_mean_dirs: Dict = {}
     layer_residue_dirs: Dict = {}
@@ -517,9 +523,10 @@ def _stream_prot_t5_residue_mean_multi_layer(
         else:
             root_name = f"prot_t5_layer_{layer}"
         layer_root_names[layer] = root_name
-        mean_dir = precomputed_root / root_name / "mean_vecs"
-        mean_dir.mkdir(parents=True, exist_ok=True)
-        layer_mean_dirs[layer] = mean_dir
+        if write_mean_files:
+            mean_dir = precomputed_root / root_name / "mean_vecs"
+            mean_dir.mkdir(parents=True, exist_ok=True)
+            layer_mean_dirs[layer] = mean_dir
         if legacy_residue_write:
             residue_dir = precomputed_root / root_name / "residue_vecs"
             residue_dir.mkdir(parents=True, exist_ok=True)
@@ -536,7 +543,7 @@ def _stream_prot_t5_residue_mean_multi_layer(
     progress_interval_seconds = 10.0
 
     stream = StreamClient(stream_socket)
-    bg_writer = _BackgroundWriter()
+    bg_writer = _BackgroundWriter() if (write_mean_files or legacy_residue_write) else None
     try:
         model_load_started_at = time.monotonic()
         print(f"Loading ProtT5-XL UniRef50 from {PROTT5XL_MODEL_PATH}...")
@@ -576,7 +583,7 @@ def _stream_prot_t5_residue_mean_multi_layer(
             token_data = tokenizer(
                 batch_strs, return_tensors="pt", padding=True, add_special_tokens=True
             ).to(device)
-            with torch.no_grad():
+            with torch.inference_mode():
                 outputs = model(**token_data)
             hidden_states: Tuple[torch.Tensor, ...] = outputs.hidden_states
             seq_lens = (token_data["attention_mask"] == 1).sum(dim=1) - 1
@@ -587,10 +594,13 @@ def _stream_prot_t5_residue_mean_multi_layer(
                 for layer in layers:
                     layer_tensor = hidden_states[-1] if layer is None else hidden_states[layer + 1]
                     residue_emb = layer_tensor[idx, :L].float().cpu().numpy().astype(np.float32, copy=False)
-                    mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                    bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
+                    if write_mean_files:
+                        mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
+                        assert bg_writer is not None
+                        bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
 
                     if legacy_residue_write:
+                        assert bg_writer is not None
                         bg_writer.submit(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
 
                     header = {
@@ -608,8 +618,6 @@ def _stream_prot_t5_residue_mean_multi_layer(
                     emitted_items += 1
 
             del token_data, outputs, hidden_states
-            torch.cuda.empty_cache()
-            gc.collect()
 
             now = time.monotonic()
             if now - last_progress_at >= progress_interval_seconds:
@@ -621,7 +629,8 @@ def _stream_prot_t5_residue_mean_multi_layer(
                 )
                 last_progress_at = now
 
-        bg_writer.join()
+        if bg_writer is not None:
+            bg_writer.join()
         stream.send(
             {
                 "type": "WORKER_DONE",

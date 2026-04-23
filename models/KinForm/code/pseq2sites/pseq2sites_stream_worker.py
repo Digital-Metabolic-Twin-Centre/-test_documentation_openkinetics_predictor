@@ -175,7 +175,7 @@ def _predict_binding_scores(
     loader = DataloaderFn(dataset, batch_size=batch_size, shuffle=False, drop_last=False)
 
     pred_rows: dict[str, str] = {}
-    with torch.no_grad():
+    with torch.inference_mode():
         for batch in loader:
             aa_feats, prot_feats, prot_masks, position_ids, chain_idx = prepare_prots_input_fn(
                 config,
@@ -443,8 +443,6 @@ def _run_stream_mode(
         infer_elapsed = time.monotonic() - infer_started
         infer_total_s += infer_elapsed
         infer_batches += 1
-        pending_persist_rows.update(pred_rows)
-        persist_rows(force=False)
         for seq_id, score_text in pred_rows.items():
             pending.pop(seq_id, None)
             arr = _score_text_to_float_array(score_text)
@@ -459,6 +457,8 @@ def _run_stream_mode(
                 },
                 arr.tobytes(order="C"),
             )
+            pending_persist_rows[seq_id] = score_text
+        persist_rows(force=False)
         wrote = len(pred_rows)
         infer_rows_total += wrote
         if wrote and first_pred_completed_at is None:

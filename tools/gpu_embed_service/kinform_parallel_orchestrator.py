@@ -106,7 +106,12 @@ def _log(
 
 
 def _artifact_path(media_path: Path, root: str, kind: str, seq_id: str) -> Path:
-    return (media_path / "sequence_info" / root / f"{kind}_vecs" / f"{seq_id}.npy").resolve()
+    # Keep path arithmetic cheap in hot loops; avoid resolve() network metadata lookups.
+    return media_path / "sequence_info" / root / f"{kind}_vecs" / f"{seq_id}.npy"
+
+
+def _binding_score_path(media_path: Path, seq_id: str) -> Path:
+    return media_path / "sequence_info" / "pseq2sites_scores" / f"{seq_id}.npy"
 
 
 def _read_binding_site_scores(
@@ -149,6 +154,39 @@ def _read_binding_site_scores(
                         break
     except Exception:
         return {}
+    return out
+
+
+def _load_binding_score_cache(
+    *,
+    media_path: Path,
+    seq_ids: Iterable[str],
+    max_workers: int = 16,
+) -> dict[str, np.ndarray]:
+    seq_list = list(seq_ids)
+    if not seq_list:
+        return {}
+
+    def _load_one(seq_id: str) -> tuple[str, np.ndarray | None]:
+        path = _binding_score_path(media_path, seq_id)
+        if not path.exists():
+            return seq_id, None
+        try:
+            arr = np.load(path).astype(np.float32, copy=False).reshape(-1)
+            if arr.size == 0:
+                return seq_id, None
+            return seq_id, arr
+        except Exception:
+            return seq_id, None
+
+    out: dict[str, np.ndarray] = {}
+    with concurrent.futures.ThreadPoolExecutor(
+        max_workers=max(1, int(max_workers)),
+        thread_name_prefix="kinform-bs-load",
+    ) as pool:
+        for seq_id, arr in pool.map(_load_one, seq_list):
+            if arr is not None:
+                out[seq_id] = arr
     return out
 
 
@@ -274,6 +312,7 @@ class ArtifactTargets:
     seq_ids: list[str]
     media_path: Path
     binding_sites_path: Path
+    binding_site_existing_ids: set[str] | None = None
     weighted_targets: dict[tuple[str, str], set[str]] = field(default_factory=dict)
     mean_targets: dict[tuple[str, str], set[str]] = field(default_factory=dict)
     binding_site_targets: set[str] = field(default_factory=set)
@@ -303,8 +342,11 @@ class ArtifactTargets:
                 else:
                     self.mean_targets[key].add(seq_id)
 
-        seen = _read_binding_site_scores(self.binding_sites_path)
-        self.binding_site_targets = {sid for sid in self.seq_ids if sid not in seen}
+        if self.binding_site_existing_ids is None:
+            seen_ids = set(_read_binding_site_scores(self.binding_sites_path).keys())
+        else:
+            seen_ids = set(self.binding_site_existing_ids)
+        self.binding_site_targets = {sid for sid in self.seq_ids if sid not in seen_ids}
 
     def all_done(self, bs_scores: dict[str, np.ndarray]) -> bool:
         for (family, root), targets in self.weighted_targets.items():
@@ -351,7 +393,7 @@ ResidueKey = tuple[str, str, str]
 @dataclass
 class ResidueEntry:
     nbytes: int
-    tensor: torch.Tensor | None = None
+    array: np.ndarray | None = None
     spill_path: Path | None = None
 
 
@@ -362,22 +404,20 @@ class ResidueCache:
         max_bytes: int,
         spill_dir: Path,
         spill_fallback_dir: Path,
-        device: torch.device,
         env: dict[str, str],
         job_id: str | None,
     ) -> None:
         self.max_bytes = max(1, int(max_bytes))
         self.spill_dir = spill_dir
         self.spill_fallback_dir = spill_fallback_dir
-        self.device = device
         self.env = env
         self.job_id = job_id
         self.entries: OrderedDict[ResidueKey, ResidueEntry] = OrderedDict()
-        self._gpu_bytes = 0
+        self._resident_bytes = 0
 
     @property
-    def gpu_bytes(self) -> int:
-        return self._gpu_bytes
+    def resident_bytes(self) -> int:
+        return self._resident_bytes
 
     def has(self, key: ResidueKey) -> bool:
         return key in self.entries
@@ -386,32 +426,29 @@ class ResidueCache:
         return tuple(self.entries.keys())
 
     def put(self, key: ResidueKey, residue: np.ndarray) -> None:
-        if residue.dtype != np.float32:
-            residue = residue.astype(np.float32, copy=False)
-
-        tensor = torch.as_tensor(residue, dtype=torch.float32, device=self.device)
-        nbytes = int(tensor.numel() * tensor.element_size())
+        arr = np.ascontiguousarray(residue, dtype=np.float32)
+        nbytes = int(arr.nbytes)
 
         if key in self.entries:
             self.remove(key)
 
         self._ensure_budget_for(nbytes)
 
-        self.entries[key] = ResidueEntry(nbytes=nbytes, tensor=tensor, spill_path=None)
+        self.entries[key] = ResidueEntry(nbytes=nbytes, array=arr, spill_path=None)
         self.entries.move_to_end(key)
-        self._gpu_bytes += nbytes
+        self._resident_bytes += nbytes
 
     def _ensure_budget_for(self, incoming_nbytes: int) -> None:
-        while self._gpu_bytes + incoming_nbytes > self.max_bytes and self.entries:
+        while self._resident_bytes + incoming_nbytes > self.max_bytes and self.entries:
             evict_key, evict_entry = next(iter(self.entries.items()))
-            if evict_entry.tensor is None:
+            if evict_entry.array is None:
                 # Already spilled; move on to next entry.
                 self.entries.move_to_end(evict_key)
                 continue
             spill_path = self._spill_key(evict_key, evict_entry)
             evict_entry.spill_path = spill_path
-            evict_entry.tensor = None
-            self._gpu_bytes -= evict_entry.nbytes
+            evict_entry.array = None
+            self._resident_bytes -= evict_entry.nbytes
             self.entries[evict_key] = evict_entry
             self.entries.move_to_end(evict_key)
             _log(
@@ -428,38 +465,13 @@ class ResidueCache:
             try:
                 base.mkdir(parents=True, exist_ok=True)
                 path = base / rel_name
-                assert entry.tensor is not None
-                arr = entry.tensor.detach().cpu().numpy().astype(np.float32, copy=False)
+                assert entry.array is not None
+                arr = entry.array.astype(np.float32, copy=False)
                 _save_array_atomic(path, arr)
                 return path
             except Exception:
                 continue
         raise RuntimeError(f"Could not spill residue for key={key} to any spill directory.")
-
-    def get_tensor(self, key: ResidueKey) -> torch.Tensor:
-        entry = self.entries.get(key)
-        if entry is None:
-            raise KeyError(key)
-        self.entries.move_to_end(key)
-
-        if entry.tensor is not None:
-            if entry.tensor.device != self.device:
-                entry.tensor = entry.tensor.to(self.device)
-            return entry.tensor
-
-        if entry.spill_path is None or not entry.spill_path.exists():
-            raise RuntimeError(f"Spill file missing for residue key={key}")
-
-        arr = np.load(entry.spill_path).astype(np.float32, copy=False)
-        tensor = torch.as_tensor(arr, dtype=torch.float32, device=self.device)
-        nbytes = int(tensor.numel() * tensor.element_size())
-        entry.nbytes = nbytes
-        self._ensure_budget_for(nbytes)
-        entry.tensor = tensor
-        self._gpu_bytes += nbytes
-        self.entries[key] = entry
-        self.entries.move_to_end(key)
-        return tensor
 
     def get_numpy(self, key: ResidueKey) -> np.ndarray:
         entry = self.entries.get(key)
@@ -467,21 +479,29 @@ class ResidueCache:
             raise KeyError(key)
         self.entries.move_to_end(key)
 
-        if entry.tensor is not None:
-            return entry.tensor.detach().cpu().numpy().astype(np.float32, copy=False)
+        if entry.array is not None:
+            return entry.array
 
-        if entry.spill_path is not None and entry.spill_path.exists():
-            return np.load(entry.spill_path).astype(np.float32, copy=False)
+        if entry.spill_path is None or not entry.spill_path.exists():
+            raise RuntimeError(f"Spill file missing for residue key={key}")
 
-        raise RuntimeError(f"Residue key={key} has no in-memory tensor and missing spill file.")
+        arr = np.load(entry.spill_path).astype(np.float32, copy=False)
+        nbytes = int(arr.nbytes)
+        self._ensure_budget_for(nbytes)
+        entry.array = arr
+        entry.nbytes = nbytes
+        self._resident_bytes += nbytes
+        self.entries[key] = entry
+        self.entries.move_to_end(key)
+        return arr
 
     def remove(self, key: ResidueKey) -> None:
         entry = self.entries.pop(key, None)
         if entry is None:
             return
-        if entry.tensor is not None:
-            self._gpu_bytes -= entry.nbytes
-            entry.tensor = None
+        if entry.array is not None:
+            self._resident_bytes -= entry.nbytes
+            entry.array = None
         if entry.spill_path is not None:
             _remove_path_if_exists(entry.spill_path)
             entry.spill_path = None
@@ -603,9 +623,11 @@ class StreamEventServer:
         except queue.Empty:
             return None
 
-    def drain_events(self) -> list[tuple[str, int, dict | None, bytes | None]]:
+    def drain_events(self, *, max_items: int | None = None) -> list[tuple[str, int, dict | None, bytes | None]]:
         out: list[tuple[str, int, dict | None, bytes | None]] = []
         while True:
+            if max_items is not None and len(out) >= max_items:
+                return out
             try:
                 out.append(self.events.get_nowait())
             except queue.Empty:
@@ -1107,49 +1129,6 @@ def _decode_array(header: dict, payload: bytes) -> np.ndarray:
     return arr.reshape(shape).astype(np.float32, copy=False)
 
 
-def _derive_weighted_from_cache_if_ready(
-    *,
-    targets: ArtifactTargets,
-    family: str,
-    root: str,
-    seq_id: str,
-    bs_scores: dict[str, np.ndarray],
-    weighted_retry_errors: dict[tuple[str, str, str], int],
-    residue_cache: ResidueCache,
-    device: torch.device,
-) -> bool:
-    if seq_id not in targets.weighted_targets.get((family, root), set()):
-        return False
-
-    weighted_path = _artifact_path(targets.media_path, root, "weighted", seq_id)
-    if weighted_path.exists():
-        residue_cache.remove((family, root, seq_id))
-        return False
-
-    key = (family, root, seq_id)
-    if not residue_cache.has(key):
-        return False
-
-    weights = bs_scores.get(seq_id)
-    if weights is None:
-        return False
-
-    try:
-        # Fast path: derive from cached/spilled numpy directly to avoid GPU spill/load thrash.
-        residue_arr = residue_cache.get_numpy(key)
-        weighted_vec = weighted_mean_from_residue(residue_arr, weights)
-        _save_array_atomic(weighted_path, weighted_vec)
-        residue_cache.remove(key)
-        _remove_path_if_exists(_artifact_path(targets.media_path, root, "residue", seq_id))
-        weighted_retry_errors.pop((family, root, seq_id), None)
-        return True
-    except Exception:
-        weighted_retry_errors[key] = weighted_retry_errors.get(key, 0) + 1
-        if weighted_retry_errors[key] > 1:
-            raise
-        return False
-
-
 def _stream_all_done(
     targets: ArtifactTargets,
     bs_scores: dict[str, np.ndarray],
@@ -1216,26 +1195,44 @@ def _run_kinform_parallel_pipeline_stream(
     require_cuda = _env_bool("KINFORM_REQUIRE_CUDA", True)
     if require_cuda and not torch.cuda.is_available():
         raise RuntimeError("CUDA is required for KinForm stream mode (KINFORM_REQUIRE_CUDA=1).")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     binding_sites_path = (media_path / "pseq2sites" / "binding_sites_all.tsv").resolve()
+    binding_score_load_workers = max(1, int(_env_float("KINFORM_PARALLEL_BS_CACHE_LOAD_WORKERS", 16.0)))
+    bs_scores: dict[str, np.ndarray] = _load_binding_score_cache(
+        media_path=media_path,
+        seq_ids=seq_ids,
+        max_workers=binding_score_load_workers,
+    )
     targets = ArtifactTargets(
         seq_ids=seq_ids,
         media_path=media_path,
         binding_sites_path=binding_sites_path,
+        binding_site_existing_ids=set(bs_scores.keys()),
     )
-    score_cache = BindingSiteScoreCache(
-        binding_sites_path,
-        target_seq_ids=targets.binding_site_targets,
+    tsv_refresh_enabled = _env_bool("KINFORM_PARALLEL_STREAM_TSV_REFRESH_ENABLE", False)
+    score_cache = (
+        BindingSiteScoreCache(
+            binding_sites_path,
+            target_seq_ids=targets.binding_site_targets,
+        )
+        if tsv_refresh_enabled
+        else None
     )
-    bs_scores: dict[str, np.ndarray] = dict(score_cache.read())
+    if score_cache is not None and targets.binding_site_targets:
+        for sid, scores in score_cache.read().items():
+            if sid not in bs_scores:
+                bs_scores[sid] = scores.astype(np.float32, copy=False)
 
     if _stream_all_done(targets, bs_scores, set()):
         _log(env, "info", "All KinForm artifacts already exist; skipping stream pipeline.", job_id=job_id)
         return
 
-    async_writer = AsyncWriter(max_workers=4)
+    async_write_workers = max(1, int(_env_float("KINFORM_PARALLEL_ASYNC_WRITE_WORKERS", 12.0)))
+    async_writer = AsyncWriter(max_workers=async_write_workers)
     submitted_paths: set[Path] = set()
+    submitted_binding_score_paths: set[Path] = {
+        _binding_score_path(media_path, sid) for sid in bs_scores
+    }
 
     max_gb = _env_float("KINFORM_PARALLEL_RESIDUE_CACHE_GB", 4.0)
     max_bytes = int(max_gb * 1024 * 1024 * 1024)
@@ -1248,7 +1245,6 @@ def _run_kinform_parallel_pipeline_stream(
         max_bytes=max_bytes,
         spill_dir=spill_base / job_slug,
         spill_fallback_dir=spill_fallback_base / job_slug,
-        device=device,
         env=env,
         job_id=job_id,
     )
@@ -1301,8 +1297,18 @@ def _run_kinform_parallel_pipeline_stream(
     pseq_send_queue: queue.Queue[tuple[str, dict, bytes] | None] = queue.Queue(maxsize=pseq_send_queue_size)
     pseq_send_results: queue.Queue[tuple[str, str, str]] = queue.Queue()
     pseq_sender_stop = threading.Event()
-    score_refresh_seconds = max(1.0, _env_float("KINFORM_PARALLEL_TSV_REFRESH_SECONDS", 30.0))
+    score_refresh_seconds = (
+        max(1.0, _env_float("KINFORM_PARALLEL_TSV_REFRESH_SECONDS", 30.0))
+        if tsv_refresh_enabled
+        else 0.0
+    )
     last_score_refresh_at = 0.0
+    stream_recv_timeout_seconds = max(
+        0.01, _env_float("KINFORM_PARALLEL_STREAM_RECV_TIMEOUT_SECONDS", 0.05)
+    )
+    max_events_per_tick = max(
+        16, int(_env_float("KINFORM_PARALLEL_STREAM_MAX_EVENTS_PER_TICK", 512.0))
+    )
     worker_done_wait_seconds = max(1.0, _env_float("KINFORM_PARALLEL_WORKER_DONE_WAIT_SECONDS", 30.0))
 
     def get_pseq_client_id() -> int | None:
@@ -1712,6 +1718,18 @@ def _run_kinform_parallel_pipeline_stream(
     progress_interval_seconds = 10.0
     last_progress_ts = 0.0
 
+    def _event_priority(item: tuple[str, int, dict | None, bytes | None]) -> tuple[int, int]:
+        kind, _client_id, header, _payload = item
+        if kind != "event" or header is None:
+            return (0, 0)
+        evt_type = str(header.get("type", "")).strip().upper()
+        # Keep RESIDUE_READY and WORKER_DONE at the same priority so per-worker
+        # ordering from the socket queue is preserved (WORKER_DONE is emitted last).
+        # This avoids premature completion checks that can trigger false retries.
+        if evt_type in {"RESIDUE_READY", "WORKER_DONE"}:
+            return (1, 0)
+        return (0, 0)
+
     try:
         while True:
             had_activity = False
@@ -1719,11 +1737,15 @@ def _run_kinform_parallel_pipeline_stream(
             if drain_pseq_send_results():
                 had_activity = True
 
-            event = server.recv_event(timeout_seconds=0.2)
+            event = server.recv_event(timeout_seconds=stream_recv_timeout_seconds)
             pending_events: list[tuple[str, int, dict | None, bytes | None]] = []
             if event is not None:
                 pending_events.append(event)
-            pending_events.extend(server.drain_events())
+            if len(pending_events) < max_events_per_tick:
+                pending_events.extend(
+                    server.drain_events(max_items=max_events_per_tick - len(pending_events))
+                )
+            pending_events.sort(key=_event_priority)
 
             for kind, client_id, header, payload in pending_events:
                 had_activity = True
@@ -1795,8 +1817,12 @@ def _run_kinform_parallel_pipeline_stream(
                         raise RuntimeError("BS_READY missing payload")
                     if first_bs_ready_at is None:
                         first_bs_ready_at = time.monotonic()
-                    weights_arr = _decode_array(header, payload).reshape(-1)
-                    bs_scores[seq_id] = weights_arr.astype(np.float64, copy=False)
+                    weights_arr = _decode_array(header, payload).reshape(-1).astype(np.float32, copy=False)
+                    bs_scores[seq_id] = weights_arr
+                    bs_score_path = _binding_score_path(media_path, seq_id)
+                    if bs_score_path not in submitted_binding_score_paths:
+                        submitted_binding_score_paths.add(bs_score_path)
+                        async_writer.submit(bs_score_path, weights_arr)
                     queued_to_pseq.discard(seq_id)
                     sent_to_pseq.add(seq_id)
                     derived_weighted += attempt_weighted_for_seq(seq_id)
@@ -1805,12 +1831,16 @@ def _run_kinform_parallel_pipeline_stream(
             # Keep scores refreshed from shared TSV for resilience/resume, but avoid
             # re-reading it every loop (it can be very large).
             now_refresh = time.monotonic()
-            if now_refresh - last_score_refresh_at >= score_refresh_seconds:
+            if (
+                score_cache is not None
+                and score_refresh_seconds > 0.0
+                and now_refresh - last_score_refresh_at >= score_refresh_seconds
+            ):
                 last_score_refresh_at = now_refresh
                 tsv_scores = score_cache.read()
                 for sid, w in tsv_scores.items():
                     if sid not in bs_scores:
-                        bs_scores[sid] = w
+                        bs_scores[sid] = w.astype(np.float32, copy=False)
 
             # Send any queued T5-last residues once pseq client is connected.
             if get_pseq_client_id() is not None:
@@ -1892,7 +1922,7 @@ def _run_kinform_parallel_pipeline_stream(
                         f"pseq_sent={len(sent_to_pseq)} "
                         f"pseq_queued={len(queued_to_pseq)} "
                         f"pseq_queue_depth={pseq_send_queue.qsize()} "
-                        f"gpu_residue_cache_gb={residue_cache.gpu_bytes / (1024 ** 3):.3f}"
+                        f"residue_cache_gb={residue_cache.resident_bytes / (1024 ** 3):.3f}"
                     ),
                     job_id=job_id,
                 )

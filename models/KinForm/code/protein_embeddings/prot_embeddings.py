@@ -175,7 +175,7 @@ def get_embeddings(seq_dict, batch_size=2, model=None, id_to_seq=None, setting='
                 batch_labels, batch_strs, batch_tokens = batch_converter(data)
                 batch_tokens = batch_tokens.to(device)
 
-                with torch.no_grad():
+                with torch.inference_mode():
                     if all_layers:
                         n_layers = 34
                         results = model(batch_tokens, repr_layers=list(range(n_layers)), return_contacts=False)
@@ -412,7 +412,7 @@ def get_embeddings_multi_layer(
             data = [(k, seq_dict[k]) for k in batch_keys]
             _, _, batch_tokens = batch_converter(data)
             batch_tokens = batch_tokens.to(device)
-            with torch.no_grad():
+            with torch.inference_mode():
                 results = model_obj(batch_tokens, repr_layers=layers, return_contacts=False)
             token_reps = results["representations"]
             for i, (label, seq) in enumerate(data):
@@ -529,6 +529,12 @@ def stream_embeddings_multi_layer(
     stage_name = "esm_residue" if model == "esm2" else "esmc_residue"
     stage_started_at = time.monotonic()
     show_progress = str(os.environ.get("KINFORM_STREAM_TQDM", "")).strip().lower() in {"1", "true", "yes", "on"}
+    write_mean_files = str(os.environ.get("KINFORM_STREAM_WRITE_MEAN_FILES", "1")).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     items_total = len(seq_dict) * len(layers)
     emitted_items = 0
     last_progress_at = stage_started_at
@@ -541,16 +547,17 @@ def stream_embeddings_multi_layer(
     for layer in layers:
         root = f"{model}_last" if layer is None else f"{model}_layer_{layer}"
         layer_root_names[layer] = root
-        mean_dir = precomputed_root / root / "mean_vecs"
-        mean_dir.mkdir(parents=True, exist_ok=True)
-        layer_mean_dirs[layer] = mean_dir
+        if write_mean_files:
+            mean_dir = precomputed_root / root / "mean_vecs"
+            mean_dir.mkdir(parents=True, exist_ok=True)
+            layer_mean_dirs[layer] = mean_dir
         if legacy_residue_write:
             residue_dir = precomputed_root / root / "residue_vecs"
             residue_dir.mkdir(parents=True, exist_ok=True)
             layer_residue_dirs[layer] = residue_dir
 
     stream = StreamClient(stream_socket)
-    bg_writer = _BackgroundWriter()
+    bg_writer = _BackgroundWriter() if (write_mean_files or legacy_residue_write) else None
     try:
         import esm
         model_load_started_at = time.monotonic()
@@ -578,15 +585,18 @@ def stream_embeddings_multi_layer(
                 data = [(k, seq_dict[k]) for k in batch_keys]
                 _, _, batch_tokens = batch_converter(data)
                 batch_tokens = batch_tokens.to(device)
-                with torch.no_grad():
+                with torch.inference_mode():
                     results = model_obj(batch_tokens, repr_layers=layers, return_contacts=False)
                 token_reps = results["representations"]
                 for i, (label, seq) in enumerate(data):
                     for layer in layers:
                         residue_emb = token_reps[layer][i, 1:len(seq) + 1].cpu().numpy().astype(np.float32, copy=False)
-                        mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                        bg_writer.submit(layer_mean_dirs[layer] / f"{label}.npy", mean_vec)
+                        if write_mean_files:
+                            mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
+                            assert bg_writer is not None
+                            bg_writer.submit(layer_mean_dirs[layer] / f"{label}.npy", mean_vec)
                         if legacy_residue_write:
+                            assert bg_writer is not None
                             bg_writer.submit(layer_residue_dirs[layer] / f"{label}.npy", residue_emb)
                         header = {
                             "type": "RESIDUE_READY",
@@ -602,8 +612,6 @@ def stream_embeddings_multi_layer(
                         stream.send(header, residue_emb.tobytes(order="C"))
                         emitted_items += 1
                 del batch_tokens, results
-                gc.collect()
-                torch.cuda.empty_cache()
                 now = time.monotonic()
                 if now - last_progress_at >= progress_interval_seconds:
                     elapsed_s = max(0.0, now - stage_started_at)
@@ -640,9 +648,12 @@ def stream_embeddings_multi_layer(
                     layer_emb = logits_out.hidden_states[layer]
                     layer_emb = layer_emb.squeeze(0).to(torch.float32).cpu().numpy()
                     residue_emb = layer_emb[1:-1].astype(np.float32, copy=False)
-                    mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
-                    bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
+                    if write_mean_files:
+                        mean_vec = residue_emb.mean(axis=0).astype(np.float32, copy=False)
+                        assert bg_writer is not None
+                        bg_writer.submit(layer_mean_dirs[layer] / f"{key}.npy", mean_vec)
                     if legacy_residue_write:
+                        assert bg_writer is not None
                         bg_writer.submit(layer_residue_dirs[layer] / f"{key}.npy", residue_emb)
                     header = {
                         "type": "RESIDUE_READY",
@@ -669,7 +680,8 @@ def stream_embeddings_multi_layer(
             del model_obj
             gc.collect()
 
-        bg_writer.join()
+        if bg_writer is not None:
+            bg_writer.join()
         stream.send(
             {
                 "type": "WORKER_DONE",
