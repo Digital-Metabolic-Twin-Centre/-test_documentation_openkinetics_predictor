@@ -13,6 +13,10 @@ import time
 from pathlib import Path
 
 import numpy as np
+try:
+    import fcntl
+except Exception:  # pragma: no cover - non-posix runtimes
+    fcntl = None  # type: ignore
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 if str(_REPO_ROOT) not in sys.path:
@@ -76,6 +80,32 @@ def merge_binding_site_rows_atomic(path: Path, updates: dict[str, str]) -> None:
             os.close(fd)
         if tmp_name and Path(tmp_name).exists():
             Path(tmp_name).unlink(missing_ok=True)
+
+
+def append_binding_site_rows(path: Path, updates: dict[str, str]) -> None:
+    """
+    Fast append-only writer for stream mode.
+    Uses an advisory file lock on POSIX to avoid interleaved writes.
+    """
+    if not updates:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+", encoding="utf-8", newline="") as handle:
+        if fcntl is not None:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            handle.seek(0, os.SEEK_END)
+            empty = handle.tell() == 0
+            writer = csv.writer(handle, delimiter="\t")
+            if empty:
+                writer.writerow(["PDB", "Pred_BS_Scores"])
+            for seq_id, scores in updates.items():
+                if seq_id and scores:
+                    writer.writerow([seq_id, scores])
+            handle.flush()
+        finally:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _prepare_runtime():
@@ -267,10 +297,17 @@ def _run_stream_mode(
         b"",
     )
 
-    existing = _read_binding_site_rows(binding_sites_path)
-    pending: dict[str, str] = {
-        sid: seq for sid, seq in seq_id_to_seq.items() if sid not in existing
-    }
+    read_existing_on_start = str(
+        os.environ.get("KINFORM_PARALLEL_PSEQ_STREAM_READ_EXISTING_ON_START", "")
+    ).strip().lower() in {"1", "true", "yes", "on"}
+    if read_existing_on_start:
+        existing = _read_binding_site_rows(binding_sites_path)
+        pending: dict[str, str] = {
+            sid: seq for sid, seq in seq_id_to_seq.items() if sid not in existing
+        }
+    else:
+        # Orchestrator already launches this worker with unresolved sequence IDs.
+        pending = dict(seq_id_to_seq)
     if not pending:
         stream.send(
             {
@@ -373,7 +410,7 @@ def _run_stream_mode(
             if len(pending_persist_rows) < persist_every_rows and (now - last_persist) < persist_every_seconds:
                 return 0
         started = time.monotonic()
-        merge_binding_site_rows_atomic(binding_sites_path, pending_persist_rows)
+        append_binding_site_rows(binding_sites_path, pending_persist_rows)
         wrote = len(pending_persist_rows)
         persist_elapsed_s = max(0.0, time.monotonic() - started)
         persist_total_s += persist_elapsed_s

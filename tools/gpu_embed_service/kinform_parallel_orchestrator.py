@@ -108,11 +108,16 @@ def _artifact_path(media_path: Path, root: str, kind: str, seq_id: str) -> Path:
     return (media_path / "sequence_info" / root / f"{kind}_vecs" / f"{seq_id}.npy").resolve()
 
 
-def _read_binding_site_scores(binding_sites_path: Path) -> dict[str, np.ndarray]:
+def _read_binding_site_scores(
+    binding_sites_path: Path,
+    *,
+    target_seq_ids: set[str] | None = None,
+) -> dict[str, np.ndarray]:
     if not binding_sites_path.exists():
         return {}
 
     out: dict[str, np.ndarray] = {}
+    wanted = set(target_seq_ids) if target_seq_ids else None
     try:
         with binding_sites_path.open("r", encoding="utf-8", newline="") as handle:
             reader = csv.DictReader(handle, delimiter="\t")
@@ -131,20 +136,25 @@ def _read_binding_site_scores(binding_sites_path: Path) -> dict[str, np.ndarray]
                 score_text = str(row.get(score_col, "")).strip()
                 if not seq_id or not score_text:
                     continue
+                if wanted is not None and seq_id not in wanted:
+                    continue
                 try:
                     weights = np.fromiter((float(x) for x in score_text.split(",")), dtype=np.float64)
                 except ValueError:
                     continue
                 if weights.size:
                     out[seq_id] = weights
+                    if wanted is not None and len(out) >= len(wanted):
+                        break
     except Exception:
         return {}
     return out
 
 
 class BindingSiteScoreCache:
-    def __init__(self, binding_sites_path: Path) -> None:
+    def __init__(self, binding_sites_path: Path, *, target_seq_ids: set[str] | None = None) -> None:
         self.binding_sites_path = binding_sites_path
+        self.target_seq_ids = set(target_seq_ids) if target_seq_ids else None
         self._mtime_ns: int | None = None
         self._scores: dict[str, np.ndarray] = {}
 
@@ -155,7 +165,10 @@ class BindingSiteScoreCache:
             return {}
         stat = self.binding_sites_path.stat()
         if self._mtime_ns != stat.st_mtime_ns:
-            self._scores = _read_binding_site_scores(self.binding_sites_path)
+            self._scores = _read_binding_site_scores(
+                self.binding_sites_path,
+                target_seq_ids=self.target_seq_ids,
+            )
             self._mtime_ns = stat.st_mtime_ns
         return self._scores
 
@@ -1083,8 +1096,9 @@ def _derive_weighted_from_cache_if_ready(
         return False
 
     try:
-        residue_tensor = residue_cache.get_tensor(key)
-        weighted_vec = weighted_mean_from_residue_gpu(residue_tensor, weights, device=device)
+        # Fast path: derive from cached/spilled numpy directly to avoid GPU spill/load thrash.
+        residue_arr = residue_cache.get_numpy(key)
+        weighted_vec = weighted_mean_from_residue(residue_arr, weights)
         _save_array_atomic(weighted_path, weighted_vec)
         residue_cache.remove(key)
         _remove_path_if_exists(_artifact_path(targets.media_path, root, "residue", seq_id))
@@ -1124,7 +1138,10 @@ def _run_kinform_parallel_pipeline_stream(
         media_path=media_path,
         binding_sites_path=binding_sites_path,
     )
-    score_cache = BindingSiteScoreCache(binding_sites_path)
+    score_cache = BindingSiteScoreCache(
+        binding_sites_path,
+        target_seq_ids=targets.binding_site_targets,
+    )
     bs_scores: dict[str, np.ndarray] = dict(score_cache.read())
 
     if targets.all_done(bs_scores):
@@ -1188,6 +1205,9 @@ def _run_kinform_parallel_pipeline_stream(
 
     pseq_client_id: int | None = None
     sent_to_pseq: set[str] = set()
+    pseq_sends_per_tick = max(1, int(_env_float("KINFORM_PARALLEL_PSEQ_SENDS_PER_TICK", 4.0)))
+    score_refresh_seconds = max(1.0, _env_float("KINFORM_PARALLEL_TSV_REFRESH_SECONDS", 30.0))
+    last_score_refresh_at = 0.0
 
     def has_residue(family: str, root: str, seq_id: str) -> bool:
         return residue_cache.has((family, root, seq_id))
@@ -1559,17 +1579,25 @@ def _run_kinform_parallel_pipeline_stream(
                     derived_weighted += attempt_weighted_for_seq(seq_id)
                     continue
 
-            # keep scores refreshed from shared tsv for resilience/resume
-            tsv_scores = score_cache.read()
-            for sid, w in tsv_scores.items():
-                if sid not in bs_scores:
-                    bs_scores[sid] = w
+            # Keep scores refreshed from shared TSV for resilience/resume, but avoid
+            # re-reading it every loop (it can be very large).
+            now_refresh = time.monotonic()
+            if now_refresh - last_score_refresh_at >= score_refresh_seconds:
+                last_score_refresh_at = now_refresh
+                tsv_scores = score_cache.read()
+                for sid, w in tsv_scores.items():
+                    if sid not in bs_scores:
+                        bs_scores[sid] = w
 
             # Send any queued T5-last residues once pseq client is connected.
             if pseq_client_id is not None:
+                sent_this_tick = 0
                 for sid in list(needed_ids(_PSEQ_WORKER)):
                     if try_send_t5_to_pseq(sid):
                         had_activity = True
+                        sent_this_tick += 1
+                        if sent_this_tick >= pseq_sends_per_tick:
+                            break
 
             # Opportunistically derive weighted vectors for all ids that already have BS.
             for sid in seq_ids:

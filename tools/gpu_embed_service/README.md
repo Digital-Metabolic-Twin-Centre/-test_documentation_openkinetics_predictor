@@ -64,6 +64,12 @@ Minimal FastAPI service for remote GPU embedding offload.
   - Default: `64`
 - `KINFORM_PARALLEL_PSEQ_STREAM_PERSIST_EVERY_SECONDS`: max seconds between pseq TSV persistence flushes.
   - Default: `15`
+- `KINFORM_PARALLEL_PSEQ_STREAM_READ_EXISTING_ON_START`: when `1`, pseq worker scans existing TSV on startup to skip known IDs.
+  - Default: `0` (orchestrator already launches unresolved IDs)
+- `KINFORM_PARALLEL_PSEQ_SENDS_PER_TICK`: max T5 residue payloads sent to pseq worker per orchestrator loop.
+  - Default: `4`
+- `KINFORM_PARALLEL_TSV_REFRESH_SECONDS`: minimum seconds between orchestrator refreshes from shared binding-sites TSV.
+  - Default: `30`
 - `KINFORM_PARALLEL_STREAM_SOCKET_DIR`: Unix socket directory for orchestrator-worker stream IPC.
   - Default: `/tmp/webkinpred-gpu-embed/kinform`
 
