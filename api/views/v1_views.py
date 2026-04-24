@@ -97,12 +97,18 @@ def api_health(request):
 @require_GET
 def api_gpu_status(request):
     """
-    Return current GPU embed-service reachability and capacity snapshot.
+    Return a minimal GPU availability snapshot for the frontend.
 
-    Uses server-side TTL caching to avoid hammering the remote GPU host.
+    Internal fields (gpu_name, vram, active_jobs, raw GPU response) are
+    deliberately stripped — the browser only needs to know online/offline.
     """
     status = get_gpu_status()
-    return JsonResponse(status)
+    public = {
+        "configured": bool(status.get("configured", False)),
+        "online": bool(status.get("online", False)),
+        "mode": str(status.get("mode", "cpu")),
+    }
+    return JsonResponse(public)
 
 
 # ---------------------------------------------------------------------------
