@@ -29,14 +29,15 @@ from rdkit import Chem
 from rdkit.Chem import MACCSkeys
 from torch_geometric.data import Batch, Data
 
-from KCM import EitlemKcatPredictor
-from KMP import EitlemKmPredictor
-
 _REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_REPO_ROOT_STR = str(_REPO_ROOT)
+if _REPO_ROOT_STR in sys.path:
+    sys.path.remove(_REPO_ROOT_STR)
+sys.path.insert(0, _REPO_ROOT_STR)
 
 from tools.gpu_embed_service.cache_io import SpoolAsyncCommitter, resolve_missing_ids
+from KCM import EitlemKcatPredictor
+from KMP import EitlemKmPredictor
 
 # ── Path resolution ────────────────────────────────────────────────────────────
 

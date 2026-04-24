@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 import torch
@@ -14,8 +16,10 @@ _REPO_ROOT = _HERE.parents[3]
 _DEFAULT_MEDIA = _REPO_ROOT / "media"
 _DEFAULT_TOOLS = _REPO_ROOT / "tools"
 
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_REPO_ROOT_STR = str(_REPO_ROOT)
+if _REPO_ROOT_STR in sys.path:
+    sys.path.remove(_REPO_ROOT_STR)
+sys.path.insert(0, _REPO_ROOT_STR)
 
 from tools.gpu_embed_service.cache_io import SpoolAsyncCommitter, resolve_missing_ids
 

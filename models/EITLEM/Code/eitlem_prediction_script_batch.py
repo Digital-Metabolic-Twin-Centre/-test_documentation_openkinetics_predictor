@@ -14,15 +14,17 @@ import subprocess
 import gc
 from pathlib import Path
 
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_REPO_ROOT_STR = str(_REPO_ROOT)
+if _REPO_ROOT_STR in sys.path:
+    sys.path.remove(_REPO_ROOT_STR)
+sys.path.insert(0, _REPO_ROOT_STR)
+
+from tools.gpu_embed_service.cache_io import SpoolAsyncCommitter, resolve_missing_ids
+
 # Adjust the import paths according to your project structure
 from KCM import EitlemKcatPredictor
 from KMP import EitlemKmPredictor
-
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
-
-from tools.gpu_embed_service.cache_io import SpoolAsyncCommitter, resolve_missing_ids
 
 
 def _env_bool(name, default=True):
