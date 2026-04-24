@@ -162,11 +162,97 @@ def _compute_seq_pooled_output(
     return seq_pooled_outs.squeeze(0).detach().cpu()
 
 
-# ── ESM2 representations ──────────────────────────────────────────────────────
+def _env_int(name: str, default: int) -> int:
+    raw = str(os.environ.get(name, "")).strip()
+    if not raw:
+        return int(default)
+    try:
+        value = int(raw)
+    except ValueError:
+        return int(default)
+    return value if value > 0 else int(default)
 
-def _get_esm_repr(sequence: str) -> torch.Tensor:
-    from catpred.data.esm_utils import get_single_esm_repr
-    return get_single_esm_repr(sequence).cpu()
+
+def _compute_esm_reprs_batched(
+    *,
+    seq_id_to_seq: dict[str, str],
+    seq_ids: list[str],
+    device: torch.device,
+) -> dict[str, torch.Tensor]:
+    """Compute ESM2 residue representations using token-budget batching.
+
+    This preserves output semantics of get_single_esm_repr() while avoiding
+    one-forward-pass-per-sequence overhead.
+    """
+    from catpred.data import esm_utils
+
+    esm_utils.init_esm()
+    model, batch_converter = esm_utils.GLOBAL_VARIABLES["model"]
+    use_cpu = bool(esm_utils.PROTEIN_EMBED_USE_CPU)
+    max_length = int(esm_utils.ESM_MAX_LENGTH)
+
+    default_token_budget = 2000 if use_cpu else 6000
+    token_budget = _env_int("CATPRED_GPU_ESM_TOKEN_BUDGET", default_token_budget)
+    max_batch = _env_int("CATPRED_GPU_ESM_MAX_BATCH", 8)
+
+    ordered = sorted(seq_ids, key=lambda sid: len(seq_id_to_seq[sid]), reverse=True)
+    batches: list[list[str]] = []
+    current: list[str] = []
+    current_tokens = 0
+
+    for seq_id in ordered:
+        seq_len = len(seq_id_to_seq[seq_id])
+        token_len = min(seq_len + 2, max_length)
+        if current and (len(current) >= max_batch or (current_tokens + token_len) > token_budget):
+            batches.append(current)
+            current = []
+            current_tokens = 0
+        current.append(seq_id)
+        current_tokens += token_len
+    if current:
+        batches.append(current)
+
+    out: dict[str, torch.Tensor] = {}
+
+    def run_batch(batch_ids: list[str]) -> None:
+        data = [("protein", seq_id_to_seq[seq_id]) for seq_id in batch_ids]
+        _labels, _seqs, batch_tokens = batch_converter(data)
+        if batch_tokens.shape[1] > max_length:
+            batch_tokens = batch_tokens[:, :max_length]
+        if not use_cpu:
+            batch_tokens = batch_tokens.to(next(model.parameters()).device, non_blocking=True)
+
+        with torch.inference_mode():
+            results = model(batch_tokens, repr_layers=[33])
+        token_representations = results["representations"][33].detach().cpu()
+
+        for row_idx, seq_id in enumerate(batch_ids):
+            # Match get_single_esm_repr() semantics under truncation.
+            seq_len = len(seq_id_to_seq[seq_id])
+            max_residues = token_representations.shape[1] - 1
+            valid_len = min(seq_len, max_residues)
+            out[seq_id] = token_representations[row_idx, 1 : 1 + valid_len].contiguous()
+
+    def run_batch_with_retry(batch_ids: list[str]) -> None:
+        try:
+            run_batch(batch_ids)
+        except RuntimeError as exc:
+            if (
+                "out of memory" in str(exc).lower()
+                and not use_cpu
+                and len(batch_ids) > 1
+            ):
+                torch.cuda.empty_cache()
+                mid = len(batch_ids) // 2
+                run_batch_with_retry(batch_ids[:mid])
+                run_batch_with_retry(batch_ids[mid:])
+            else:
+                raise
+
+    for batch_ids in batches:
+        run_batch_with_retry(batch_ids)
+
+    return out
 
 
 # ── Cache path helper ─────────────────────────────────────────────────────────
@@ -254,9 +340,11 @@ def main() -> None:
         return
 
     print(f"Computing ESM2 representations for {len(missing_seq_ids)} sequence(s)...")
-    esm_by_seq_id: dict[str, torch.Tensor] = {}
-    for seq_id in sorted(missing_seq_ids):
-        esm_by_seq_id[seq_id] = _get_esm_repr(seq_id_to_seq[seq_id])
+    esm_by_seq_id = _compute_esm_reprs_batched(
+        seq_id_to_seq=seq_id_to_seq,
+        seq_ids=sorted(missing_seq_ids),
+        device=device,
+    )
 
     # ── Per-checkpoint attentive pooling ──────────────────────────────────────
     async_workers = max(1, int(os.environ.get("GPU_EMBED_CACHE_ASYNC_WORKERS", "8")))
