@@ -20,9 +20,9 @@ const BENCHMARK_DATA = [
     cached: 'N/A',
     cachedTooltip: 'uses full per-residue embeddings, thus not cached on server',
   },
-  { method: 'TurNup',    uncachedCpu: '19 min 36 s',  uncachedGpu: '3 min 53 s', cached: '3 min 48 s' },
+  { method: 'TurNup',    uncachedCpu: '19 min 36 s',  uncachedGpu: '3 min 53 s', cached: '2 min 12 s' },
   { method: 'CataPro',   uncachedCpu: '25 min 9 s',   uncachedGpu: '1 min 37 s', cached: '41 s'       },
-  { method: 'UniKP',     uncachedCpu: '33 min 46 s',  uncachedGpu: '1 min 28 s', cached: '4 min 7 s'  },
+  { method: 'UniKP',     uncachedCpu: '33 min 46 s',  uncachedGpu: '1 min 28 s', cached: '58 s'       },
   { method: 'KinForm-L', uncachedCpu: '54 min 38 s',  uncachedGpu: '3 min 49 s', cached: '37 s'       },
   { method: 'KinForm-H', uncachedCpu: '56 min 10 s',  uncachedGpu: '3 min 42 s', cached: '36 s'       },
 ];
