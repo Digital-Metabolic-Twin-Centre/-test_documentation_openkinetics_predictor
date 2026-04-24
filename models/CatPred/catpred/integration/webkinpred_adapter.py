@@ -15,9 +15,26 @@ import pandas as pd
 import torch
 
 _THIS_FILE = Path(__file__).resolve()
-_REPO_ROOT = _THIS_FILE.parents[2]
-if str(_REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(_REPO_ROOT))
+_CATPRED_ROOT = _THIS_FILE.parents[2]
+
+
+def _discover_repo_root(start: Path) -> Path:
+    for candidate in [start] + list(start.parents):
+        if (candidate / "tools" / "gpu_embed_service" / "cache_io.py").exists():
+            return candidate
+    # Fallback for expected source layout.
+    return _THIS_FILE.parents[4]
+
+
+_REPO_ROOT = _discover_repo_root(_THIS_FILE.parent)
+_REPO_ROOT_STR = str(_REPO_ROOT)
+_CATPRED_ROOT_STR = str(_CATPRED_ROOT)
+for path_str in (_CATPRED_ROOT_STR, _REPO_ROOT_STR):
+    if path_str in sys.path:
+        sys.path.remove(path_str)
+# Keep repo root first (for `tools.*` imports), catpred root second.
+sys.path.insert(0, _CATPRED_ROOT_STR)
+sys.path.insert(0, _REPO_ROOT_STR)
 
 from catpred.inference import PredictionRequest, run_prediction_pipeline
 from tools.gpu_embed_service.cache_io import SpoolAsyncCommitter, resolve_missing_ids
