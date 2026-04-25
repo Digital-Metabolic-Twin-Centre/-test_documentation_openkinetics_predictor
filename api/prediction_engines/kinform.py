@@ -11,7 +11,6 @@ import logging
 import os
 import subprocess
 
-import numpy as np
 import pandas as pd
 
 _log = logging.getLogger(__name__)
@@ -37,6 +36,18 @@ _AMINO_ACIDS = set("ACDEFGHIKLMNPQRSTVWY")
 
 # KinForm CLI task names (passed as --task argument)
 _TASK_FLAG = {"KCAT": "kcat", "KM": "KM"}
+
+
+def _is_missing_prediction(prediction) -> bool:
+    """Return True when a raw model output should be treated as missing."""
+    if prediction is None:
+        return True
+    if isinstance(prediction, str):
+        return prediction.strip().lower() in {"", "none", "nan", "null"}
+    try:
+        return bool(pd.isna(prediction))
+    except Exception:
+        return False
 
 
 def kinform_predictions(
@@ -250,9 +261,51 @@ def kinform_predictions(
             "Please contact support if this persists."
         ) from e
 
-    for local_idx, pred in enumerate(raw_values):
+    expected = len(valid_indices)
+    reported = len(raw_values)
+    upto = min(expected, reported)
+    post_prediction_invalids = 0
+
+    for local_idx in range(upto):
+        pred = raw_values[local_idx]
         global_idx = valid_indices[local_idx]
-        predictions[global_idx] = None if pred in ("None", "", np.nan, "nan") else pred
+        if _is_missing_prediction(pred):
+            predictions[global_idx] = None
+            invalid_reasons[global_idx] = "Prediction could not be made"
+            post_prediction_invalids += 1
+        else:
+            predictions[global_idx] = pred
+
+    if reported < expected:
+        _log.warning(
+            "%s output shorter than expected for job %s: expected=%d, reported=%d",
+            model_key,
+            public_id,
+            expected,
+            reported,
+        )
+        for local_idx in range(reported, expected):
+            global_idx = valid_indices[local_idx]
+            predictions[global_idx] = None
+            invalid_reasons[global_idx] = "Prediction output missing"
+            post_prediction_invalids += 1
+    elif reported > expected:
+        _log.warning(
+            "%s output longer than expected for job %s: expected=%d, reported=%d",
+            model_key,
+            public_id,
+            expected,
+            reported,
+        )
+
+    if post_prediction_invalids:
+        increment_stage_validation(
+            job_public_id=public_id,
+            target=stage_target,
+            method_key=model_key,
+            processed_inc=0,
+            invalid_inc=post_prediction_invalids,
+        )
 
     _cleanup(input_file, output_file)
     return predictions, invalid_reasons
