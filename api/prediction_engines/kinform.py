@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import subprocess
+from collections import defaultdict, deque
 
 import pandas as pd
 
@@ -253,7 +254,8 @@ def kinform_predictions(
     # ── Read output CSV ───────────────────────────────────────────────────────
     try:
         df_output = pd.read_csv(output_file)
-        raw_values = df_output["y_pred"].tolist()
+        if "y_pred" not in df_output.columns:
+            raise ValueError("missing required output column 'y_pred'")
     except Exception as e:
         _cleanup(input_file, output_file)
         raise PredictionError(
@@ -262,34 +264,77 @@ def kinform_predictions(
         ) from e
 
     expected = len(valid_indices)
-    reported = len(raw_values)
-    upto = min(expected, reported)
+    reported = len(df_output)
     post_prediction_invalids = 0
+    matched_local: set[int] = set()
 
-    for local_idx in range(upto):
-        pred = raw_values[local_idx]
-        global_idx = valid_indices[local_idx]
-        if _is_missing_prediction(pred):
-            predictions[global_idx] = None
-            invalid_reasons[global_idx] = "Prediction could not be made"
-            post_prediction_invalids += 1
-        else:
-            predictions[global_idx] = pred
+    # Prefer key-based mapping to avoid positional drift if KinForm internally
+    # drops rows (e.g., stricter filtering than the wrapper).
+    can_key_map = {"sequence", "smiles"}.issubset(set(df_output.columns))
+    if can_key_map:
+        key_to_local: dict[tuple[str, str], deque[int]] = defaultdict(deque)
+        for local_idx, (seq, smi) in enumerate(zip(valid_sequences, valid_smiles)):
+            key_to_local[(str(seq), str(smi))].append(local_idx)
 
-    if reported < expected:
+        unmatched_rows = 0
+        for out_row in df_output.itertuples(index=False):
+            seq_out = str(getattr(out_row, "sequence", ""))
+            smi_out = str(getattr(out_row, "smiles", ""))
+            pred = getattr(out_row, "y_pred", None)
+            queue = key_to_local.get((seq_out, smi_out))
+            if not queue:
+                unmatched_rows += 1
+                continue
+
+            local_idx = queue.popleft()
+            matched_local.add(local_idx)
+            global_idx = valid_indices[local_idx]
+            if _is_missing_prediction(pred):
+                predictions[global_idx] = None
+                invalid_reasons[global_idx] = "Prediction could not be made"
+                post_prediction_invalids += 1
+            else:
+                predictions[global_idx] = pred
+
+        if unmatched_rows:
+            _log.warning(
+                "%s output contained %d unmatched rows for job %s (reported=%d)",
+                model_key,
+                unmatched_rows,
+                public_id,
+                reported,
+            )
+    else:
+        raw_values = df_output["y_pred"].tolist()
+        upto = min(expected, reported)
+        for local_idx in range(upto):
+            pred = raw_values[local_idx]
+            matched_local.add(local_idx)
+            global_idx = valid_indices[local_idx]
+            if _is_missing_prediction(pred):
+                predictions[global_idx] = None
+                invalid_reasons[global_idx] = "Prediction could not be made"
+                post_prediction_invalids += 1
+            else:
+                predictions[global_idx] = pred
+
+    missing_local = [i for i in range(expected) if i not in matched_local]
+    if missing_local:
         _log.warning(
-            "%s output shorter than expected for job %s: expected=%d, reported=%d",
+            "%s output shorter than expected for job %s: expected=%d, reported=%d, unmatched_inputs=%d",
             model_key,
             public_id,
             expected,
             reported,
+            len(missing_local),
         )
-        for local_idx in range(reported, expected):
+        for local_idx in missing_local:
             global_idx = valid_indices[local_idx]
             predictions[global_idx] = None
             invalid_reasons[global_idx] = "Prediction output missing"
             post_prediction_invalids += 1
-    elif reported > expected:
+
+    if reported > expected:
         _log.warning(
             "%s output longer than expected for job %s: expected=%d, reported=%d",
             model_key,
