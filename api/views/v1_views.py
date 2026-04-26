@@ -689,7 +689,7 @@ def api_validate(request):
       rowCount          — total number of data rows in the input
       invalidSubstrates — list of rows with unparseable SMILES/InChI strings
       invalidProteins   — list of rows with invalid amino-acid sequences
-      lengthViolations  — per-model violation counts and sequence-length limits
+      lengthViolations  — per-model violation counts (all registered methods + Server)
       similarity        — null when not requested; otherwise a dict keyed by
                           method name, each containing histogram_max,
                           histogram_mean, average_max_similarity,

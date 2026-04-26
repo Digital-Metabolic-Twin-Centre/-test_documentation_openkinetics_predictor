@@ -543,12 +543,22 @@ export default function ApiDocs() {
     { "row": 5, "value": "!!!FAKE!!!", "error": "Invalid amino acid characters" }
   ],
   "lengthViolations": {
-    "TurNup": { "count": 3, "limit": 1024 },
-    "EITLEM": { "count": 3, "limit": 1024 },
-    "UniKP":  { "count": 1, "limit": 1000 }
+    "DLKcat": 0,
+    "TurNup": 3,
+    "EITLEM": 3,
+    "UniKP": 1,
+    "CataPro": 1,
+    "KinForm-H": 0,
+    "KinForm-L": 0,
+    "CatPred": 0,
+    "Server": 0
   },
   "similarity": null
 }`} />
+              <div className="api-callout api-callout-info">
+                <code>lengthViolations</code> reports counts only. Use <code>/methods/</code> to read each
+                method&apos;s <code>maxSeqLen</code> limit.
+              </div>
 
               <p className="example-section-label">Response — with <code>runSimilarity=true</code></p>
               <CodeBlock language="json" code={`{
