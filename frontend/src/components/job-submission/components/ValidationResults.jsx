@@ -23,27 +23,31 @@ export default function ValidationResults({
   methods,
 }) {
   const lengthViol = submissionResult?.length_violations || {};
+  const lengthLimits = submissionResult?.length_limits || {};
   const toCount = (value) => {
     const n = Number(value);
     return Number.isFinite(n) ? n : 0;
   };
 
   const serverViolations = toCount(lengthViol.Server);
+  const serverLimit = Number(lengthLimits.Server) || 10000;
 
   const modelViolationRows = Object.entries(lengthViol)
     .filter(([key]) => key !== 'Server')
     .map(([key, value]) => {
       const methodMeta = methods?.[key];
-      const rawLimit = methodMeta?.maxSeqLen;
+      const hasLimitFromValidation = Object.prototype.hasOwnProperty.call(lengthLimits, key);
+      const rawLimit = hasLimitFromValidation ? lengthLimits[key] : methodMeta?.maxSeqLen;
       const numericLimit = Number(rawLimit);
-      const hasFiniteLimit = methodMeta && rawLimit !== null && Number.isFinite(numericLimit);
+      const hasFiniteLimit = rawLimit !== null && Number.isFinite(numericLimit);
 
       return {
         key,
         label: methodMeta?.displayName || key,
-        limitLabel: methodMeta
-          ? (rawLimit === null ? '∞' : (hasFiniteLimit ? numericLimit.toLocaleString() : String(rawLimit)))
-          : 'Unknown',
+        limitLabel:
+          rawLimit === null
+            ? '∞'
+            : (hasFiniteLimit ? numericLimit.toLocaleString() : 'Unknown'),
         sortLimit: hasFiniteLimit ? numericLimit : Number.POSITIVE_INFINITY,
         violations: toCount(value),
       };
@@ -150,7 +154,7 @@ export default function ValidationResults({
                           <td className="text-white">
                             <strong>Overall Server Limit</strong>
                           </td>
-                          <td className="text-white">10,000</td>
+                          <td className="text-white">{serverLimit.toLocaleString()}</td>
                           <td className="text-danger">{serverViolations}</td>
                         </tr>
                       )}

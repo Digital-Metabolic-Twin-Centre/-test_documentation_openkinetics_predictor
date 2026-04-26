@@ -690,6 +690,8 @@ def api_validate(request):
       invalidSubstrates — list of rows with unparseable SMILES/InChI strings
       invalidProteins   — list of rows with invalid amino-acid sequences
       lengthViolations  — per-model violation counts (all registered methods + Server)
+      lengthLimits      — per-model max sequence lengths from descriptors
+                          (null means no limit), plus Server
       similarity        — null when not requested; otherwise a dict keyed by
                           method name, each containing histogram_max,
                           histogram_mean, average_max_similarity,
@@ -742,6 +744,7 @@ def api_validate(request):
             "invalidSubstrates": validation_result["invalid_substrates"],
             "invalidProteins": validation_result["invalid_proteins"],
             "lengthViolations": validation_result["length_violations"],
+            "lengthLimits": validation_result["length_limits"],
             "similarity": similarity,
         }
     )

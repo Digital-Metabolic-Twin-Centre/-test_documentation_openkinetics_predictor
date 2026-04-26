@@ -553,11 +553,22 @@ export default function ApiDocs() {
     "CatPred": 0,
     "Server": 0
   },
+  "lengthLimits": {
+    "DLKcat": null,
+    "TurNup": 1024,
+    "EITLEM": 1024,
+    "UniKP": 1000,
+    "CataPro": 1000,
+    "KinForm-H": 1500,
+    "KinForm-L": 1500,
+    "CatPred": 2048,
+    "Server": 10000
+  },
   "similarity": null
 }`} />
               <div className="api-callout api-callout-info">
-                <code>lengthViolations</code> reports counts only. Use <code>/methods/</code> to read each
-                method&apos;s <code>maxSeqLen</code> limit.
+                <code>lengthViolations</code> reports counts and <code>lengthLimits</code> reports limits for all
+                registered methods (derived from descriptor <code>max_seq_len</code>).
               </div>
 
               <p className="example-section-label">Response — with <code>runSimilarity=true</code></p>
