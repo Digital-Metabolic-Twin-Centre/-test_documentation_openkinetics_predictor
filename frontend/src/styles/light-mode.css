@@ -398,6 +398,89 @@
   background: rgba(110, 90, 200, 0.06);
 }
 
+/* Length warning table (bg-dark + text-white hardcoded in JSX) */
+[data-theme="light"] .section-validation-results .table.bg-dark {
+  background-color: #f0ecff !important;
+  color: #1c1443 !important;
+}
+[data-theme="light"] .section-validation-results .table .text-white {
+  color: #1c1443 !important;
+}
+[data-theme="light"] .section-validation-results .table .text-secondary {
+  color: rgba(44, 32, 100, 0.65) !important;
+}
+[data-theme="light"] .section-validation-results .table th[style] {
+  background-color: rgba(110, 90, 200, 0.12) !important;
+  color: #1c1443 !important;
+}
+[data-theme="light"] .section-validation-results .table tfoot tr[style] {
+  border-top-color: rgba(110, 90, 200, 0.25) !important;
+}
+
+/* Long-sequence options panel */
+[data-theme="light"] .section-validation-results .bg-light.bg-opacity-10 {
+  background-color: rgba(110, 90, 200, 0.07) !important;
+}
+[data-theme="light"] .section-validation-results .text-white-50 {
+  color: rgba(44, 32, 100, 0.6) !important;
+}
+
+/* Similarity histogram — controls wrapper */
+[data-theme="light"] .sim-controls-wrapper {
+  background-color: rgba(110, 90, 200, 0.06);
+  border-color: rgba(110, 90, 200, 0.18);
+}
+
+[data-theme="light"] .sim-section-label {
+  color: rgba(44, 32, 100, 0.55);
+}
+
+[data-theme="light"] .sim-body-text {
+  color: #1c1443;
+}
+
+[data-theme="light"] .sim-slider-row {
+  color: #1c1443;
+}
+
+[data-theme="light"] .sim-view-btn {
+  border-color: rgba(110, 90, 200, 0.35);
+  color: rgba(44, 32, 100, 0.72);
+}
+[data-theme="light"] .sim-view-btn:hover {
+  background: rgba(110, 90, 200, 0.08);
+  color: #1c1443;
+}
+[data-theme="light"] .sim-view-btn.active {
+  background: rgba(110, 90, 200, 0.16);
+  border-color: rgba(110, 90, 200, 0.55);
+  color: #1c1443;
+}
+
+/* Similarity histogram — accordion */
+[data-theme="light"] .custom-accordion {
+  --bs-accordion-color: #1c1443;
+  --bs-accordion-bg: transparent;
+  --bs-accordion-border-color: rgba(110, 90, 200, 0.2);
+  --bs-accordion-btn-color: #1c1443;
+  --bs-accordion-btn-bg: rgba(110, 90, 200, 0.05);
+  --bs-accordion-btn-focus-border-color: rgba(110, 90, 200, 0.4);
+  --bs-accordion-btn-focus-box-shadow: 0 0 0 0.2rem rgba(110, 90, 200, 0.15);
+  --bs-accordion-active-color: #1c1443;
+  --bs-accordion-active-bg: rgba(110, 90, 200, 0.1);
+}
+[data-theme="light"] .custom-accordion .accordion-button::after {
+  filter: none;
+}
+[data-theme="light"] .custom-accordion .accordion-body {
+  background-color: rgba(110, 90, 200, 0.04);
+  color: #1c1443;
+}
+[data-theme="light"] .parameter-list code {
+  color: #3d2e8a;
+  background-color: rgba(110, 90, 200, 0.12);
+}
+
 /* ═══════════════════════════════════════════════════════════
    10. EXPANDABLE ERROR MESSAGE
    ═══════════════════════════════════════════════════════════ */
