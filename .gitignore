@@ -53,3 +53,5 @@ frontend/yarn-error.log*
 
 # Editor
 .vscode/settings.json
+node_modules/
+docs/_build/
