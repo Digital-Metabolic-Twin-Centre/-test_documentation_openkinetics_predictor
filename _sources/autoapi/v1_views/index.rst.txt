@@ -1,0 +1,262 @@
+v1_views
+========
+
+.. py:module:: v1_views
+
+.. autoapi-nested-parse::
+
+   Public REST API — version 1 endpoints.
+
+   All endpoints live under the /api/v1/ prefix (see api/urls_v1.py).
+
+   Authentication
+   --------------
+   Most endpoints require an API key delivered as a Bearer token:
+
+       Authorization: Bearer ak_<your_key>
+
+   The two exceptions are /health/ and /methods/, which are intentionally public
+   so that clients can discover available methods and check server status without
+   needing credentials.
+
+   Quota
+   -----
+   Quota accounting uses the IP address stored on the ApiUser record associated
+   with the API key (not the request's source IP).  This keeps quota consistent
+   regardless of where the script is run.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   v1_views._json_error
+   v1_views._quota_dict
+   v1_views.api_health
+   v1_views.api_gpu_status
+   v1_views.api_list_methods
+   v1_views.api_quota
+   v1_views.api_submit_job
+   v1_views._parse_multipart_body
+   v1_views._parse_json_body
+   v1_views.api_job_status
+   v1_views.api_download_result
+   v1_views.api_validate
+   v1_views._parse_validate_multipart_body
+   v1_views._parse_validate_json_body
+
+
+Module Contents
+---------------
+
+.. py:function:: _json_error(message: str, status: int = 400) -> django.http.JsonResponse
+
+   Return a consistently formatted error response.
+
+
+.. py:function:: _quota_dict(ip_address: str) -> dict
+
+   Return quota data in the camelCase shape expected by API clients.
+
+
+.. py:function:: api_health(request)
+
+   Health check endpoint — no authentication required.
+
+   Returns a simple JSON object confirming the service is up.
+
+
+.. py:function:: api_gpu_status(request)
+
+   Return a minimal GPU availability snapshot for the frontend.
+
+   Internal fields (gpu_name, vram, active_jobs, raw GPU response) are
+   deliberately stripped — the browser only needs to know online/offline.
+
+
+.. py:function:: api_list_methods(request)
+
+   List all available prediction methods and their requirements.
+
+   No authentication required — this endpoint acts as living documentation
+   so clients can discover what methods exist and what CSV columns they need
+   before writing any code.  The response is generated directly from the
+   method registry, so it is always up to date when new methods are added.
+
+   Response shape
+   --------------
+   {
+     "methods": {
+       "<method_key>": {
+         "displayName":       str,
+         "authors":           str,
+         "publicationTitle":  str,
+         "citationUrl":       str,
+         "repoUrl":           str,
+         "moreInfo":          str,
+         "supports":          list[str],   // e.g. ["kcat", "Km", "kcat/Km"]
+         "inputFormat":       str,         // "single" or "multi" ("full reaction" is represented as "multi")
+         "maxSeqLen":         int | null,  // null means no limit
+         "requiredColumns":   list[str],   // includes "Protein Sequence"
+         "substrateFormat":   str,
+       },
+       ...
+     },
+     "predictionTypes": ["kcat", "Km", "kcat/Km"],
+     "longSequenceOptions": { "truncate": "...", "skip": "..." },
+     "notes": { ... }
+   }
+
+
+.. py:function:: api_quota(request)
+
+   Return the current quota status for the authenticated key owner.
+
+   Quota is tracked per-day (resetting at midnight UTC) and per-user
+   (keyed by the IP address stored on the ApiUser record).
+
+
+.. py:function:: api_submit_job(request)
+
+   Submit a new prediction job.
+
+   Accepts two content types:
+
+   1. multipart/form-data — upload a CSV file plus form fields:
+        file                  (required) — the CSV file
+        targets               (required) — JSON array from
+                                            ["kcat", "Km", "kcat/Km"]
+        methods               (required) — JSON object mapping selected target
+                                            to method key
+        handleLongSequences   (optional, default "truncate") — "truncate" or "skip"
+        useExperimental       (optional, default "false")   — "true" or "false"
+        includeSimilarityColumns (optional, default "true") — "true" or "false"
+        canonicalizeSubstrates (optional, default "true")  — "true" or "false"
+
+   2. application/json — send data directly as a JSON body:
+        {
+          "targets": ["kcat"],
+          "methods": {"kcat": "DLKcat"},
+          "handleLongSequences": "truncate",
+          "useExperimental": false,
+          "includeSimilarityColumns": true,
+          "canonicalizeSubstrates": true,
+          "data": [
+            {"Protein Sequence": "MKTL...", "Substrate": "CC(=O)O"},
+            ...
+          ]
+        }
+
+   Both paths call the same underlying job-submission service, so validation,
+   quota accounting, and task dispatch behave identically.
+
+   On success, returns a JSON object with:
+     - jobId       — use this to poll /status/ and download /result/
+     - statusUrl   — convenience URL for polling
+     - resultUrl   — convenience URL for downloading results
+     - quota       — your remaining quota after this submission
+
+
+.. py:function:: _parse_multipart_body(request)
+
+   Extract CSV file and parameters from a multipart/form-data request.
+
+   Returns (csv_file, params, error).  On success, error is None.
+
+
+.. py:function:: _parse_json_body(request)
+
+   Extract CSV data and parameters from an application/json request body.
+
+   The caller supplies the data as an array of row objects under the key
+   "data".  We convert this to an in-memory CSV file so the same downstream
+   validation and processing code can handle it without modification.
+
+   Returns (csv_file, params, error).  On success, error is None.
+
+
+.. py:function:: api_job_status(request, public_id)
+
+   Return the current status of a prediction job.
+
+   Poll this endpoint until status is "Completed" or "Failed", then
+   fetch your results from the resultUrl.
+
+   Possible status values:
+     Pending    — job is queued and waiting for a worker
+     Processing — worker is running predictions
+     Completed  — predictions are done; results are ready to download
+     Failed     — something went wrong; see the 'error' field for details
+
+
+.. py:function:: api_download_result(request, public_id)
+
+   Download the prediction results for a completed job.
+
+   By default, returns a CSV file attachment.  Add ?format=json to receive
+   the same data as a JSON object instead — useful when you want to parse
+   results directly without writing an intermediate file.
+
+   The response includes all columns from the input CSV plus:
+     - A prediction column (e.g. "kcat (1/s)" or "KM (mM)")
+     - A "Source" column indicating whether the value came from a model
+       or from the experimental database
+     - An "Extra Info" column with additional details
+
+   Returns 409 Conflict if the job has not yet completed.
+   Returns 404 if the job does not exist.
+   Returns 500 if the output file is missing (should not normally occur).
+
+
+.. py:function:: api_validate(request)
+
+   Validate a CSV file (or inline JSON data) without submitting a prediction
+   job.  Checks substrate SMILES/InChI strings, protein amino-acid sequences,
+   and sequence-length limits for every available model.
+
+   Optionally runs MMseqs2 sequence similarity analysis against each method's
+   training database when runSimilarity=true.  This is a synchronous call that
+   blocks until the analysis is complete — it may take several minutes for
+   large inputs.  No quota is consumed by this endpoint.
+
+   Accepts the same two content-type formats as /submit/:
+
+   1. multipart/form-data
+        file           (required) — the CSV file
+        runSimilarity  (optional, default "false") — "true" to include similarity
+
+   2. application/json
+        {
+          "data":          [...],      // required — array of row objects
+          "runSimilarity": false       // optional
+        }
+
+   Response fields:
+     rowCount          — total number of data rows in the input
+     invalidSubstrates — list of rows with unparseable SMILES/InChI strings
+     invalidProteins   — list of rows with invalid amino-acid sequences
+     lengthViolations  — per-model violation counts (all registered methods + Server)
+     lengthLimits      — per-model max sequence lengths from descriptors
+                         (null means no limit), plus Server
+     similarity        — null when not requested; otherwise a dict keyed by
+                         method name, each containing histogram_max,
+                         histogram_mean, average_max_similarity,
+                         average_mean_similarity, count_max, count_mean
+
+
+.. py:function:: _parse_validate_multipart_body(request)
+
+   Extract CSV file and runSimilarity flag from a multipart/form-data request.
+
+   Returns (csv_file, run_similarity, error).  On success, error is None.
+
+
+.. py:function:: _parse_validate_json_body(request)
+
+   Extract inline data and runSimilarity flag from an application/json request.
+
+   Returns (csv_file, run_similarity, error).  On success, error is None.
+
+

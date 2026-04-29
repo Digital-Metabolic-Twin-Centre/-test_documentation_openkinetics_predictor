@@ -1,0 +1,509 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>base &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="tasks" href="../tasks/index.html" />
+    <link rel="prev" title="API Reference" href="../index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">base</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#attributes">Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#exceptions">Exceptions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#classes">Classes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#base.PredictionTarget"><code class="docutils literal notranslate"><span class="pre">PredictionTarget</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#base.InputFormat"><code class="docutils literal notranslate"><span class="pre">InputFormat</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#base.PredictionError"><code class="docutils literal notranslate"><span class="pre">PredictionError</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#base.SubprocessEngineConfig"><code class="docutils literal notranslate"><span class="pre">SubprocessEngineConfig</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#base.MethodDescriptor"><code class="docutils literal notranslate"><span class="pre">MethodDescriptor</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../tasks/index.html">tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../v1_views/index.html">v1_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_utils/index.html">job_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extra_info/index.html">extra_info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_utils/index.html">validation_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">base</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/base/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-base">
+<span id="base"></span><h1>base<a class="headerlink" href="#module-base" title="Link to this heading"></a></h1>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#base.PredictionTarget" title="base.PredictionTarget"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PredictionTarget</span></code></a></p></td>
+<td><p>A kinetic parameter that a method can predict.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#base.InputFormat" title="base.InputFormat"><code class="xref py py-obj docutils literal notranslate"><span class="pre">InputFormat</span></code></a></p></td>
+<td><p>The CSV input format expected by a method.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="exceptions">
+<h2>Exceptions<a class="headerlink" href="#exceptions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#base.PredictionError" title="base.PredictionError"><code class="xref py py-obj docutils literal notranslate"><span class="pre">PredictionError</span></code></a></p></td>
+<td><p>Raised by prediction engines when an unrecoverable error occurs during</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="classes">
+<h2>Classes<a class="headerlink" href="#classes" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#base.SubprocessEngineConfig" title="base.SubprocessEngineConfig"><code class="xref py py-obj docutils literal notranslate"><span class="pre">SubprocessEngineConfig</span></code></a></p></td>
+<td><p>Configuration for the built-in generic subprocess prediction engine.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#base.MethodDescriptor" title="base.MethodDescriptor"><code class="xref py py-obj docutils literal notranslate"><span class="pre">MethodDescriptor</span></code></a></p></td>
+<td><p>Complete specification for a kinetic-parameter prediction method.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="base.PredictionTarget">
+<span class="sig-prename descclassname"><span class="pre">base.</span></span><span class="sig-name descname"><span class="pre">PredictionTarget</span></span><a class="headerlink" href="#base.PredictionTarget" title="Link to this definition"></a></dt>
+<dd><p>A kinetic parameter that a method can predict.</p>
+</dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="base.InputFormat">
+<span class="sig-prename descclassname"><span class="pre">base.</span></span><span class="sig-name descname"><span class="pre">InputFormat</span></span><a class="headerlink" href="#base.InputFormat" title="Link to this definition"></a></dt>
+<dd><p>The CSV input format expected by a method.</p>
+<ul class="simple">
+<li><p>“single”: requires a single “Substrate” column (one SMILES/InChI per row).</p></li>
+<li><dl class="simple">
+<dt>“multi”:  requires “Substrates” and “Products” columns</dt><dd><p>(semicolon-separated SMILES/InChI per row).</p>
+</dd>
+</dl>
+</li>
+</ul>
+<p>User-facing terminology also includes “full reaction”.
+In backend descriptors and validation logic, “full reaction” is represented by
+“multi” with both “Substrates” and “Products” columns.</p>
+</dd></dl>
+
+<dl class="py exception">
+<dt class="sig sig-object py" id="base.PredictionError">
+<em class="property"><span class="k"><span class="pre">exception</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">base.</span></span><span class="sig-name descname"><span class="pre">PredictionError</span></span><a class="headerlink" href="#base.PredictionError" title="Link to this definition"></a></dt>
+<dd><p>Bases: <code class="xref py py-obj docutils literal notranslate"><span class="pre">Exception</span></code></p>
+<p>Raised by prediction engines when an unrecoverable error occurs during
+prediction.</p>
+<p>The exception message is shown directly to the user as the job’s error
+message, so it must be written in plain English without technical jargon,
+internal file paths, or stack traces.</p>
+<p>Prediction engines should catch all subprocess and I/O errors and re-raise
+them as PredictionError with a descriptive message.  Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">raise</span> <span class="n">PredictionError</span><span class="p">(</span>
+    <span class="s2">&quot;DLKcat ran out of memory. Try reducing the number of rows or the sequence lengths.&quot;</span>
+<span class="p">)</span>
+
+<span class="k">raise</span> <span class="n">PredictionError</span><span class="p">(</span>
+    <span class="s2">&quot;EITLEM encountered an internal error and could not complete. &quot;</span>
+    <span class="s2">&quot;Please verify your input and try again.&quot;</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">base.</span></span><span class="sig-name descname"><span class="pre">SubprocessEngineConfig</span></span><a class="headerlink" href="#base.SubprocessEngineConfig" title="Link to this definition"></a></dt>
+<dd><p>Configuration for the built-in generic subprocess prediction engine.</p>
+<p>When a method descriptor provides this config (and does not provide
+<code class="docutils literal notranslate"><span class="pre">pred_func</span></code>), the framework handles:</p>
+<ol class="arabic simple">
+<li><p>Row-level validation (sequence + molecule format checks),</p></li>
+<li><p>Input file creation,</p></li>
+<li><p>Subprocess execution (with progress streaming),</p></li>
+<li><p>Output file parsing and index remapping.</p></li>
+</ol>
+<p>This allows a new method to be integrated without writing a custom
+<code class="docutils literal notranslate"><span class="pre">api/prediction_engines/&lt;method&gt;.py</span></code> module.</p>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.python_path_key">
+<span class="sig-name descname"><span class="pre">python_path_key</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.python_path_key" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.python_path">
+<span class="sig-name descname"><span class="pre">python_path</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.python_path" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.script_key">
+<span class="sig-name descname"><span class="pre">script_key</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.script_key" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.script_path">
+<span class="sig-name descname"><span class="pre">script_path</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.script_path" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.input_flag">
+<span class="sig-name descname"><span class="pre">input_flag</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'--input'</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.input_flag" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.output_flag">
+<span class="sig-name descname"><span class="pre">output_flag</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'--output'</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.output_flag" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.extra_args">
+<span class="sig-name descname"><span class="pre">extra_args</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.extra_args" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.data_path_env">
+<span class="sig-name descname"><span class="pre">data_path_env</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#base.SubprocessEngineConfig.data_path_env" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.extra_env">
+<span class="sig-name descname"><span class="pre">extra_env</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#base.SubprocessEngineConfig.extra_env" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.validate_sequence">
+<span class="sig-name descname"><span class="pre">validate_sequence</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.validate_sequence" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.validate_chemistry">
+<span class="sig-name descname"><span class="pre">validate_chemistry</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">True</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.validate_chemistry" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.SubprocessEngineConfig.allowed_amino_acids">
+<span class="sig-name descname"><span class="pre">allowed_amino_acids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'ACDEFGHIKLMNPQRSTVWY'</span></em><a class="headerlink" href="#base.SubprocessEngineConfig.allowed_amino_acids" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="base.MethodDescriptor">
+<em class="property"><span class="k"><span class="pre">class</span></span><span class="w"> </span></em><span class="sig-prename descclassname"><span class="pre">base.</span></span><span class="sig-name descname"><span class="pre">MethodDescriptor</span></span><a class="headerlink" href="#base.MethodDescriptor" title="Link to this definition"></a></dt>
+<dd><p>Complete specification for a kinetic-parameter prediction method.</p>
+<p>One instance of this class is defined in each <code class="docutils literal notranslate"><span class="pre">api/methods/&lt;method&gt;.py</span></code>
+module as a module-level variable named <code class="docutils literal notranslate"><span class="pre">descriptor</span></code>.  The registry
+loads all descriptors automatically — no manual registration is required.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>key</strong> (<em>str</em>) – Unique, stable identifier for this method.  Used as the method ID in
+API requests (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;DLKcat&quot;</span></code>, <code class="docutils literal notranslate"><span class="pre">&quot;KinForm-H&quot;</span></code>).  Must not contain
+spaces.</p></li>
+<li><p><strong>display_name</strong> (<em>str</em>) – Human-readable name shown in the UI and included in result CSVs
+(e.g. <code class="docutils literal notranslate"><span class="pre">&quot;KinForm-H&quot;</span></code>).</p></li>
+<li><p><strong>authors</strong> (<em>str</em>) – Author list for the underlying publication.</p></li>
+<li><p><strong>publication_title</strong> (<em>str</em>) – Full title of the paper describing this method.</p></li>
+<li><p><strong>citation_url</strong> (<em>str</em>) – URL of the paper (DOI link or journal page).</p></li>
+<li><p><strong>repo_url</strong> (<em>str</em>) – URL of the method’s source-code repository.</p></li>
+<li><p><strong>more_info</strong> (<em>str</em>) – Optional extra guidance shown to users (e.g. “Recommended for …”).</p></li>
+<li><p><strong>supports</strong> (<em>list</em><em>[</em><em>PredictionTarget</em><em>]</em>) – Which kinetic parameters this method can predict.
+E.g. <code class="docutils literal notranslate"><span class="pre">[&quot;kcat&quot;]</span></code>, <code class="docutils literal notranslate"><span class="pre">[&quot;kcat&quot;,</span> <span class="pre">&quot;Km&quot;]</span></code>.</p></li>
+<li><p><strong>input_format</strong> (<em>InputFormat</em>) – CSV format expected by the method: <code class="docutils literal notranslate"><span class="pre">&quot;single&quot;</span></code> (one substrate per
+row) or <code class="docutils literal notranslate"><span class="pre">&quot;multi&quot;</span></code> (semicolon-separated substrates and products).
+In user-facing text, <code class="docutils literal notranslate"><span class="pre">&quot;full</span> <span class="pre">reaction&quot;</span></code> maps to <code class="docutils literal notranslate"><span class="pre">&quot;multi&quot;</span></code>.</p></li>
+<li><p><strong>output_cols</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em>) – Maps each supported prediction target to the output CSV column name.
+E.g. <code class="docutils literal notranslate"><span class="pre">{&quot;kcat&quot;:</span> <span class="pre">&quot;kcat</span> <span class="pre">(1/s)&quot;,</span> <span class="pre">&quot;Km&quot;:</span> <span class="pre">&quot;KM</span> <span class="pre">(mM)&quot;}</span></code>.</p></li>
+<li><p><strong>max_seq_len</strong> (<em>int</em><em> | </em><em>float</em>) – Maximum protein sequence length accepted by the method.
+Use <code class="docutils literal notranslate"><span class="pre">float(&quot;inf&quot;)</span></code> if the method has no length limit.</p></li>
+<li><p><strong>col_to_kwarg</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em>) – <p>Maps CSV column names to the keyword argument names of <code class="docutils literal notranslate"><span class="pre">pred_func</span></code>.
+The framework reads each listed column from the input DataFrame and
+passes it to <code class="docutils literal notranslate"><span class="pre">pred_func</span></code> under the mapped name.</p>
+<p>Examples:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span><span class="s2">&quot;Substrate&quot;</span><span class="p">:</span> <span class="s2">&quot;substrates&quot;</span><span class="p">}</span>  <span class="c1"># single-substrate methods</span>
+<span class="p">{</span>
+    <span class="s2">&quot;Substrates&quot;</span><span class="p">:</span> <span class="s2">&quot;substrates&quot;</span><span class="p">,</span>  <span class="c1"># TurNup</span>
+    <span class="s2">&quot;Products&quot;</span><span class="p">:</span> <span class="s2">&quot;products&quot;</span><span class="p">,</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+</p></li>
+<li><p><strong>target_kwargs</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>dict</em><em>]</em>) – <p>Extra static keyword arguments passed to <code class="docutils literal notranslate"><span class="pre">pred_func</span></code> depending on
+the prediction target.  Use this for methods that handle both kcat
+and Km through the same function but need different flags:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="p">{</span>
+    <span class="s2">&quot;kcat&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;kinetics_type&quot;</span><span class="p">:</span> <span class="s2">&quot;KCAT&quot;</span><span class="p">},</span>
+    <span class="s2">&quot;Km&quot;</span><span class="p">:</span> <span class="p">{</span><span class="s2">&quot;kinetics_type&quot;</span><span class="p">:</span> <span class="s2">&quot;KM&quot;</span><span class="p">},</span>
+<span class="p">}</span>
+</pre></div>
+</div>
+<p>For methods that only support one target, this can be empty or omitted.</p>
+</p></li>
+<li><p><strong>pred_func</strong> (<em>Callable</em><em> | </em><em>None</em>) – <p>Optional custom prediction function.  Must follow this exact
+signature if provided:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="k">def</span><span class="w"> </span><span class="nf">pred_func</span><span class="p">(</span>
+    <span class="n">sequences</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">],</span>
+    <span class="n">public_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">list</span><span class="p">,</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parameters</span>
+<span class="sd">    ----------</span>
+<span class="sd">    sequences</span>
+<span class="sd">        Pre-filtered, possibly truncated protein sequences.</span>
+<span class="sd">        Length matches the number of valid rows passed to this call.</span>
+<span class="sd">    public_id</span>
+<span class="sd">        Job identifier used to update progress in the database.</span>
+<span class="sd">    **kwargs</span>
+<span class="sd">        Assembled by the framework from col_to_kwarg (CSV-derived</span>
+<span class="sd">        inputs) and target_kwargs (target-specific flags).</span>
+
+<span class="sd">    Returns</span>
+<span class="sd">    -------</span>
+<span class="sd">    predictions</span>
+<span class="sd">        One value per input sequence, in the same order.</span>
+<span class="sd">        Use ``None`` or empty string for rows where a prediction</span>
+<span class="sd">        could not be made.</span>
+<span class="sd">    invalid_indices</span>
+<span class="sd">        Zero-based indices (into the ``sequences`` list) of rows</span>
+<span class="sd">        rejected due to invalid substrate or sequence format.</span>
+
+<span class="sd">    Raises</span>
+<span class="sd">    ------</span>
+<span class="sd">    PredictionError</span>
+<span class="sd">        When the prediction cannot complete due to a model-level</span>
+<span class="sd">        error (subprocess failure, out of memory, timeout, …).</span>
+<span class="sd">        The message is shown verbatim to the user.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+</pre></div>
+</div>
+<p>The function usually lives in
+<code class="docutils literal notranslate"><span class="pre">api/prediction_engines/&lt;method&gt;.py</span></code>.</p>
+<p>If omitted, set <code class="docutils literal notranslate"><span class="pre">subprocess</span></code> (below) to use the built-in generic
+subprocess engine instead.</p>
+</p></li>
+<li><p><strong>subprocess</strong> (<a class="reference internal" href="#base.SubprocessEngineConfig" title="base.SubprocessEngineConfig"><em>SubprocessEngineConfig</em></a><em> | </em><em>None</em>) – Configuration for the built-in generic subprocess engine.
+Recommended for most new methods because it avoids writing a custom
+engine module.</p></li>
+<li><p><strong>embeddings_used</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – Informational list of embedding model keys used by this method.
+Check <code class="docutils literal notranslate"><span class="pre">api/embeddings/registry.py</span></code> for which of these are already
+implemented in the shared infrastructure.  Embeddings that are already
+implemented can be reused directly by referencing the conda python path
+from config (as KinForm does) rather than bundling a separate copy.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.key">
+<span class="sig-name descname"><span class="pre">key</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.key" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.display_name">
+<span class="sig-name descname"><span class="pre">display_name</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.display_name" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.authors">
+<span class="sig-name descname"><span class="pre">authors</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.authors" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.publication_title">
+<span class="sig-name descname"><span class="pre">publication_title</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.publication_title" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.citation_url">
+<span class="sig-name descname"><span class="pre">citation_url</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.citation_url" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.repo_url">
+<span class="sig-name descname"><span class="pre">repo_url</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><a class="headerlink" href="#base.MethodDescriptor.repo_url" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.more_info">
+<span class="sig-name descname"><span class="pre">more_info</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">''</span></em><a class="headerlink" href="#base.MethodDescriptor.more_info" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.supports">
+<span class="sig-name descname"><span class="pre">supports</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">PredictionTarget</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#base.MethodDescriptor.supports" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.input_format">
+<span class="sig-name descname"><span class="pre">input_format</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">InputFormat</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">'single'</span></em><a class="headerlink" href="#base.MethodDescriptor.input_format" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.output_cols">
+<span class="sig-name descname"><span class="pre">output_cols</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#base.MethodDescriptor.output_cols" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.max_seq_len">
+<span class="sig-name descname"><span class="pre">max_seq_len</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">float</span></em><a class="headerlink" href="#base.MethodDescriptor.max_seq_len" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.col_to_kwarg">
+<span class="sig-name descname"><span class="pre">col_to_kwarg</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#base.MethodDescriptor.col_to_kwarg" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.target_kwargs">
+<span class="sig-name descname"><span class="pre">target_kwargs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">]</span></span></em><a class="headerlink" href="#base.MethodDescriptor.target_kwargs" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.pred_func">
+<span class="sig-name descname"><span class="pre">pred_func</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Callable</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.MethodDescriptor.pred_func" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.subprocess">
+<span class="sig-name descname"><span class="pre">subprocess</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><a class="reference internal" href="#base.SubprocessEngineConfig" title="base.SubprocessEngineConfig"><span class="pre">SubprocessEngineConfig</span></a><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#base.MethodDescriptor.subprocess" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="base.MethodDescriptor.embeddings_used">
+<span class="sig-name descname"><span class="pre">embeddings_used</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">[]</span></em><a class="headerlink" href="#base.MethodDescriptor.embeddings_used" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../index.html" class="btn btn-neutral float-left" title="API Reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../tasks/index.html" class="btn btn-neutral float-right" title="tasks" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

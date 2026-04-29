@@ -1,0 +1,40 @@
+validation_service
+==================
+
+.. py:module:: validation_service
+
+.. autoapi-nested-parse::
+
+   Validation service that orchestrates input validation workflows.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   validation_service._build_length_limits_payload
+   validation_service.validate_input_file
+
+
+Module Contents
+---------------
+
+.. py:function:: _build_length_limits_payload() -> Dict[str, int | None]
+
+   Return per-method sequence limits derived from method descriptors.
+
+   Infinite limits are represented as None for JSON transport.
+   Includes a top-level Server limit.
+
+
+.. py:function:: validate_input_file(file) -> Dict[str, Any]
+
+   Validate an uploaded CSV file for substrate and protein sequence data.
+
+   :param file: Uploaded file object from Django request
+
+   :returns: Dictionary containing validation results or error information
+
+

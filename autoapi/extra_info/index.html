@@ -1,0 +1,213 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>extra_info &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="handle_long" href="../handle_long/index.html" />
+    <link rel="prev" title="http_utils" href="../http_utils/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base/index.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tasks/index.html">tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../v1_views/index.html">v1_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_utils/index.html">job_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">extra_info</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#extra_info._nullish"><code class="docutils literal notranslate"><span class="pre">_nullish()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#extra_info._source"><code class="docutils literal notranslate"><span class="pre">_source()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#extra_info.build_extra_info"><code class="docutils literal notranslate"><span class="pre">build_extra_info()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_utils/index.html">validation_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">extra_info</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/extra_info/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-extra_info">
+<span id="extra-info"></span><h1>extra_info<a class="headerlink" href="#module-extra_info" title="Link to this heading"></a></h1>
+<p>api/utils/extra_info.py
+───────────────────────
+Utility for turning an experimental-lookup dict into the
+‘Extra Information’ string shown in output.csv</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#extra_info._nullish" title="extra_info._nullish"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_nullish</span></code></a>(→ bool)</p></td>
+<td><p>True if <em>v</em> counts as 'not provided'.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#extra_info._source" title="extra_info._source"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_source</span></code></a>(→ str)</p></td>
+<td><p>Return BRENDA / Sabio-RK / UniProt or 'Experimental' as fallback.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#extra_info.build_extra_info" title="extra_info.build_extra_info"><code class="xref py py-obj docutils literal notranslate"><span class="pre">build_extra_info</span></code></a>(→ str)</p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="extra_info._nullish">
+<span class="sig-prename descclassname"><span class="pre">extra_info.</span></span><span class="sig-name descname"><span class="pre">_nullish</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">v</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#extra_info._nullish" title="Link to this definition"></a></dt>
+<dd><p>True if <em>v</em> counts as ‘not provided’.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="extra_info._source">
+<span class="sig-prename descclassname"><span class="pre">extra_info.</span></span><span class="sig-name descname"><span class="pre">_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#extra_info._source" title="Link to this definition"></a></dt>
+<dd><p>Return BRENDA / Sabio-RK / UniProt or ‘Experimental’ as fallback.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="extra_info.build_extra_info">
+<span class="sig-prename descclassname"><span class="pre">extra_info.</span></span><span class="sig-name descname"><span class="pre">build_extra_info</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exp</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">param_type</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">prediction</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">''</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#extra_info.build_extra_info" title="Link to this definition"></a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>exp</strong> (<em>dict</em>) – Record returned by <cite>lookup_experimental</cite>, already guaranteed to
+contain at least the keys used below.</p></li>
+<li><p><strong>param_type</strong> (<em>str</em>) – ‘Km’ or ‘kcat’ (case-insensitive).  Used to pick the SD field.</p></li>
+<li><p><strong>prediction</strong> (<em>str</em><em>, </em><em>optional</em>) – The prediction value, if available. Used to include in the output.</p></li>
+<li><p><strong>model_key</strong> (<em>str</em><em>, </em><em>optional</em>) – The model key used for the prediction, if applicable.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>A single human-readable paragraph, or ‘’ if exp[‘found’] is False.</p>
+</dd>
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>str</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../http_utils/index.html" class="btn btn-neutral float-left" title="http_utils" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../handle_long/index.html" class="btn btn-neutral float-right" title="handle_long" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

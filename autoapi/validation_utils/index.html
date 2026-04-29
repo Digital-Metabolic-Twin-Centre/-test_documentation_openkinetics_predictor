@@ -1,0 +1,441 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>validation_utils &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="similarity_views" href="../similarity_views/index.html" />
+    <link rel="prev" title="similarity_utils" href="../similarity_utils/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base/index.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tasks/index.html">tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../v1_views/index.html">v1_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_utils/index.html">job_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extra_info/index.html">extra_info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">validation_utils</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils._get_model_limits"><code class="docutils literal notranslate"><span class="pre">_get_model_limits()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.safe_convert_to_mol"><code class="docutils literal notranslate"><span class="pre">safe_convert_to_mol()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.split_single_substrate_components"><code class="docutils literal notranslate"><span class="pre">split_single_substrate_components()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_csv_structure"><code class="docutils literal notranslate"><span class="pre">validate_csv_structure()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_single_substrate_schema"><code class="docutils literal notranslate"><span class="pre">validate_single_substrate_schema()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_multi_substrate_schema"><code class="docutils literal notranslate"><span class="pre">validate_multi_substrate_schema()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_substrates"><code class="docutils literal notranslate"><span class="pre">validate_substrates()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_protein_sequence_characters"><code class="docutils literal notranslate"><span class="pre">validate_protein_sequence_characters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.calculate_sequence_length_violations"><code class="docutils literal notranslate"><span class="pre">calculate_sequence_length_violations()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_protein_sequences"><code class="docutils literal notranslate"><span class="pre">validate_protein_sequences()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.clean_data_for_json"><code class="docutils literal notranslate"><span class="pre">clean_data_for_json()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.parse_csv_file"><code class="docutils literal notranslate"><span class="pre">parse_csv_file()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_file_format"><code class="docutils literal notranslate"><span class="pre">validate_file_format()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_required_columns"><code class="docutils literal notranslate"><span class="pre">validate_required_columns()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#validation_utils.validate_column_emptiness"><code class="docutils literal notranslate"><span class="pre">validate_column_emptiness()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">validation_utils</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/validation_utils/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-validation_utils">
+<span id="validation-utils"></span><h1>validation_utils<a class="headerlink" href="#module-validation_utils" title="Link to this heading"></a></h1>
+<p>Validation utility functions for input processing.
+These functions handle specific validation tasks following single responsibility principle.</p>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils._get_model_limits" title="validation_utils._get_model_limits"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_get_model_limits</span></code></a>(→ dict)</p></td>
+<td><p>Return per-method sequence-length limits from the method registry.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.safe_convert_to_mol" title="validation_utils.safe_convert_to_mol"><code class="xref py py-obj docutils literal notranslate"><span class="pre">safe_convert_to_mol</span></code></a>(→ Optional[Any])</p></td>
+<td><p>Safely convert a value to molecule format with robust NaN/empty string handling.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.split_single_substrate_components" title="validation_utils.split_single_substrate_components"><code class="xref py py-obj docutils literal notranslate"><span class="pre">split_single_substrate_components</span></code></a>(→ List[str])</p></td>
+<td><p>Split single-column substrate values into individually validatable components.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.validate_csv_structure" title="validation_utils.validate_csv_structure"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_csv_structure</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate that CSV has required columns for substrate/protein validation.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.validate_single_substrate_schema" title="validation_utils.validate_single_substrate_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_single_substrate_schema</span></code></a>(→ List[Dict[str, Any]])</p></td>
+<td><p>Validate substrates using single-substrate schema (Substrate column).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.validate_multi_substrate_schema" title="validation_utils.validate_multi_substrate_schema"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_multi_substrate_schema</span></code></a>(→ List[Dict[str, Any]])</p></td>
+<td><p>Validate substrates using multi-substrate schema (Substrates and Products columns).</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.validate_substrates" title="validation_utils.validate_substrates"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_substrates</span></code></a>(→ List[Dict[str, Any]])</p></td>
+<td><p>Validate substrate data based on available columns in the dataframe.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.validate_protein_sequence_characters" title="validation_utils.validate_protein_sequence_characters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_protein_sequence_characters</span></code></a>(→ List[str])</p></td>
+<td><p>Validate that protein sequence contains only valid amino acid characters.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.calculate_sequence_length_violations" title="validation_utils.calculate_sequence_length_violations"><code class="xref py py-obj docutils literal notranslate"><span class="pre">calculate_sequence_length_violations</span></code></a>(→ Dict[str, int])</p></td>
+<td><p>Calculate which models would reject a sequence based on length limits.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.validate_protein_sequences" title="validation_utils.validate_protein_sequences"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_protein_sequences</span></code></a>(→ Tuple[List[Dict[str, ...)</p></td>
+<td><p>Validate protein sequences for character validity and length constraints.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.clean_data_for_json" title="validation_utils.clean_data_for_json"><code class="xref py py-obj docutils literal notranslate"><span class="pre">clean_data_for_json</span></code></a>(→ Any)</p></td>
+<td><p>Recursively clean data to make it JSON-serializable.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.parse_csv_file" title="validation_utils.parse_csv_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">parse_csv_file</span></code></a>(→ pandas.DataFrame)</p></td>
+<td><p>Parse and clean a CSV file from request.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.validate_file_format" title="validation_utils.validate_file_format"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_file_format</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate file format based on allowed extensions.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#validation_utils.validate_required_columns" title="validation_utils.validate_required_columns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_required_columns</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate that DataFrame contains all required columns.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#validation_utils.validate_column_emptiness" title="validation_utils.validate_column_emptiness"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_column_emptiness</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate that a column doesn't have too many empty values.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils._get_model_limits">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">_get_model_limits</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#validation_utils._get_model_limits" title="Link to this definition"></a></dt>
+<dd><p>Return per-method sequence-length limits from the method registry.</p>
+<p>Imported lazily (inside a function) so that this module can be safely
+imported before Django’s app registry is fully initialised.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.safe_convert_to_mol">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">safe_convert_to_mol</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#validation_utils.safe_convert_to_mol" title="Link to this definition"></a></dt>
+<dd><p>Safely convert a value to molecule format with robust NaN/empty string handling.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>value</strong> – Input value to convert</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Converted molecule object or None if invalid/empty</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.split_single_substrate_components">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">split_single_substrate_components</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.split_single_substrate_components" title="Link to this definition"></a></dt>
+<dd><p>Split single-column substrate values into individually validatable components.</p>
+<p>Rules:
+- InChI values are treated as a single token.
+- SMILES values are split by ‘.’ to support multi-component entries</p>
+<blockquote>
+<div><p>like “A.B” in the “Substrate” column.</p>
+</div></blockquote>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_csv_structure">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_csv_structure</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#validation_utils.validate_csv_structure" title="Link to this definition"></a></dt>
+<dd><p>Validate that CSV has required columns for substrate/protein validation.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dataframe</strong> – Pandas DataFrame to validate</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Error message if validation fails, None if valid</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_single_substrate_schema">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_single_substrate_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.validate_single_substrate_schema" title="Link to this definition"></a></dt>
+<dd><p>Validate substrates using single-substrate schema (Substrate column).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dataframe</strong> – DataFrame containing Substrate column</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of validation errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_multi_substrate_schema">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_multi_substrate_schema</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.validate_multi_substrate_schema" title="Link to this definition"></a></dt>
+<dd><p>Validate substrates using multi-substrate schema (Substrates and Products columns).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dataframe</strong> – DataFrame containing Substrates and Products columns</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of validation errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_substrates">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_substrates</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.validate_substrates" title="Link to this definition"></a></dt>
+<dd><p>Validate substrate data based on available columns in the dataframe.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dataframe</strong> – DataFrame to validate substrates from</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of substrate validation errors</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_protein_sequence_characters">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_protein_sequence_characters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sequence</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.validate_protein_sequence_characters" title="Link to this definition"></a></dt>
+<dd><p>Validate that protein sequence contains only valid amino acid characters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>sequence</strong> – Protein sequence string</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>List of invalid characters found in sequence</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.calculate_sequence_length_violations">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">calculate_sequence_length_violations</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">sequence_length</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.calculate_sequence_length_violations" title="Link to this definition"></a></dt>
+<dd><p>Calculate which models would reject a sequence based on length limits.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>sequence_length</strong> – Length of the protein sequence</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Dictionary mapping model names to violation count (0 or 1)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_protein_sequences">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_protein_sequences</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">int</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#validation_utils.validate_protein_sequences" title="Link to this definition"></a></dt>
+<dd><p>Validate protein sequences for character validity and length constraints.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>dataframe</strong> – DataFrame containing Protein Sequence column</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Tuple of (invalid_proteins_list, aggregated_length_violations)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.clean_data_for_json">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">clean_data_for_json</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">data</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Any</span></span></span><a class="headerlink" href="#validation_utils.clean_data_for_json" title="Link to this definition"></a></dt>
+<dd><p>Recursively clean data to make it JSON-serializable.
+Converts pandas NaN values to string “NaN”.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>data</strong> – Data to clean (can be nested lists/dicts)</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>JSON-serializable version of the data</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.parse_csv_file">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">parse_csv_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#validation_utils.parse_csv_file" title="Link to this definition"></a></dt>
+<dd><p>Parse and clean a CSV file from request.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>file</strong> – File object from Django request</p>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Cleaned pandas DataFrame</p>
+</dd>
+<dt class="field-odd">Raises<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>Exception</strong> – If CSV parsing fails</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_file_format">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_file_format</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allowed_extensions</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#validation_utils.validate_file_format" title="Link to this definition"></a></dt>
+<dd><p>Validate file format based on allowed extensions.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>file</strong> – File object from request</p></li>
+<li><p><strong>allowed_extensions</strong> – List of allowed extensions (defaults to [‘.csv’])</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Error message if invalid, None if valid</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_required_columns">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_required_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">required_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#validation_utils.validate_required_columns" title="Link to this definition"></a></dt>
+<dd><p>Validate that DataFrame contains all required columns.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataframe</strong> – DataFrame to validate</p></li>
+<li><p><strong>required_columns</strong> – List of required column names</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Error message if validation fails, None if valid</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="validation_utils.validate_column_emptiness">
+<span class="sig-prename descclassname"><span class="pre">validation_utils.</span></span><span class="sig-name descname"><span class="pre">validate_column_emptiness</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">column_name</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">max_empty_percent</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">float</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">0.1</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#validation_utils.validate_column_emptiness" title="Link to this definition"></a></dt>
+<dd><p>Validate that a column doesn’t have too many empty values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataframe</strong> – DataFrame to validate</p></li>
+<li><p><strong>column_name</strong> – Name of the column to check</p></li>
+<li><p><strong>max_empty_percent</strong> – Maximum allowed percentage of empty rows (default 0.1 = 10%)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>Error message if validation fails, None if valid</p>
+</dd>
+</dl>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../similarity_utils/index.html" class="btn btn-neutral float-left" title="similarity_utils" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../similarity_views/index.html" class="btn btn-neutral float-right" title="similarity_views" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

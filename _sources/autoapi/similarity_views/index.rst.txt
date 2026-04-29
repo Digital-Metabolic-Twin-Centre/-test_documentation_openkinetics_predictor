@@ -1,0 +1,22 @@
+similarity_views
+================
+
+.. py:module:: similarity_views
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   similarity_views.sequence_similarity_summary
+
+
+Module Contents
+---------------
+
+.. py:function:: sequence_similarity_summary(request)
+
+   Analyze protein sequence similarity against target databases.
+
+

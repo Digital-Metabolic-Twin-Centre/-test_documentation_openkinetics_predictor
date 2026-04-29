@@ -1,0 +1,353 @@
+base
+====
+
+.. py:module:: base
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   base.PredictionTarget
+   base.InputFormat
+
+
+Exceptions
+----------
+
+.. autoapisummary::
+
+   base.PredictionError
+
+
+Classes
+-------
+
+.. autoapisummary::
+
+   base.SubprocessEngineConfig
+   base.MethodDescriptor
+
+
+Module Contents
+---------------
+
+.. py:data:: PredictionTarget
+
+   A kinetic parameter that a method can predict.
+
+.. py:data:: InputFormat
+
+   The CSV input format expected by a method.
+
+   - "single": requires a single "Substrate" column (one SMILES/InChI per row).
+   - "multi":  requires "Substrates" and "Products" columns
+               (semicolon-separated SMILES/InChI per row).
+
+   User-facing terminology also includes "full reaction".
+   In backend descriptors and validation logic, "full reaction" is represented by
+   "multi" with both "Substrates" and "Products" columns.
+
+.. py:exception:: PredictionError
+
+   Bases: :py:obj:`Exception`
+
+
+   Raised by prediction engines when an unrecoverable error occurs during
+   prediction.
+
+   The exception message is shown directly to the user as the job's error
+   message, so it must be written in plain English without technical jargon,
+   internal file paths, or stack traces.
+
+   Prediction engines should catch all subprocess and I/O errors and re-raise
+   them as PredictionError with a descriptive message.  Examples::
+
+       raise PredictionError(
+           "DLKcat ran out of memory. Try reducing the number of rows or the sequence lengths."
+       )
+
+       raise PredictionError(
+           "EITLEM encountered an internal error and could not complete. "
+           "Please verify your input and try again."
+       )
+
+
+.. py:class:: SubprocessEngineConfig
+
+   Configuration for the built-in generic subprocess prediction engine.
+
+   When a method descriptor provides this config (and does not provide
+   ``pred_func``), the framework handles:
+
+   1. Row-level validation (sequence + molecule format checks),
+   2. Input file creation,
+   3. Subprocess execution (with progress streaming),
+   4. Output file parsing and index remapping.
+
+   This allows a new method to be integrated without writing a custom
+   ``api/prediction_engines/<method>.py`` module.
+
+
+   .. py:attribute:: python_path_key
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: python_path
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: script_key
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: script_path
+      :type:  str | None
+      :value: None
+
+
+
+   .. py:attribute:: input_flag
+      :type:  str
+      :value: '--input'
+
+
+
+   .. py:attribute:: output_flag
+      :type:  str
+      :value: '--output'
+
+
+
+   .. py:attribute:: extra_args
+      :type:  list[str]
+      :value: []
+
+
+
+   .. py:attribute:: data_path_env
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: extra_env
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: validate_sequence
+      :type:  bool
+      :value: True
+
+
+
+   .. py:attribute:: validate_chemistry
+      :type:  bool
+      :value: True
+
+
+
+   .. py:attribute:: allowed_amino_acids
+      :type:  str
+      :value: 'ACDEFGHIKLMNPQRSTVWY'
+
+
+
+.. py:class:: MethodDescriptor
+
+   Complete specification for a kinetic-parameter prediction method.
+
+   One instance of this class is defined in each ``api/methods/<method>.py``
+   module as a module-level variable named ``descriptor``.  The registry
+   loads all descriptors automatically — no manual registration is required.
+
+   :param key: Unique, stable identifier for this method.  Used as the method ID in
+               API requests (e.g. ``"DLKcat"``, ``"KinForm-H"``).  Must not contain
+               spaces.
+   :type key: str
+   :param display_name: Human-readable name shown in the UI and included in result CSVs
+                        (e.g. ``"KinForm-H"``).
+   :type display_name: str
+   :param authors: Author list for the underlying publication.
+   :type authors: str
+   :param publication_title: Full title of the paper describing this method.
+   :type publication_title: str
+   :param citation_url: URL of the paper (DOI link or journal page).
+   :type citation_url: str
+   :param repo_url: URL of the method's source-code repository.
+   :type repo_url: str
+   :param more_info: Optional extra guidance shown to users (e.g. "Recommended for …").
+   :type more_info: str
+   :param supports: Which kinetic parameters this method can predict.
+                    E.g. ``["kcat"]``, ``["kcat", "Km"]``.
+   :type supports: list[PredictionTarget]
+   :param input_format: CSV format expected by the method: ``"single"`` (one substrate per
+                        row) or ``"multi"`` (semicolon-separated substrates and products).
+                        In user-facing text, ``"full reaction"`` maps to ``"multi"``.
+   :type input_format: InputFormat
+   :param output_cols: Maps each supported prediction target to the output CSV column name.
+                       E.g. ``{"kcat": "kcat (1/s)", "Km": "KM (mM)"}``.
+   :type output_cols: dict[str, str]
+   :param max_seq_len: Maximum protein sequence length accepted by the method.
+                       Use ``float("inf")`` if the method has no length limit.
+   :type max_seq_len: int | float
+   :param col_to_kwarg: Maps CSV column names to the keyword argument names of ``pred_func``.
+                        The framework reads each listed column from the input DataFrame and
+                        passes it to ``pred_func`` under the mapped name.
+
+                        Examples::
+
+                            {"Substrate": "substrates"}  # single-substrate methods
+                            {
+                                "Substrates": "substrates",  # TurNup
+                                "Products": "products",
+                            }
+   :type col_to_kwarg: dict[str, str]
+   :param target_kwargs: Extra static keyword arguments passed to ``pred_func`` depending on
+                         the prediction target.  Use this for methods that handle both kcat
+                         and Km through the same function but need different flags::
+
+                             {
+                                 "kcat": {"kinetics_type": "KCAT"},
+                                 "Km": {"kinetics_type": "KM"},
+                             }
+
+                         For methods that only support one target, this can be empty or omitted.
+   :type target_kwargs: dict[str, dict]
+   :param pred_func: Optional custom prediction function.  Must follow this exact
+                     signature if provided::
+
+                         def pred_func(
+                             sequences: list[str],
+                             public_id: str,
+                             **kwargs,
+                         ) -> tuple[list, list[int]]:
+                             """
+                             Parameters
+                             ----------
+                             sequences
+                                 Pre-filtered, possibly truncated protein sequences.
+                                 Length matches the number of valid rows passed to this call.
+                             public_id
+                                 Job identifier used to update progress in the database.
+                             **kwargs
+                                 Assembled by the framework from col_to_kwarg (CSV-derived
+                                 inputs) and target_kwargs (target-specific flags).
+
+                             Returns
+                             -------
+                             predictions
+                                 One value per input sequence, in the same order.
+                                 Use ``None`` or empty string for rows where a prediction
+                                 could not be made.
+                             invalid_indices
+                                 Zero-based indices (into the ``sequences`` list) of rows
+                                 rejected due to invalid substrate or sequence format.
+
+                             Raises
+                             ------
+                             PredictionError
+                                 When the prediction cannot complete due to a model-level
+                                 error (subprocess failure, out of memory, timeout, …).
+                                 The message is shown verbatim to the user.
+                             """
+
+                     The function usually lives in
+                     ``api/prediction_engines/<method>.py``.
+
+                     If omitted, set ``subprocess`` (below) to use the built-in generic
+                     subprocess engine instead.
+   :type pred_func: Callable | None
+   :param subprocess: Configuration for the built-in generic subprocess engine.
+                      Recommended for most new methods because it avoids writing a custom
+                      engine module.
+   :type subprocess: SubprocessEngineConfig | None
+   :param embeddings_used: Informational list of embedding model keys used by this method.
+                           Check ``api/embeddings/registry.py`` for which of these are already
+                           implemented in the shared infrastructure.  Embeddings that are already
+                           implemented can be reused directly by referencing the conda python path
+                           from config (as KinForm does) rather than bundling a separate copy.
+   :type embeddings_used: list[str]
+
+
+   .. py:attribute:: key
+      :type:  str
+
+
+   .. py:attribute:: display_name
+      :type:  str
+
+
+   .. py:attribute:: authors
+      :type:  str
+
+
+   .. py:attribute:: publication_title
+      :type:  str
+
+
+   .. py:attribute:: citation_url
+      :type:  str
+
+
+   .. py:attribute:: repo_url
+      :type:  str
+
+
+   .. py:attribute:: more_info
+      :type:  str
+      :value: ''
+
+
+
+   .. py:attribute:: supports
+      :type:  list[PredictionTarget]
+      :value: []
+
+
+
+   .. py:attribute:: input_format
+      :type:  InputFormat
+      :value: 'single'
+
+
+
+   .. py:attribute:: output_cols
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: max_seq_len
+      :type:  int | float
+
+
+   .. py:attribute:: col_to_kwarg
+      :type:  dict[str, str]
+
+
+   .. py:attribute:: target_kwargs
+      :type:  dict[str, dict]
+
+
+   .. py:attribute:: pred_func
+      :type:  Callable | None
+      :value: None
+
+
+
+   .. py:attribute:: subprocess
+      :type:  SubprocessEngineConfig | None
+      :value: None
+
+
+
+   .. py:attribute:: embeddings_used
+      :type:  list[str]
+      :value: []
+
+
+

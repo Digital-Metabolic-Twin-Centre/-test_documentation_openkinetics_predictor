@@ -1,0 +1,35 @@
+handle_long
+===========
+
+.. py:module:: handle_long
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   handle_long.get_valid_indices
+   handle_long.truncate_sequences
+
+
+Module Contents
+---------------
+
+.. py:function:: get_valid_indices(sequences, limit, mode='skip')
+
+   Returns indices of sequences that are valid (below both model and server limits).
+   If mode is 'skip', sequences above limit are excluded from prediction.
+
+
+.. py:function:: truncate_sequences(sequences, limit)
+
+   Truncates sequences that exceed the limit by keeping the first and last halves.
+   For example, if limit=1000 and sequence length=1200, it returns seq[:500] + seq[-500:]
+
+   :returns:
+
+             - List of sequences (truncated if needed)
+             - List of indices for sequences that were valid or truncated
+
+

@@ -1,0 +1,137 @@
+tasks
+=====
+
+.. py:module:: tasks
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   tasks._safe_clear_gpu_precompute_status
+   tasks.run_prediction
+   tasks.run_both_prediction
+   tasks.run_multi_prediction
+   tasks._execute_prediction
+   tasks._execute_both_prediction
+   tasks._execute_multi_prediction
+   tasks._invoke_method_prediction
+   tasks._map_subset_invalid_reasons
+   tasks._build_skipped_message
+   tasks._load_input
+   tasks._output_path
+   tasks._handle_oom
+   tasks._sanitise_unexpected
+
+
+Module Contents
+---------------
+
+.. py:function:: _safe_clear_gpu_precompute_status(public_id: str) -> None
+
+.. py:function:: run_prediction(public_id: str, method_key: str, target: str, experimental_results: list | None = None, canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run a single-target prediction job.
+
+   :param public_id: The job's public identifier.
+   :type public_id: str
+   :param method_key: Registry key of the prediction method (e.g. ``"DLKcat"``).
+   :type method_key: str
+   :param target: Prediction target: ``"kcat"`` or ``"Km"``.
+   :type target: str
+   :param experimental_results: Pre-fetched experimental values to merge into the output, or None.
+   :type experimental_results: list | None
+
+
+.. py:function:: run_both_prediction(public_id: str, kcat_key: str, km_key: str, experimental_results: list | None = None, canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run a dual-target prediction job (kcat and KM in sequence).
+
+   :param public_id: The job's public identifier.
+   :type public_id: str
+   :param kcat_key: Registry key of the kcat prediction method.
+   :type kcat_key: str
+   :param km_key: Registry key of the KM prediction method.
+   :type km_key: str
+   :param experimental_results: Pre-fetched experimental values to merge into the output, or None.
+   :type experimental_results: list | None
+
+
+.. py:function:: run_multi_prediction(public_id: str, targets: list[str], methods: dict[str, str], experimental_results: dict | None = None, canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run a multi-target prediction job.
+
+   :param public_id: The job's public identifier.
+   :type public_id: str
+   :param targets: Selected targets, subset of ``["kcat", "Km", "kcat/Km"]``.
+   :type targets: list[str]
+   :param methods: Mapping target -> method key.
+   :type methods: dict[str, str]
+   :param experimental_results: Optional pre-fetched experimental rows keyed by target.
+   :type experimental_results: dict | None
+
+
+.. py:function:: _execute_prediction(job: api.models.Job, desc, df: pandas.DataFrame, target: str, experimental_results: list, canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run a single-target prediction and write output.csv.
+
+   Validates required columns, applies sequence-length handling, invokes the
+   method's pred_func, merges experimental overwrites, writes the output CSV,
+   and credits back rows that produced no prediction.
+
+
+.. py:function:: _execute_both_prediction(job: api.models.Job, kcat_desc, km_desc, df: pandas.DataFrame, experimental_results: list, canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run kcat and KM predictions in sequence and write a combined output.csv.
+
+   Uses the stricter of the two methods' sequence-length limits.
+
+
+.. py:function:: _execute_multi_prediction(job: api.models.Job, targets: list[str], desc_by_target: dict, df: pandas.DataFrame, experimental_results: dict[str, list], canonicalize_substrates: bool = True, include_similarity_columns: bool = True) -> None
+
+   Run one or more prediction targets and write a combined output.csv.
+
+   Targets are executed in canonical order and each contributes a column bundle:
+   prediction values + source + extra info.
+
+
+.. py:function:: _invoke_method_prediction(desc, sequences: list[str], public_id: str, target: str, canonicalize_substrates: bool = True, **call_kwargs) -> tuple[list, dict[int, str]]
+
+   Invoke a method using either:
+
+   1) a custom `pred_func` (legacy/current methods), or
+   2) the built-in generic subprocess engine (recommended for new methods).
+
+   Always returns (predictions, invalid_reasons) where invalid_reasons maps
+   local indices (into sequences) to human-readable skip reasons.
+
+
+.. py:function:: _map_subset_invalid_reasons(global_indices: list[int], invalid_reasons: dict[int, str]) -> dict[int, str]
+
+   Map local invalid reasons (keyed by position in sequences subset) to global row indices.
+
+
+.. py:function:: _build_skipped_message(skipped_reasons: dict[int, str]) -> str
+
+   Serialize per-row skip reasons as a JSON array grouped by reason.
+
+
+.. py:function:: _load_input(job: api.models.Job) -> pandas.DataFrame
+
+   Read the job's input CSV, crediting back quota on failure.
+
+
+.. py:function:: _output_path(public_id: str) -> str
+
+.. py:function:: _handle_oom(job: api.models.Job, label: str) -> None
+
+   Mark job as failed with an out-of-memory message and credit back quota.
+
+
+.. py:function:: _sanitise_unexpected(exc: Exception, label: str) -> str
+
+   Convert an unexpected (non-PredictionError) exception to a user-facing
+   message, stripping internal paths and stack traces.
+
+

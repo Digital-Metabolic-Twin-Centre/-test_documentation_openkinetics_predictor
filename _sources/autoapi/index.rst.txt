@@ -1,0 +1,28 @@
+API Reference
+=============
+
+This page contains auto-generated API reference documentation [#f1]_.
+
+.. toctree::
+   :titlesonly:
+
+   /autoapi/base/index
+   /autoapi/tasks/index
+   /autoapi/registry/index
+   /autoapi/v1_views/index
+   /autoapi/safe_read/index
+   /autoapi/job_utils/index
+   /autoapi/http_utils/index
+   /autoapi/extra_info/index
+   /autoapi/handle_long/index
+   /autoapi/job_service/index
+   /autoapi/log_sanitiser/index
+   /autoapi/api_key_views/index
+   /autoapi/progress_views/index
+   /autoapi/similarity_utils/index
+   /autoapi/validation_utils/index
+   /autoapi/similarity_views/index
+   /autoapi/validation_views/index
+   /autoapi/validation_service/index
+
+.. [#f1] Created with `sphinx-autoapi <https://github.com/readthedocs/sphinx-autoapi>`_

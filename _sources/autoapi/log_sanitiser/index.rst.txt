@@ -1,0 +1,55 @@
+log_sanitiser
+=============
+
+.. py:module:: log_sanitiser
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   log_sanitiser.RE_CONDA
+   log_sanitiser.RE_APP_ROOT
+   log_sanitiser.RE_HOME
+   log_sanitiser.RE_TMP_PATTERNS
+   log_sanitiser.RE_ABS_FALLBACK
+   log_sanitiser.COMMON_LABELS
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   log_sanitiser._normalise_target_db_refs
+   log_sanitiser.sanitise_log_line
+
+
+Module Contents
+---------------
+
+.. py:data:: RE_CONDA
+
+.. py:data:: RE_APP_ROOT
+
+.. py:data:: RE_HOME
+
+.. py:data:: RE_TMP_PATTERNS
+
+.. py:data:: RE_ABS_FALLBACK
+
+.. py:data:: COMMON_LABELS
+
+.. py:function:: _normalise_target_db_refs(line: str, target_dbs: Dict[str, str] | None) -> str
+
+   Replace any known target DB paths (and their basenames) with friendly labels:
+     /.../targetdb_dlkcat  -> TARGET_DB(DLKcat)  (or whatever key name you use)
+
+
+.. py:function:: sanitise_log_line(line: str, target_dbs: Dict[str, str] | None = None) -> str
+
+   Apply the requested redactions, while keeping the log readable and useful.
+   Order matters: normalise known DBs first, then scrub paths.
+
+

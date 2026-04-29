@@ -1,0 +1,23 @@
+progress_views
+==============
+
+.. py:module:: progress_views
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   progress_views.progress_stream
+
+
+Module Contents
+---------------
+
+.. py:function:: progress_stream(request)
+
+   SSE endpoint: /api/progress-stream/?session_id=XYZ
+   Streams logs for the given session_id.
+
+

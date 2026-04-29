@@ -1,0 +1,484 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>v1_views &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="safe_read" href="../safe_read/index.html" />
+    <link rel="prev" title="registry" href="../registry/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base/index.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tasks/index.html">tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">v1_views</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#authentication">Authentication</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#quota">Quota</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._json_error"><code class="docutils literal notranslate"><span class="pre">_json_error()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._quota_dict"><code class="docutils literal notranslate"><span class="pre">_quota_dict()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_health"><code class="docutils literal notranslate"><span class="pre">api_health()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_gpu_status"><code class="docutils literal notranslate"><span class="pre">api_gpu_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_list_methods"><code class="docutils literal notranslate"><span class="pre">api_list_methods()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_quota"><code class="docutils literal notranslate"><span class="pre">api_quota()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_submit_job"><code class="docutils literal notranslate"><span class="pre">api_submit_job()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._parse_multipart_body"><code class="docutils literal notranslate"><span class="pre">_parse_multipart_body()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._parse_json_body"><code class="docutils literal notranslate"><span class="pre">_parse_json_body()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_job_status"><code class="docutils literal notranslate"><span class="pre">api_job_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_download_result"><code class="docutils literal notranslate"><span class="pre">api_download_result()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views.api_validate"><code class="docutils literal notranslate"><span class="pre">api_validate()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._parse_validate_multipart_body"><code class="docutils literal notranslate"><span class="pre">_parse_validate_multipart_body()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#v1_views._parse_validate_json_body"><code class="docutils literal notranslate"><span class="pre">_parse_validate_json_body()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_utils/index.html">job_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extra_info/index.html">extra_info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_utils/index.html">validation_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">v1_views</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/v1_views/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-v1_views">
+<span id="v1-views"></span><h1>v1_views<a class="headerlink" href="#module-v1_views" title="Link to this heading"></a></h1>
+<p>Public REST API — version 1 endpoints.</p>
+<p>All endpoints live under the /api/v1/ prefix (see api/urls_v1.py).</p>
+<section id="authentication">
+<h2>Authentication<a class="headerlink" href="#authentication" title="Link to this heading"></a></h2>
+<p>Most endpoints require an API key delivered as a Bearer token:</p>
+<blockquote>
+<div><p>Authorization: Bearer ak_&lt;your_key&gt;</p>
+</div></blockquote>
+<p>The two exceptions are /health/ and /methods/, which are intentionally public
+so that clients can discover available methods and check server status without
+needing credentials.</p>
+</section>
+<section id="quota">
+<h2>Quota<a class="headerlink" href="#quota" title="Link to this heading"></a></h2>
+<p>Quota accounting uses the IP address stored on the ApiUser record associated
+with the API key (not the request’s source IP).  This keeps quota consistent
+regardless of where the script is run.</p>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views._json_error" title="v1_views._json_error"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_json_error</span></code></a>(→ django.http.JsonResponse)</p></td>
+<td><p>Return a consistently formatted error response.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views._quota_dict" title="v1_views._quota_dict"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_quota_dict</span></code></a>(→ dict)</p></td>
+<td><p>Return quota data in the camelCase shape expected by API clients.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views.api_health" title="v1_views.api_health"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_health</span></code></a>(request)</p></td>
+<td><p>Health check endpoint — no authentication required.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views.api_gpu_status" title="v1_views.api_gpu_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_gpu_status</span></code></a>(request)</p></td>
+<td><p>Return a minimal GPU availability snapshot for the frontend.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views.api_list_methods" title="v1_views.api_list_methods"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_list_methods</span></code></a>(request)</p></td>
+<td><p>List all available prediction methods and their requirements.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views.api_quota" title="v1_views.api_quota"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_quota</span></code></a>(request)</p></td>
+<td><p>Return the current quota status for the authenticated key owner.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views.api_submit_job" title="v1_views.api_submit_job"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_submit_job</span></code></a>(request)</p></td>
+<td><p>Submit a new prediction job.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views._parse_multipart_body" title="v1_views._parse_multipart_body"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_parse_multipart_body</span></code></a>(request)</p></td>
+<td><p>Extract CSV file and parameters from a multipart/form-data request.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views._parse_json_body" title="v1_views._parse_json_body"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_parse_json_body</span></code></a>(request)</p></td>
+<td><p>Extract CSV data and parameters from an application/json request body.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views.api_job_status" title="v1_views.api_job_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_job_status</span></code></a>(request, public_id)</p></td>
+<td><p>Return the current status of a prediction job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views.api_download_result" title="v1_views.api_download_result"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_download_result</span></code></a>(request, public_id)</p></td>
+<td><p>Download the prediction results for a completed job.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views.api_validate" title="v1_views.api_validate"><code class="xref py py-obj docutils literal notranslate"><span class="pre">api_validate</span></code></a>(request)</p></td>
+<td><p>Validate a CSV file (or inline JSON data) without submitting a prediction</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#v1_views._parse_validate_multipart_body" title="v1_views._parse_validate_multipart_body"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_parse_validate_multipart_body</span></code></a>(request)</p></td>
+<td><p>Extract CSV file and runSimilarity flag from a multipart/form-data request.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#v1_views._parse_validate_json_body" title="v1_views._parse_validate_json_body"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_parse_validate_json_body</span></code></a>(request)</p></td>
+<td><p>Extract inline data and runSimilarity flag from an application/json request.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._json_error">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_json_error</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">message</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">status</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">400</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">django.http.JsonResponse</span></span></span><a class="headerlink" href="#v1_views._json_error" title="Link to this definition"></a></dt>
+<dd><p>Return a consistently formatted error response.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._quota_dict">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_quota_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">ip_address</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span></span></span><a class="headerlink" href="#v1_views._quota_dict" title="Link to this definition"></a></dt>
+<dd><p>Return quota data in the camelCase shape expected by API clients.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_health">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_health</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_health" title="Link to this definition"></a></dt>
+<dd><p>Health check endpoint — no authentication required.</p>
+<p>Returns a simple JSON object confirming the service is up.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_gpu_status">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_gpu_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_gpu_status" title="Link to this definition"></a></dt>
+<dd><p>Return a minimal GPU availability snapshot for the frontend.</p>
+<p>Internal fields (gpu_name, vram, active_jobs, raw GPU response) are
+deliberately stripped — the browser only needs to know online/offline.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_list_methods">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_list_methods</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_list_methods" title="Link to this definition"></a></dt>
+<dd><p>List all available prediction methods and their requirements.</p>
+<p>No authentication required — this endpoint acts as living documentation
+so clients can discover what methods exist and what CSV columns they need
+before writing any code.  The response is generated directly from the
+method registry, so it is always up to date when new methods are added.</p>
+<section id="response-shape">
+<h3>Response shape<a class="headerlink" href="#response-shape" title="Link to this heading"></a></h3>
+<dl>
+<dt>{</dt><dd><dl class="simple">
+<dt>“methods”: {</dt><dd><dl class="simple">
+<dt>“&lt;method_key&gt;”: {</dt><dd><p>“displayName”:       str,
+“authors”:           str,
+“publicationTitle”:  str,
+“citationUrl”:       str,
+“repoUrl”:           str,
+“moreInfo”:          str,
+“supports”:          list[str],   // e.g. [“kcat”, “Km”, “kcat/Km”]
+“inputFormat”:       str,         // “single” or “multi” (“full reaction” is represented as “multi”)
+“maxSeqLen”:         int | null,  // null means no limit
+“requiredColumns”:   list[str],   // includes “Protein Sequence”
+“substrateFormat”:   str,</p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>},
+“predictionTypes”: [“kcat”, “Km”, “kcat/Km”],
+“longSequenceOptions”: { “truncate”: “…”, “skip”: “…” },
+“notes”: { … }</p>
+</dd>
+</dl>
+<p>}</p>
+</section>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_quota">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_quota</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_quota" title="Link to this definition"></a></dt>
+<dd><p>Return the current quota status for the authenticated key owner.</p>
+<p>Quota is tracked per-day (resetting at midnight UTC) and per-user
+(keyed by the IP address stored on the ApiUser record).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_submit_job">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_submit_job</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_submit_job" title="Link to this definition"></a></dt>
+<dd><p>Submit a new prediction job.</p>
+<p>Accepts two content types:</p>
+<ol class="arabic">
+<li><dl>
+<dt>multipart/form-data — upload a CSV file plus form fields:</dt><dd><p>file                  (required) — the CSV file
+targets               (required) — JSON array from</p>
+<blockquote>
+<div><p>[“kcat”, “Km”, “kcat/Km”]</p>
+</div></blockquote>
+<dl class="simple">
+<dt>methods               (required) — JSON object mapping selected target</dt><dd><p>to method key</p>
+</dd>
+</dl>
+<p>handleLongSequences   (optional, default “truncate”) — “truncate” or “skip”
+useExperimental       (optional, default “false”)   — “true” or “false”
+includeSimilarityColumns (optional, default “true”) — “true” or “false”
+canonicalizeSubstrates (optional, default “true”)  — “true” or “false”</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>application/json — send data directly as a JSON body:</dt><dd><dl>
+<dt>{</dt><dd><p>“targets”: [“kcat”],
+“methods”: {“kcat”: “DLKcat”},
+“handleLongSequences”: “truncate”,
+“useExperimental”: false,
+“includeSimilarityColumns”: true,
+“canonicalizeSubstrates”: true,
+“data”: [</p>
+<blockquote>
+<div><p>{“Protein Sequence”: “MKTL…”, “Substrate”: “CC(=O)O”},
+…</p>
+</div></blockquote>
+<p>]</p>
+</dd>
+</dl>
+<p>}</p>
+</dd>
+</dl>
+</li>
+</ol>
+<p>Both paths call the same underlying job-submission service, so validation,
+quota accounting, and task dispatch behave identically.</p>
+<dl class="simple">
+<dt>On success, returns a JSON object with:</dt><dd><ul class="simple">
+<li><p>jobId       — use this to poll /status/ and download /result/</p></li>
+<li><p>statusUrl   — convenience URL for polling</p></li>
+<li><p>resultUrl   — convenience URL for downloading results</p></li>
+<li><p>quota       — your remaining quota after this submission</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._parse_multipart_body">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_parse_multipart_body</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views._parse_multipart_body" title="Link to this definition"></a></dt>
+<dd><p>Extract CSV file and parameters from a multipart/form-data request.</p>
+<p>Returns (csv_file, params, error).  On success, error is None.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._parse_json_body">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_parse_json_body</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views._parse_json_body" title="Link to this definition"></a></dt>
+<dd><p>Extract CSV data and parameters from an application/json request body.</p>
+<p>The caller supplies the data as an array of row objects under the key
+“data”.  We convert this to an in-memory CSV file so the same downstream
+validation and processing code can handle it without modification.</p>
+<p>Returns (csv_file, params, error).  On success, error is None.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_job_status">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_job_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_job_status" title="Link to this definition"></a></dt>
+<dd><p>Return the current status of a prediction job.</p>
+<p>Poll this endpoint until status is “Completed” or “Failed”, then
+fetch your results from the resultUrl.</p>
+<dl class="simple">
+<dt>Possible status values:</dt><dd><p>Pending    — job is queued and waiting for a worker
+Processing — worker is running predictions
+Completed  — predictions are done; results are ready to download
+Failed     — something went wrong; see the ‘error’ field for details</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_download_result">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_download_result</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_id</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_download_result" title="Link to this definition"></a></dt>
+<dd><p>Download the prediction results for a completed job.</p>
+<p>By default, returns a CSV file attachment.  Add ?format=json to receive
+the same data as a JSON object instead — useful when you want to parse
+results directly without writing an intermediate file.</p>
+<dl class="simple">
+<dt>The response includes all columns from the input CSV plus:</dt><dd><ul class="simple">
+<li><p>A prediction column (e.g. “kcat (1/s)” or “KM (mM)”)</p></li>
+<li><p>A “Source” column indicating whether the value came from a model
+or from the experimental database</p></li>
+<li><p>An “Extra Info” column with additional details</p></li>
+</ul>
+</dd>
+</dl>
+<p>Returns 409 Conflict if the job has not yet completed.
+Returns 404 if the job does not exist.
+Returns 500 if the output file is missing (should not normally occur).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views.api_validate">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">api_validate</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views.api_validate" title="Link to this definition"></a></dt>
+<dd><p>Validate a CSV file (or inline JSON data) without submitting a prediction
+job.  Checks substrate SMILES/InChI strings, protein amino-acid sequences,
+and sequence-length limits for every available model.</p>
+<p>Optionally runs MMseqs2 sequence similarity analysis against each method’s
+training database when runSimilarity=true.  This is a synchronous call that
+blocks until the analysis is complete — it may take several minutes for
+large inputs.  No quota is consumed by this endpoint.</p>
+<p>Accepts the same two content-type formats as /submit/:</p>
+<ol class="arabic">
+<li><dl class="simple">
+<dt>multipart/form-data</dt><dd><p>file           (required) — the CSV file
+runSimilarity  (optional, default “false”) — “true” to include similarity</p>
+</dd>
+</dl>
+</li>
+<li><dl>
+<dt>application/json</dt><dd><dl class="simple">
+<dt>{</dt><dd><p>“data”:          […],      // required — array of row objects
+“runSimilarity”: false       // optional</p>
+</dd>
+</dl>
+<p>}</p>
+</dd>
+</dl>
+</li>
+</ol>
+<dl>
+<dt>Response fields:</dt><dd><p>rowCount          — total number of data rows in the input
+invalidSubstrates — list of rows with unparseable SMILES/InChI strings
+invalidProteins   — list of rows with invalid amino-acid sequences
+lengthViolations  — per-model violation counts (all registered methods + Server)
+lengthLimits      — per-model max sequence lengths from descriptors</p>
+<blockquote>
+<div><p>(null means no limit), plus Server</p>
+</div></blockquote>
+<dl class="simple">
+<dt>similarity        — null when not requested; otherwise a dict keyed by</dt><dd><p>method name, each containing histogram_max,
+histogram_mean, average_max_similarity,
+average_mean_similarity, count_max, count_mean</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._parse_validate_multipart_body">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_parse_validate_multipart_body</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views._parse_validate_multipart_body" title="Link to this definition"></a></dt>
+<dd><p>Extract CSV file and runSimilarity flag from a multipart/form-data request.</p>
+<p>Returns (csv_file, run_similarity, error).  On success, error is None.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="v1_views._parse_validate_json_body">
+<span class="sig-prename descclassname"><span class="pre">v1_views.</span></span><span class="sig-name descname"><span class="pre">_parse_validate_json_body</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span><a class="headerlink" href="#v1_views._parse_validate_json_body" title="Link to this definition"></a></dt>
+<dd><p>Extract inline data and runSimilarity flag from an application/json request.</p>
+<p>Returns (csv_file, run_similarity, error).  On success, error is None.</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../registry/index.html" class="btn btn-neutral float-left" title="registry" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../safe_read/index.html" class="btn btn-neutral float-right" title="safe_read" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

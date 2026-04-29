@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>job_utils &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="http_utils" href="../http_utils/index.html" />
+    <link rel="prev" title="safe_read" href="../safe_read/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base/index.html">base</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../tasks/index.html">tasks</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../v1_views/index.html">v1_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">job_utils</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#attributes">Attributes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.TARGET_ORDER"><code class="docutils literal notranslate"><span class="pre">TARGET_ORDER</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.VALID_TARGETS"><code class="docutils literal notranslate"><span class="pre">VALID_TARGETS</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.coerce_bool_param"><code class="docutils literal notranslate"><span class="pre">coerce_bool_param()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.canonicalise_targets"><code class="docutils literal notranslate"><span class="pre">canonicalise_targets()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.canonical_prediction_type"><code class="docutils literal notranslate"><span class="pre">canonical_prediction_type()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.validate_prediction_parameters"><code class="docutils literal notranslate"><span class="pre">validate_prediction_parameters()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.validate_sequence_handling_option"><code class="docutils literal notranslate"><span class="pre">validate_sequence_handling_option()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.determine_required_columns"><code class="docutils literal notranslate"><span class="pre">determine_required_columns()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.validate_required_columns_for_methods"><code class="docutils literal notranslate"><span class="pre">validate_required_columns_for_methods()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.create_job_directory"><code class="docutils literal notranslate"><span class="pre">create_job_directory()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.save_job_input_file"><code class="docutils literal notranslate"><span class="pre">save_job_input_file()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.get_experimental_results"><code class="docutils literal notranslate"><span class="pre">get_experimental_results()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.extract_job_parameters_from_request"><code class="docutils literal notranslate"><span class="pre">extract_job_parameters_from_request()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.create_rate_limit_headers"><code class="docutils literal notranslate"><span class="pre">create_rate_limit_headers()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.get_queue_position"><code class="docutils literal notranslate"><span class="pre">get_queue_position()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#job_utils.create_job_status_response_data"><code class="docutils literal notranslate"><span class="pre">create_job_status_response_data()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extra_info/index.html">extra_info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_utils/index.html">validation_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">job_utils</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/job_utils/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-job_utils">
+<span id="job-utils"></span><h1>job_utils<a class="headerlink" href="#module-job_utils" title="Link to this heading"></a></h1>
+<p>Job-specific utility functions for job submission and management.</p>
+<section id="attributes">
+<h2>Attributes<a class="headerlink" href="#attributes" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.TARGET_ORDER" title="job_utils.TARGET_ORDER"><code class="xref py py-obj docutils literal notranslate"><span class="pre">TARGET_ORDER</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.VALID_TARGETS" title="job_utils.VALID_TARGETS"><code class="xref py py-obj docutils literal notranslate"><span class="pre">VALID_TARGETS</span></code></a></p></td>
+<td><p></p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.coerce_bool_param" title="job_utils.coerce_bool_param"><code class="xref py py-obj docutils literal notranslate"><span class="pre">coerce_bool_param</span></code></a>(→ bool)</p></td>
+<td><p>Coerce common HTML/JSON boolean representations to a Python bool.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.canonicalise_targets" title="job_utils.canonicalise_targets"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canonicalise_targets</span></code></a>(→ List[str])</p></td>
+<td><p>Return deduplicated targets in canonical display/execution order.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.canonical_prediction_type" title="job_utils.canonical_prediction_type"><code class="xref py py-obj docutils literal notranslate"><span class="pre">canonical_prediction_type</span></code></a>(→ str)</p></td>
+<td><p>Build a compact, human-readable prediction_type label for persisted jobs.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.validate_prediction_parameters" title="job_utils.validate_prediction_parameters"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_prediction_parameters</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate target and method parameters against the method registry.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.validate_sequence_handling_option" title="job_utils.validate_sequence_handling_option"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_sequence_handling_option</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate the sequence handling option parameter.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.determine_required_columns" title="job_utils.determine_required_columns"><code class="xref py py-obj docutils literal notranslate"><span class="pre">determine_required_columns</span></code></a>(→ List[str])</p></td>
+<td><p>Determine strict required columns for the selected target/method set.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.validate_required_columns_for_methods" title="job_utils.validate_required_columns_for_methods"><code class="xref py py-obj docutils literal notranslate"><span class="pre">validate_required_columns_for_methods</span></code></a>(→ Optional[str])</p></td>
+<td><p>Validate CSV columns for selected methods.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.create_job_directory" title="job_utils.create_job_directory"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_job_directory</span></code></a>(→ str)</p></td>
+<td><p>Create directory structure for a job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.save_job_input_file" title="job_utils.save_job_input_file"><code class="xref py py-obj docutils literal notranslate"><span class="pre">save_job_input_file</span></code></a>(→ str)</p></td>
+<td><p>Save the input CSV file to the job directory.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.get_experimental_results" title="job_utils.get_experimental_results"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_experimental_results</span></code></a>(→ Optional[Dict[str, ...)</p></td>
+<td><p>Look up experimental kinetic values when the user has opted in.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.extract_job_parameters_from_request" title="job_utils.extract_job_parameters_from_request"><code class="xref py py-obj docutils literal notranslate"><span class="pre">extract_job_parameters_from_request</span></code></a>(→ Dict[str, Any])</p></td>
+<td><p>Extract job parameters from an HTTP request.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.create_rate_limit_headers" title="job_utils.create_rate_limit_headers"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_rate_limit_headers</span></code></a>(→ Dict[str, str])</p></td>
+<td><p>Create standard rate-limiting headers for HTTP responses.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#job_utils.get_queue_position" title="job_utils.get_queue_position"><code class="xref py py-obj docutils literal notranslate"><span class="pre">get_queue_position</span></code></a>(→ Optional[int])</p></td>
+<td><p>Return the 1-based queue position for a Pending job.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#job_utils.create_job_status_response_data" title="job_utils.create_job_status_response_data"><code class="xref py py-obj docutils literal notranslate"><span class="pre">create_job_status_response_data</span></code></a>(→ Dict[str, Any])</p></td>
+<td><p>Create a response data dictionary for the job-status endpoint.</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py data">
+<dt class="sig sig-object py" id="job_utils.TARGET_ORDER">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">TARGET_ORDER</span></span><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">['kcat',</span> <span class="pre">'Km',</span> <span class="pre">'kcat/Km']</span></em><a class="headerlink" href="#job_utils.TARGET_ORDER" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py data">
+<dt class="sig sig-object py" id="job_utils.VALID_TARGETS">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">VALID_TARGETS</span></span><a class="headerlink" href="#job_utils.VALID_TARGETS" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.coerce_bool_param">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">coerce_bool_param</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">value</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Any</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">default</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">bool</span></span></span><a class="headerlink" href="#job_utils.coerce_bool_param" title="Link to this definition"></a></dt>
+<dd><p>Coerce common HTML/JSON boolean representations to a Python bool.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.canonicalise_targets">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">canonicalise_targets</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#job_utils.canonicalise_targets" title="Link to this definition"></a></dt>
+<dd><p>Return deduplicated targets in canonical display/execution order.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.canonical_prediction_type">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">canonical_prediction_type</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#job_utils.canonical_prediction_type" title="Link to this definition"></a></dt>
+<dd><p>Build a compact, human-readable prediction_type label for persisted jobs.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.validate_prediction_parameters">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">validate_prediction_parameters</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">methods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#job_utils.validate_prediction_parameters" title="Link to this definition"></a></dt>
+<dd><p>Validate target and method parameters against the method registry.</p>
+<p>Returns an error message if validation fails, None if valid.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.validate_sequence_handling_option">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">validate_sequence_handling_option</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">handle_long_seq</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#job_utils.validate_sequence_handling_option" title="Link to this definition"></a></dt>
+<dd><p>Validate the sequence handling option parameter.</p>
+<p>Returns an error message if invalid, None if valid.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.determine_required_columns">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">determine_required_columns</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">methods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#job_utils.determine_required_columns" title="Link to this definition"></a></dt>
+<dd><p>Determine strict required columns for the selected target/method set.</p>
+<p>The result always includes “Protein Sequence”.  Additional columns are
+derived from each selected descriptor’s col_to_kwarg mapping.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.validate_required_columns_for_methods">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">validate_required_columns_for_methods</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">methods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#job_utils.validate_required_columns_for_methods" title="Link to this definition"></a></dt>
+<dd><p>Validate CSV columns for selected methods.</p>
+<p>Methods requiring “Substrate” must receive a “Substrate” column.
+Full-reaction input (“Substrates” + “Products”) is only valid for methods
+that explicitly declare those columns (for example, TurNup).</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.create_job_directory">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">create_job_directory</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#job_utils.create_job_directory" title="Link to this definition"></a></dt>
+<dd><p>Create directory structure for a job.</p>
+<p>Returns the path to the created job directory.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.save_job_input_file">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">save_job_input_file</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">file</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">job_dir</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#job_utils.save_job_input_file" title="Link to this definition"></a></dt>
+<dd><p>Save the input CSV file to the job directory.</p>
+<p>Returns the path to the saved file.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.get_experimental_results">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">get_experimental_results</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">use_experimental</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">methods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">List</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">dataframe</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#job_utils.get_experimental_results" title="Link to this definition"></a></dt>
+<dd><p>Look up experimental kinetic values when the user has opted in.</p>
+<p>Experimental lookup is skipped for multi-substrate methods (TurNup) since
+the experimental database is indexed by single substrates.</p>
+<p>Returns a dict keyed by target (“kcat”, “Km”), or None.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.extract_job_parameters_from_request">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">extract_job_parameters_from_request</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">request</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#job_utils.extract_job_parameters_from_request" title="Link to this definition"></a></dt>
+<dd><p>Extract job parameters from an HTTP request.</p>
+<p>Returns a parameters dictionary used by process_job_submission_from_params.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.create_rate_limit_headers">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">create_rate_limit_headers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">daily_limit</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remaining</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ttl</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">int</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#job_utils.create_rate_limit_headers" title="Link to this definition"></a></dt>
+<dd><p>Create standard rate-limiting headers for HTTP responses.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.get_queue_position">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">get_queue_position</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span></span><a class="headerlink" href="#job_utils.get_queue_position" title="Link to this definition"></a></dt>
+<dd><p>Return the 1-based queue position for a Pending job.
+Returns None if the job is not Pending.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="job_utils.create_job_status_response_data">
+<span class="sig-prename descclassname"><span class="pre">job_utils.</span></span><span class="sig-name descname"><span class="pre">create_job_status_response_data</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">Dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">Any</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#job_utils.create_job_status_response_data" title="Link to this definition"></a></dt>
+<dd><p>Create a response data dictionary for the job-status endpoint.</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../safe_read/index.html" class="btn btn-neutral float-left" title="safe_read" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../http_utils/index.html" class="btn btn-neutral float-right" title="http_utils" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

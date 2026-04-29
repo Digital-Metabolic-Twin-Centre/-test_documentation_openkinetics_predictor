@@ -1,0 +1,109 @@
+job_service
+===========
+
+.. py:module:: job_service
+
+.. autoapi-nested-parse::
+
+   Job service that orchestrates job submission and management workflows.
+
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   job_service.process_job_submission
+   job_service.process_job_submission_from_params
+   job_service.handle_quota_validation
+   job_service.create_job_record
+   job_service.dispatch_prediction_task
+   job_service.get_job_status_data
+
+
+Module Contents
+---------------
+
+.. py:function:: process_job_submission(request, file) -> Tuple[Optional[django.http.JsonResponse], Optional[Dict[str, Any]]]
+
+   Process a job submission from the web UI.
+
+   Extracts parameters from the Django request object (form fields + IP) and
+   delegates to the shared ``process_job_submission_from_params`` function.
+
+   :param request: Django HTTP request (POST with multipart form data).
+   :param file: Uploaded CSV file extracted from request.FILES.
+
+   :returns: Tuple of (error_response, success_data).
+             On success: (None, {"message": ..., "public_id": ...})
+             On failure: (JsonResponse with error, None)
+
+
+.. py:function:: process_job_submission_from_params(params: Dict[str, Any], file, ip_address: str) -> Tuple[Optional[django.http.JsonResponse], Optional[Dict[str, Any]]]
+
+   Core job-submission logic, decoupled from the HTTP request object.
+
+   This function is called by both the web-UI view (via
+   ``process_job_submission``) and the public API v1 submit endpoint.  It
+   accepts an explicit params dict and IP address so it can be used
+   regardless of how the caller obtained those values.
+
+   :param params: Dict with keys:
+                  targets              – e.g. ["kcat"], ["Km", "kcat/Km"]
+                  methods              – e.g. {"kcat":"DLKcat","Km":"UniKP"}
+                  handle_long_sequences– "truncate" or "skip"
+                  use_experimental     – bool
+                  include_similarity_columns – bool
+                  canonicalize_substrates – bool
+   :param file: A file-like object (Django InMemoryUploadedFile or
+                io.BytesIO) containing the CSV data.
+   :param ip_address: The IP address to charge quota against.
+
+   :returns: Tuple of (error_response, success_data).
+             On success: (None, {"message": ..., "public_id": ...})
+             On failure: (JsonResponse with error, None)
+
+
+.. py:function:: handle_quota_validation(ip_address: str, requested_rows: int) -> Optional[django.http.JsonResponse]
+
+   Handle quota validation and return error response if quota exceeded.
+
+   :param ip_address: Client IP address
+   :param requested_rows: Number of rows being requested
+
+   :returns: JsonResponse with error if quota exceeded, None if allowed
+
+
+.. py:function:: create_job_record(params: Dict[str, Any], ip_address: str, requested_rows: int, user) -> api.models.Job
+
+   Create and save a new job record.
+
+   :param params: Job parameters dictionary
+   :param ip_address: Client IP address
+   :param requested_rows: Number of rows in the request
+   :param user: User model instance
+
+   :returns: Created Job instance
+
+
+.. py:function:: dispatch_prediction_task(public_id: str, params: Dict[str, Any], experimental_results: Optional[dict]) -> None
+
+   Dispatch the appropriate Celery prediction task based on job parameters.
+
+   Uses one generic multi-target task that resolves each method at runtime.
+
+   :param public_id: Job public ID
+   :param params: Job parameters
+   :param experimental_results: Pre-fetched experimental results or None
+
+
+.. py:function:: get_job_status_data(job: api.models.Job) -> Dict[str, Any]
+
+   Get formatted job status data.
+
+   :param job: Job model instance
+
+   :returns: Dictionary containing job status information
+
+

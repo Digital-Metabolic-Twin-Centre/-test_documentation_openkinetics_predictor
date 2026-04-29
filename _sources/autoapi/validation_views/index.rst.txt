@@ -1,0 +1,28 @@
+validation_views
+================
+
+.. py:module:: validation_views
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   validation_views.cancel_validation
+   validation_views.validate_input
+
+
+Module Contents
+---------------
+
+.. py:function:: cancel_validation(request)
+
+   Cancel a validation session.
+
+
+.. py:function:: validate_input(request)
+
+   Validate uploaded CSV file for substrate and protein data.
+
+

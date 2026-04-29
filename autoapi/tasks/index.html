@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<html class="writer-html5" lang="en" data-content_root="../../">
+<head>
+  <meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>tasks &mdash; Test Documentation Openkinetics Predictor  documentation</title>
+      <link rel="stylesheet" type="text/css" href="../../_static/pygments.css?v=b86133f3" />
+      <link rel="stylesheet" type="text/css" href="../../_static/css/theme.css?v=e59714d7" />
+      <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css?v=4ae1632d" />
+      <link rel="stylesheet" type="text/css" href="../../_static/custom-wide.css?v=35173757" />
+
+  
+      <script src="../../_static/jquery.js?v=5d32c60e"></script>
+      <script src="../../_static/_sphinx_javascript_frameworks_compat.js?v=2cd50e6c"></script>
+      <script src="../../_static/documentation_options.js?v=5929fcd5"></script>
+      <script src="../../_static/doctools.js?v=9bcbadda"></script>
+      <script src="../../_static/sphinx_highlight.js?v=dc90522c"></script>
+    <script src="../../_static/js/theme.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+    <link rel="next" title="registry" href="../registry/index.html" />
+    <link rel="prev" title="base" href="../base/index.html" /> 
+</head>
+
+<body class="wy-body-for-nav"> 
+  <div class="wy-grid-for-nav">
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search" >
+
+          
+          
+          <a href="../../index.html" class="icon icon-home">
+            Test Documentation Openkinetics Predictor
+          </a>
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" aria-label="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+        </div><div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="Navigation menu">
+              <p class="caption" role="heading"><span class="caption-text">Project</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../project/overview.html">Project Overview</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/objectives.html">Objectives</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/plan.html">Project Plan</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../project/results.html">Results</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Progress</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../logbook/weekly_updates.html">Weekly Updates</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">Notes</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../README.html">Documentation Notes</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">API Reference</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="reference internal" href="../index.html">API Reference</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="../base/index.html">base</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">tasks</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#functions">Functions</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#module-contents">Module Contents</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._safe_clear_gpu_precompute_status"><code class="docutils literal notranslate"><span class="pre">_safe_clear_gpu_precompute_status()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks.run_prediction"><code class="docutils literal notranslate"><span class="pre">run_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks.run_both_prediction"><code class="docutils literal notranslate"><span class="pre">run_both_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks.run_multi_prediction"><code class="docutils literal notranslate"><span class="pre">run_multi_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._execute_prediction"><code class="docutils literal notranslate"><span class="pre">_execute_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._execute_both_prediction"><code class="docutils literal notranslate"><span class="pre">_execute_both_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._execute_multi_prediction"><code class="docutils literal notranslate"><span class="pre">_execute_multi_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._invoke_method_prediction"><code class="docutils literal notranslate"><span class="pre">_invoke_method_prediction()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._map_subset_invalid_reasons"><code class="docutils literal notranslate"><span class="pre">_map_subset_invalid_reasons()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._build_skipped_message"><code class="docutils literal notranslate"><span class="pre">_build_skipped_message()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._load_input"><code class="docutils literal notranslate"><span class="pre">_load_input()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._output_path"><code class="docutils literal notranslate"><span class="pre">_output_path()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._handle_oom"><code class="docutils literal notranslate"><span class="pre">_handle_oom()</span></code></a></li>
+<li class="toctree-l4"><a class="reference internal" href="#tasks._sanitise_unexpected"><code class="docutils literal notranslate"><span class="pre">_sanitise_unexpected()</span></code></a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="../registry/index.html">registry</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../v1_views/index.html">v1_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../safe_read/index.html">safe_read</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_utils/index.html">job_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../http_utils/index.html">http_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../extra_info/index.html">extra_info</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../handle_long/index.html">handle_long</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../job_service/index.html">job_service</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../log_sanitiser/index.html">log_sanitiser</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../api_key_views/index.html">api_key_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../progress_views/index.html">progress_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_utils/index.html">similarity_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_utils/index.html">validation_utils</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../similarity_views/index.html">similarity_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_views/index.html">validation_views</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../validation_service/index.html">validation_service</a></li>
+</ul>
+</li>
+</ul>
+
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap"><nav class="wy-nav-top" aria-label="Mobile navigation menu" >
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../../index.html">Test Documentation Openkinetics Predictor</a>
+      </nav>
+
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          <div role="navigation" aria-label="Page navigation">
+  <ul class="wy-breadcrumbs">
+      <li><a href="../../index.html" class="icon icon-home" aria-label="Home"></a></li>
+          <li class="breadcrumb-item"><a href="../index.html">API Reference</a></li>
+      <li class="breadcrumb-item active">tasks</li>
+      <li class="wy-breadcrumbs-aside">
+            <a href="../../_sources/autoapi/tasks/index.rst.txt" rel="nofollow"> View page source</a>
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+             
+  <section id="module-tasks">
+<span id="tasks"></span><h1>tasks<a class="headerlink" href="#module-tasks" title="Link to this heading"></a></h1>
+<section id="functions">
+<h2>Functions<a class="headerlink" href="#functions" title="Link to this heading"></a></h2>
+<table class="autosummary longtable docutils align-default">
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._safe_clear_gpu_precompute_status" title="tasks._safe_clear_gpu_precompute_status"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_safe_clear_gpu_precompute_status</span></code></a>(→ None)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks.run_prediction" title="tasks.run_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run a single-target prediction job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks.run_both_prediction" title="tasks.run_both_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_both_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run a dual-target prediction job (kcat and KM in sequence).</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks.run_multi_prediction" title="tasks.run_multi_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">run_multi_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run a multi-target prediction job.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._execute_prediction" title="tasks._execute_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_execute_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run a single-target prediction and write output.csv.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks._execute_both_prediction" title="tasks._execute_both_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_execute_both_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run kcat and KM predictions in sequence and write a combined output.csv.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._execute_multi_prediction" title="tasks._execute_multi_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_execute_multi_prediction</span></code></a>(→ None)</p></td>
+<td><p>Run one or more prediction targets and write a combined output.csv.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks._invoke_method_prediction" title="tasks._invoke_method_prediction"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_invoke_method_prediction</span></code></a>(→ tuple[list, dict[int, str]])</p></td>
+<td><p>Invoke a method using either:</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._map_subset_invalid_reasons" title="tasks._map_subset_invalid_reasons"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_map_subset_invalid_reasons</span></code></a>(→ dict[int, str])</p></td>
+<td><p>Map local invalid reasons (keyed by position in sequences subset) to global row indices.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks._build_skipped_message" title="tasks._build_skipped_message"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_build_skipped_message</span></code></a>(→ str)</p></td>
+<td><p>Serialize per-row skip reasons as a JSON array grouped by reason.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._load_input" title="tasks._load_input"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_load_input</span></code></a>(→ pandas.DataFrame)</p></td>
+<td><p>Read the job's input CSV, crediting back quota on failure.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks._output_path" title="tasks._output_path"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_output_path</span></code></a>(→ str)</p></td>
+<td><p></p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#tasks._handle_oom" title="tasks._handle_oom"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_handle_oom</span></code></a>(→ None)</p></td>
+<td><p>Mark job as failed with an out-of-memory message and credit back quota.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#tasks._sanitise_unexpected" title="tasks._sanitise_unexpected"><code class="xref py py-obj docutils literal notranslate"><span class="pre">_sanitise_unexpected</span></code></a>(→ str)</p></td>
+<td><p>Convert an unexpected (non-PredictionError) exception to a user-facing</p></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Link to this heading"></a></h2>
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._safe_clear_gpu_precompute_status">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_safe_clear_gpu_precompute_status</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks._safe_clear_gpu_precompute_status" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks.run_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">run_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">method_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks.run_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run a single-target prediction job.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>public_id</strong> (<em>str</em>) – The job’s public identifier.</p></li>
+<li><p><strong>method_key</strong> (<em>str</em>) – Registry key of the prediction method (e.g. <code class="docutils literal notranslate"><span class="pre">&quot;DLKcat&quot;</span></code>).</p></li>
+<li><p><strong>target</strong> (<em>str</em>) – Prediction target: <code class="docutils literal notranslate"><span class="pre">&quot;kcat&quot;</span></code> or <code class="docutils literal notranslate"><span class="pre">&quot;Km&quot;</span></code>.</p></li>
+<li><p><strong>experimental_results</strong> (<em>list</em><em> | </em><em>None</em>) – Pre-fetched experimental values to merge into the output, or None.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks.run_both_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">run_both_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kcat_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">km_key</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks.run_both_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run a dual-target prediction job (kcat and KM in sequence).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>public_id</strong> (<em>str</em>) – The job’s public identifier.</p></li>
+<li><p><strong>kcat_key</strong> (<em>str</em>) – Registry key of the kcat prediction method.</p></li>
+<li><p><strong>km_key</strong> (<em>str</em>) – Registry key of the KM prediction method.</p></li>
+<li><p><strong>experimental_results</strong> (<em>list</em><em> | </em><em>None</em>) – Pre-fetched experimental values to merge into the output, or None.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks.run_multi_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">run_multi_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">methods</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks.run_multi_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run a multi-target prediction job.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>public_id</strong> (<em>str</em>) – The job’s public identifier.</p></li>
+<li><p><strong>targets</strong> (<em>list</em><em>[</em><em>str</em><em>]</em>) – Selected targets, subset of <code class="docutils literal notranslate"><span class="pre">[&quot;kcat&quot;,</span> <span class="pre">&quot;Km&quot;,</span> <span class="pre">&quot;kcat/Km&quot;]</span></code>.</p></li>
+<li><p><strong>methods</strong> (<em>dict</em><em>[</em><em>str</em><em>, </em><em>str</em><em>]</em>) – Mapping target -&gt; method key.</p></li>
+<li><p><strong>experimental_results</strong> (<em>dict</em><em> | </em><em>None</em>) – Optional pre-fetched experimental rows keyed by target.</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._execute_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_execute_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">api.models.Job</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks._execute_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run a single-target prediction and write output.csv.</p>
+<p>Validates required columns, applies sequence-length handling, invokes the
+method’s pred_func, merges experimental overwrites, writes the output CSV,
+and credits back rows that produced no prediction.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._execute_both_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_execute_both_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">api.models.Job</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">kcat_desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">km_desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks._execute_both_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run kcat and KM predictions in sequence and write a combined output.csv.</p>
+<p>Uses the stricter of the two methods’ sequence-length limits.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._execute_multi_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_execute_multi_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">api.models.Job</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">targets</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">desc_by_target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">df</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">pandas.DataFrame</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">experimental_results</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">include_similarity_columns</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks._execute_multi_prediction" title="Link to this definition"></a></dt>
+<dd><p>Run one or more prediction targets and write a combined output.csv.</p>
+<p>Targets are executed in canonical order and each contributes a column bundle:
+prediction values + source + extra info.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._invoke_method_prediction">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_invoke_method_prediction</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">desc</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">sequences</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">target</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">canonicalize_substrates</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">bool</span></span><span class="w"> </span><span class="o"><span class="pre">=</span></span><span class="w"> </span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">call_kwargs</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">tuple</span><span class="p"><span class="pre">[</span></span><span class="pre">list</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#tasks._invoke_method_prediction" title="Link to this definition"></a></dt>
+<dd><p>Invoke a method using either:</p>
+<ol class="arabic simple">
+<li><p>a custom <cite>pred_func</cite> (legacy/current methods), or</p></li>
+<li><p>the built-in generic subprocess engine (recommended for new methods).</p></li>
+</ol>
+<p>Always returns (predictions, invalid_reasons) where invalid_reasons maps
+local indices (into sequences) to human-readable skip reasons.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._map_subset_invalid_reasons">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_map_subset_invalid_reasons</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">global_indices</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">]</span></span></span></em>, <em class="sig-param"><span class="n"><span class="pre">invalid_reasons</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></span><a class="headerlink" href="#tasks._map_subset_invalid_reasons" title="Link to this definition"></a></dt>
+<dd><p>Map local invalid reasons (keyed by position in sequences subset) to global row indices.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._build_skipped_message">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_build_skipped_message</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">skipped_reasons</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">dict</span><span class="p"><span class="pre">[</span></span><span class="pre">int</span><span class="p"><span class="pre">,</span></span><span class="w"> </span><span class="pre">str</span><span class="p"><span class="pre">]</span></span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#tasks._build_skipped_message" title="Link to this definition"></a></dt>
+<dd><p>Serialize per-row skip reasons as a JSON array grouped by reason.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._load_input">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_load_input</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">api.models.Job</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">pandas.DataFrame</span></span></span><a class="headerlink" href="#tasks._load_input" title="Link to this definition"></a></dt>
+<dd><p>Read the job’s input CSV, crediting back quota on failure.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._output_path">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_output_path</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">public_id</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#tasks._output_path" title="Link to this definition"></a></dt>
+<dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._handle_oom">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_handle_oom</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">job</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">api.models.Job</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">None</span></span></span><a class="headerlink" href="#tasks._handle_oom" title="Link to this definition"></a></dt>
+<dd><p>Mark job as failed with an out-of-memory message and credit back quota.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="tasks._sanitise_unexpected">
+<span class="sig-prename descclassname"><span class="pre">tasks.</span></span><span class="sig-name descname"><span class="pre">_sanitise_unexpected</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">exc</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">Exception</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">label</span></span><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="n"><span class="pre">str</span></span></em><span class="sig-paren">)</span> <span class="sig-return"><span class="sig-return-icon">&#x2192;</span> <span class="sig-return-typehint"><span class="pre">str</span></span></span><a class="headerlink" href="#tasks._sanitise_unexpected" title="Link to this definition"></a></dt>
+<dd><p>Convert an unexpected (non-PredictionError) exception to a user-facing
+message, stripping internal paths and stack traces.</p>
+</dd></dl>
+
+</section>
+</section>
+
+
+           </div>
+          </div>
+          <footer><div class="rst-footer-buttons" role="navigation" aria-label="Footer">
+        <a href="../base/index.html" class="btn btn-neutral float-left" title="base" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left" aria-hidden="true"></span> Previous</a>
+        <a href="../registry/index.html" class="btn btn-neutral float-right" title="registry" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right" aria-hidden="true"></span></a>
+    </div>
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>&#169; Copyright 2026, Digital Metabolic Twin Centre.</p>
+  </div>
+
+  Built with <a href="https://www.sphinx-doc.org/">Sphinx</a> using a
+    <a href="https://github.com/readthedocs/sphinx_rtd_theme">theme</a>
+    provided by <a href="https://readthedocs.org">Read the Docs</a>.
+   
+
+</footer>
+        </div>
+      </div>
+    </section>
+  </div>
+  <script>
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

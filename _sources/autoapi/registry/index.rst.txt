@@ -1,0 +1,39 @@
+registry
+========
+
+.. py:module:: registry
+
+
+Attributes
+----------
+
+.. autoapisummary::
+
+   registry.EMBEDDING_REGISTRY
+
+
+Functions
+---------
+
+.. autoapisummary::
+
+   registry.get
+   registry.implemented_embeddings
+
+
+Module Contents
+---------------
+
+.. py:data:: EMBEDDING_REGISTRY
+   :type:  dict[str, dict]
+
+.. py:function:: get(key: str) -> dict
+
+   Return metadata for the given embedding key.  Raises KeyError if unknown.
+
+
+.. py:function:: implemented_embeddings() -> dict[str, dict]
+
+   Return only the embeddings that are already installed in the Docker image.
+
+
