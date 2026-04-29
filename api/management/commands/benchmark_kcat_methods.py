@@ -50,7 +50,15 @@ PRODUCT_POOL = [
     "CC(=O)N",  # acetamide
 ]
 DEFAULT_API_BASE_URL = "https://predictor.openkinetics.org/api/v1"
-GPU_OFFLOAD_KCAT_METHOD_IDS = {"KinForm-H", "KinForm-L", "UniKP", "TurNup", "CataPro", "EITLEM", "CatPred"}
+GPU_OFFLOAD_KCAT_METHOD_IDS = {
+    "KinForm-H",
+    "KinForm-L",
+    "UniKP",
+    "TurNup",
+    "CataPro",
+    "EITLEM",
+    "CatPred",
+}
 PREFERRED_METHOD_ORDER = [
     "UniKP",
     "TurNup",
@@ -77,6 +85,24 @@ METHOD_KEY_ALIASES = {
 
 @dataclass
 class SingleRunResult:
+    """
+    Represents the result of a single run of a computation.
+
+        Args:
+            compute_seconds (float | None): Time taken for computation in seconds.
+            status (str): Current status of the run.
+            error_message (str): Error message if the run failed.
+            public_id (str): Unique identifier for the run.
+            gpu_used (bool | None): Indicates if GPU was used.
+            gpu_attempted (bool | None): Indicates if GPU was attempted.
+            gpu_completed (bool | None): Indicates if GPU processing completed.
+            gpu_reason (str | None): Reason for GPU status.
+
+        Returns:
+            None
+
+    """
+
     compute_seconds: float | None
     status: str
     error_message: str
@@ -89,6 +115,20 @@ class SingleRunResult:
 
 @dataclass
 class MethodBenchmarkResult:
+    """
+    Represents the benchmark results of a method including CPU and GPU performance.
+
+        Args:
+            method_key (str): Unique identifier for the method.
+            uncached_cpu (SingleRunResult): Performance result for uncached CPU execution.
+            uncached_gpu (SingleRunResult): Performance result for uncached GPU execution.
+            cached (SingleRunResult): Performance result for cached execution.
+
+        Returns:
+            None
+
+    """
+
     method_key: str
     uncached_cpu: SingleRunResult
     uncached_gpu: SingleRunResult
@@ -97,6 +137,20 @@ class MethodBenchmarkResult:
 
 @dataclass
 class PendingBenchmarkJob:
+    """
+    Represents a job pending for benchmarking with specific requirements.
+
+        Args:
+            method_key (str): Unique identifier for the benchmarking method.
+            run_key (str): Identifier for the specific run of the benchmark.
+            public_id (str): Public identifier for the job.
+            require_gpu (bool): Indicates if GPU is required for the job.
+
+        Returns:
+            None
+
+    """
+
     method_key: str
     run_key: str
     public_id: str
@@ -104,12 +158,33 @@ class PendingBenchmarkJob:
 
 
 class Command(BaseCommand):
+    """
+    Benchmark kcat inference time for registered methods in various modes.
+
+        Args:
+            parser (ArgumentParser): Argument parser to add command line options.
+
+        Returns:
+            None: Executes the benchmark and outputs results to stdout.
+
+    """
+
     help = (
         "Benchmark kcat inference time for each registered kcat-capable method, "
         "running uncached cpu, uncached gpu, and cached modes."
     )
 
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for benchmarking configuration.
+
+            Args:
+                parser (argparse.ArgumentParser): The argument parser to add arguments to.
+
+            Returns:
+                None: This function does not return a value.
+
+        """
         parser.add_argument(
             "--num-reactions",
             type=int,
@@ -212,6 +287,17 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handles benchmarking of kcat methods with specified parameters.
+
+            Args:
+                num_reactions (int): Number of reactions to benchmark.
+                options (dict): Various options including num_proteins, avg_seq_len, etc.
+
+            Returns:
+                None: Executes benchmarking and outputs results to stdout.
+
+        """
         num_reactions = options["num_reactions"]
         num_proteins = options["num_proteins"]
         avg_seq_len = options["avg_seq_len"]
@@ -241,7 +327,9 @@ class Command(BaseCommand):
         )
 
         if not api_key:
-            raise CommandError("Missing API key. Pass --api-key or set WEBKINPRED_API_KEY.")
+            raise CommandError(
+                "Missing API key. Pass --api-key or set WEBKINPRED_API_KEY."
+            )
         if poll_seconds <= 0:
             raise CommandError("--poll-seconds must be > 0.")
         if request_timeout_seconds <= 0:
@@ -276,7 +364,8 @@ class Command(BaseCommand):
 
             if unknown:
                 raise CommandError(
-                    "Unknown or non-kcat method key(s) for this API: " + ", ".join(sorted(unknown))
+                    "Unknown or non-kcat method key(s) for this API: "
+                    + ", ".join(sorted(unknown))
                 )
             selected_keys = self._order_method_keys(selected_keys)
         else:
@@ -308,9 +397,7 @@ class Command(BaseCommand):
             f"Seed: {run_seed} ({'fixed' if options['seed'] is not None else 'auto-generated'})"
         )
         if gpu_only:
-            self.stdout.write(
-                "GPU-only mode: only uncached GPU runs are executed."
-            )
+            self.stdout.write("GPU-only mode: only uncached GPU runs are executed.")
         else:
             self.stdout.write(
                 "Uncached CPU run uses fresh proteins per method; cached run repeats "
@@ -350,7 +437,9 @@ class Command(BaseCommand):
             }
 
             if gpu_only:
-                raw_results[method_key]["uncached_cpu"] = self._skipped_run("gpu_only_mode")
+                raw_results[method_key]["uncached_cpu"] = self._skipped_run(
+                    "gpu_only_mode"
+                )
                 raw_results[method_key]["cached"] = self._skipped_run("gpu_only_mode")
             else:
                 proteins_cpu = self._generate_unique_proteins(
@@ -395,7 +484,9 @@ class Command(BaseCommand):
                         public_id=uncached_cpu_submission,
                         require_gpu=False,
                     )
-                    self.stdout.write(f"  submitted uncached cpu: {uncached_cpu_submission}")
+                    self.stdout.write(
+                        f"  submitted uncached cpu: {uncached_cpu_submission}"
+                    )
 
             if method_key not in GPU_OFFLOAD_KCAT_METHOD_IDS:
                 raw_results[method_key]["uncached_gpu"] = self._skipped_run(
@@ -442,7 +533,9 @@ class Command(BaseCommand):
                         public_id=uncached_gpu_submission,
                         require_gpu=True,
                     )
-                    self.stdout.write(f"  submitted uncached gpu: {uncached_gpu_submission}")
+                    self.stdout.write(
+                        f"  submitted uncached gpu: {uncached_gpu_submission}"
+                    )
 
         if stage1_jobs:
             self.stdout.write("")
@@ -463,7 +556,9 @@ class Command(BaseCommand):
         if not gpu_only:
             cached_jobs: dict[str, PendingBenchmarkJob] = {}
             self.stdout.write("")
-            self.stdout.write("Submitting cached repeat jobs after uncached CPU warm-up.")
+            self.stdout.write(
+                "Submitting cached repeat jobs after uncached CPU warm-up."
+            )
             for idx, method_key in enumerate(selected_keys, start=1):
                 self.stdout.write(f"[{idx}/{len(selected_keys)}] {method_key}")
                 df_cpu = cached_inputs.get(method_key)
@@ -554,7 +649,9 @@ class Command(BaseCommand):
                 cached=cached_result,
             )
             results.append(method_result)
-            self.stdout.write(self._format_method_summary(method_result, gpu_only=gpu_only))
+            self.stdout.write(
+                self._format_method_summary(method_result, gpu_only=gpu_only)
+            )
             self.stdout.write("")
 
         self.stdout.write("Final summary")
@@ -575,7 +672,9 @@ class Command(BaseCommand):
                 and r.uncached_gpu.status in {"Completed", "Skipped"}
             )
         self.stdout.write("-" * 72)
-        self.stdout.write(f"Completed successfully for {success_count}/{len(results)} method(s).")
+        self.stdout.write(
+            f"Completed successfully for {success_count}/{len(results)} method(s)."
+        )
 
     def _validate_generation_parameters(
         self,
@@ -585,6 +684,19 @@ class Command(BaseCommand):
         avg_seq_len: int,
         max_seq_len: int,
     ) -> None:
+        """
+        Validate generation parameters for reaction and protein sequences.
+
+        Args:
+            num_reactions (int): Number of reactions, must be > 0.
+            num_proteins (int): Number of proteins, must be > 0.
+            avg_seq_len (int): Average sequence length, must be > 0.
+            max_seq_len (int): Maximum sequence length, must be > 0.
+
+        Returns:
+            None: Raises CommandError for invalid parameters.
+
+        """
         if num_reactions <= 0:
             raise CommandError("--num-reactions must be > 0.")
         if num_proteins <= 0:
@@ -609,6 +721,17 @@ class Command(BaseCommand):
                 )
 
     def _derive_method_seed(self, run_seed: int, method_key: str) -> int:
+        """
+        Derives a method-specific seed from a given run seed and method key.
+
+        Args:
+            run_seed (int): The base seed for the run.
+            method_key (str): The key identifying the method.
+
+        Returns:
+            int: A derived seed value based on the input parameters.
+
+        """
         digest = hashlib.sha256(f"{run_seed}:{method_key}".encode("utf-8")).hexdigest()
         return int(digest[:16], 16)
 
@@ -621,6 +744,20 @@ class Command(BaseCommand):
         max_seq_len: int,
         forbidden_sequences: set[str] | None = None,
     ) -> list[str]:
+        """
+        Generate unique protein sequences based on specified parameters.
+
+        Args:
+            rng (random.Random): Random number generator.
+            num_proteins (int): Number of unique proteins to generate.
+            avg_seq_len (int): Average length of protein sequences.
+            max_seq_len (int): Maximum length of protein sequences.
+            forbidden_sequences (set[str] | None): Set of sequences to avoid.
+
+        Returns:
+            list[str]: A list of unique protein sequences.
+
+        """
         lengths = self._generate_protein_lengths(
             rng=rng,
             num_proteins=num_proteins,
@@ -652,6 +789,19 @@ class Command(BaseCommand):
         avg_seq_len: int,
         max_seq_len: int,
     ) -> list[int]:
+        """
+        Generate a list of protein lengths ensuring an average length with variability.
+
+        Args:
+            rng (random.Random): Random number generator for variability.
+            num_proteins (int): Total number of proteins to generate.
+            avg_seq_len (int): Desired average sequence length.
+            max_seq_len (int): Maximum allowed sequence length.
+
+        Returns:
+            list[int]: A list of protein lengths satisfying the average and max constraints.
+
+        """
         if num_proteins == 1:
             # In test mode we often use a single unique protein; preserve the
             # requested average length directly in this edge case.
@@ -703,6 +853,19 @@ class Command(BaseCommand):
         proteins: list[str],
         num_reactions: int,
     ) -> pd.DataFrame:
+        """
+        Constructs a DataFrame of reactions based on provided proteins and a specified number of
+        reactions.
+
+            Args:
+                proteins (list[str]): A list of protein sequences.
+                num_reactions (int): The number of reactions to generate.
+
+            Returns:
+                pd.DataFrame: A DataFrame containing the reaction data with protein sequences,
+                substrates, and products.
+
+        """
         rows: list[dict[str, str]] = []
         n_proteins = len(proteins)
         for i in range(num_reactions):
@@ -719,6 +882,16 @@ class Command(BaseCommand):
         return pd.DataFrame(rows)
 
     def _skipped_run(self, reason: str) -> SingleRunResult:
+        """
+        Creates a SingleRunResult indicating a skipped run.
+
+            Args:
+                reason (str): The reason for skipping the run.
+
+            Returns:
+                SingleRunResult: An object representing the skipped run status.
+
+        """
         return SingleRunResult(
             compute_seconds=None,
             status="Skipped",
@@ -740,6 +913,22 @@ class Command(BaseCommand):
         handle_long_sequences: str,
         request_timeout_seconds: float,
     ) -> str | SingleRunResult | None:
+        """
+        Submits a single benchmark job to the specified API and returns the job ID or result.
+
+            Args:
+                session (requests.Session): The session to use for the request.
+                api_base_url (str): The base URL of the API.
+                method_key (str): The key for the method to be used.
+                input_df (pd.DataFrame): The input data as a DataFrame.
+                handle_long_sequences (str): Handling strategy for long sequences.
+                request_timeout_seconds (float): Timeout for the request in seconds.
+
+            Returns:
+                str | SingleRunResult | None: The job ID if successful, a result object on failure,
+                or None if no ID is returned.
+
+        """
         payload = {
             "targets": ["kcat"],
             "methods": {"kcat": method_key},
@@ -813,6 +1002,20 @@ class Command(BaseCommand):
         poll_seconds: float,
         request_timeout_seconds: float,
     ) -> dict[str, SingleRunResult]:
+        """
+        Polls submitted jobs until they reach a terminal state.
+
+        Args:
+            session (requests.Session): The session for making API requests.
+            api_base_url (str): The base URL for the API.
+            jobs (dict[str, PendingBenchmarkJob]): A dictionary of jobs to poll.
+            poll_seconds (float): Time to wait between polls.
+            request_timeout_seconds (float): Timeout for each request.
+
+        Returns:
+            dict[str, SingleRunResult]: A dictionary of completed job results.
+
+        """
         remaining = dict(jobs)
         completed: dict[str, SingleRunResult] = {}
         total = len(remaining)
@@ -849,6 +1052,20 @@ class Command(BaseCommand):
         request_timeout_seconds: float,
         require_gpu: bool,
     ) -> SingleRunResult | None:
+        """
+        Check the terminal status of a job and return the result.
+
+        Args:
+            session (requests.Session): The session for making API requests.
+            api_base_url (str): The base URL for the API.
+            public_id (str): The public identifier of the job.
+            request_timeout_seconds (float): Timeout for the request in seconds.
+            require_gpu (bool): Flag to indicate if GPU usage is required.
+
+        Returns:
+            SingleRunResult | None: The result of the job status check or None if not terminal.
+
+        """
         status_url = f"{api_base_url}/status/{public_id}/"
         try:
             response = session.get(
@@ -958,6 +1175,22 @@ class Command(BaseCommand):
         request_timeout_seconds: float,
         require_gpu: bool,
     ) -> SingleRunResult:
+        """
+        Polls a job until it reaches a terminal state.
+
+            Args:
+                session (requests.Session): The session for making API requests.
+                api_base_url (str): The base URL of the API.
+                public_id (str): The public identifier of the job.
+                poll_seconds (float): Time to wait between polls.
+                timeout_seconds (int): Not used, kept for compatibility.
+                request_timeout_seconds (float): Timeout for each request.
+                require_gpu (bool): Flag to indicate GPU requirement.
+
+            Returns:
+                SingleRunResult: The result of the job once it is complete.
+
+        """
         del timeout_seconds
         while True:
             maybe_result = self._check_job_terminal_once(
@@ -972,12 +1205,38 @@ class Command(BaseCommand):
             time.sleep(poll_seconds)
 
     def _normalize_method_key(self, method_key: str) -> str:
+        """
+        Normalize a method key by converting it to lowercase and removing non-alphanumeric
+        characters.
+
+            Args:
+                method_key (str): The method key to normalize.
+
+            Returns:
+                str: The normalized method key.
+
+        """
         return "".join(ch for ch in method_key.lower() if ch.isalnum())
 
-    def _resolve_method_key(self, *, token: str, available_methods: list[str]) -> str | None:
+    def _resolve_method_key(
+        self, *, token: str, available_methods: list[str]
+    ) -> str | None:
+        """
+        Resolve the method key from a token against available methods, considering normalization and
+        aliases.
+
+        Args:
+            token (str): The method token to resolve.
+            available_methods (list[str]): A list of available method keys.
+
+        Returns:
+            str | None: The resolved method key or None if not found.
+
+        """
         token_normalized = self._normalize_method_key(token)
         available_by_normalized = {
-            self._normalize_method_key(method_key): method_key for method_key in available_methods
+            self._normalize_method_key(method_key): method_key
+            for method_key in available_methods
         }
 
         if token in available_methods:
@@ -993,6 +1252,16 @@ class Command(BaseCommand):
         return available_by_normalized.get(alias_target_normalized)
 
     def _order_method_keys(self, method_keys: list[str]) -> list[str]:
+        """
+        Sorts method keys based on a preferred order and case-insensitively.
+
+            Args:
+                method_keys (list[str]): A list of method keys to be sorted.
+
+            Returns:
+                list[str]: A sorted list of method keys according to the preferred order.
+
+        """
         preferred_rank = {
             method_key: idx for idx, method_key in enumerate(PREFERRED_METHOD_ORDER)
         }
@@ -1018,6 +1287,25 @@ class Command(BaseCommand):
         request_timeout_seconds: float,
         require_gpu: bool,
     ) -> SingleRunResult:
+        """
+        Runs a single benchmark by submitting a job and polling for its result.
+
+            Args:
+                session (requests.Session): The session for making API requests.
+                api_base_url (str): The base URL for the API.
+                method_key (str): The key for the benchmark method.
+                input_df (pd.DataFrame): The input data for the benchmark.
+                handle_long_sequences (str): Strategy for handling long sequences.
+                poll_seconds (float): Time to wait between polls.
+                timeout_seconds (int): Maximum time to wait for the job to complete.
+                request_timeout_seconds (float): Timeout for the request.
+                require_gpu (bool): Flag to indicate if GPU is required.
+
+            Returns:
+                SingleRunResult: The result of the benchmark run, including status and error
+                messages if any.
+
+        """
         submission = self._submit_single_benchmark(
             session=session,
             api_base_url=api_base_url,
@@ -1052,6 +1340,18 @@ class Command(BaseCommand):
         api_base_url: str,
         request_timeout_seconds: float,
     ) -> list[str]:
+        """
+        Fetches kcat-capable methods from the specified API endpoint.
+
+        Args:
+            session (requests.Session): The session object for making HTTP requests.
+            api_base_url (str): The base URL of the API.
+            request_timeout_seconds (float): The timeout for the request in seconds.
+
+        Returns:
+            list[str]: A sorted list of kcat method IDs.
+
+        """
         methods_url = f"{api_base_url}/methods/"
         try:
             response = session.get(methods_url, timeout=request_timeout_seconds)
@@ -1084,6 +1384,17 @@ class Command(BaseCommand):
         return method_ids
 
     def _extract_error_message(self, response: requests.Response) -> str:
+        """
+        Extracts an error message from a given HTTP response.
+
+            Args:
+                response (requests.Response): The HTTP response object to extract the error message
+                from.
+
+            Returns:
+                str: The extracted error message or a default message if none is found.
+
+        """
         try:
             payload = response.json()
         except ValueError:
@@ -1097,6 +1408,16 @@ class Command(BaseCommand):
         return str(payload)[:500]
 
     def _to_optional_float(self, value: Any) -> float | None:
+        """
+        Convert a value to a float or return None if conversion fails.
+
+            Args:
+                value (Any): The value to convert to a float.
+
+            Returns:
+                float | None: The converted float value or None if conversion is not possible.
+
+        """
         if value is None:
             return None
         try:
@@ -1104,7 +1425,20 @@ class Command(BaseCommand):
         except (TypeError, ValueError):
             return None
 
-    def _format_method_summary(self, result: MethodBenchmarkResult, *, gpu_only: bool) -> str:
+    def _format_method_summary(
+        self, result: MethodBenchmarkResult, *, gpu_only: bool
+    ) -> str:
+        """
+        Formats a summary of method benchmark results.
+
+        Args:
+            result (MethodBenchmarkResult): The benchmark results to format.
+            gpu_only (bool): Flag indicating if only GPU results should be included.
+
+        Returns:
+            str: A formatted summary string of the benchmark results.
+
+        """
         uncached_cpu = result.uncached_cpu
         uncached_gpu = result.uncached_gpu
         cached = result.cached
@@ -1114,10 +1448,7 @@ class Command(BaseCommand):
         cached_time = self._format_compute_seconds(cached.compute_seconds)
 
         if gpu_only:
-            base = (
-                f"{result.method_key} - "
-                f"{uncached_gpu_time} compute (not cached gpu)"
-            )
+            base = f"{result.method_key} - {uncached_gpu_time} compute (not cached gpu)"
         else:
             base = (
                 f"{result.method_key} - "
@@ -1145,6 +1476,16 @@ class Command(BaseCommand):
         return base
 
     def _format_compute_seconds(self, seconds: float | None) -> str:
+        """
+        Format the given seconds into a string representation.
+
+            Args:
+                seconds (float | None): The number of seconds to format, or None.
+
+            Returns:
+                str: Formatted string of seconds or 'n/a' if None.
+
+        """
         if seconds is None:
             return "n/a"
         return f"{seconds:.2f}s"

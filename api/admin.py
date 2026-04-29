@@ -9,6 +9,19 @@ from db_models.seqmap_models import Sequence
 
 @admin.register(ApiUser)
 class ApiUserAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing API users, including quota and job summaries.
+
+        Args:
+            request: HttpRequest object for the admin action.
+            queryset: QuerySet of selected ApiUser instances.
+
+        Returns:
+            None: Performs actions on the selected users and displays messages in the admin
+            interface.
+
+    """
+
     list_display = [
         "ip_address",
         "quota_status",
@@ -33,6 +46,17 @@ class ApiUserAdmin(admin.ModelAdmin):
 
     @admin.display(description="Today's Usage")
     def quota_status(self, obj):
+        """
+        Determines the quota status of a given object and formats it for display.
+
+            Args:
+                obj (object): The object containing the IP address to check quota usage.
+
+            Returns:
+                str: HTML formatted string indicating quota usage and remaining amount with color
+                coding.
+
+        """
         usage = get_quota_usage(obj.ip_address)
         used = usage["used"]
         limit = usage["limit"]
@@ -55,6 +79,17 @@ class ApiUserAdmin(admin.ModelAdmin):
 
     @admin.display(description="Live Quota Status")
     def quota_info(self, obj):
+        """
+        Retrieve and format quota information for a given object.
+
+            Args:
+                obj (Object): The object containing quota-related attributes.
+
+            Returns:
+                str: HTML formatted string with current usage and reset information, or a message if
+                the user is not saved.
+
+        """
         if obj.pk:
             usage = get_quota_usage(obj.ip_address)
             reset_hours = usage["reset_in_seconds"] // 3600
@@ -78,12 +113,25 @@ class ApiUserAdmin(admin.ModelAdmin):
 
     @admin.display(description="Job Summary")
     def job_summary(self, obj):
+        """
+        Generates an HTML summary of job statistics for a given object.
+
+            Args:
+                obj (Object): The object containing job data, must have a primary key.
+
+            Returns:
+                str: HTML formatted string with job summary or a message prompting to save the user
+                first.
+
+        """
         if obj.pk:
             total_jobs = obj.total_jobs
             jobs_today = obj.jobs_today
             recent_jobs = obj.job_set.order_by("-submission_time")[:5]
 
-            html = f'<div style="background: #f8f8f8; padding: 10px; border-radius: 4px;">'
+            html = (
+                '<div style="background: #f8f8f8; padding: 10px; border-radius: 4px;">'
+            )
             html += f"<strong>Total Jobs:</strong> {total_jobs}<br>"
             html += f"<strong>Jobs Today:</strong> {jobs_today}<br>"
 
@@ -102,16 +150,49 @@ class ApiUserAdmin(admin.ModelAdmin):
 
     @admin.action(description="Block selected users")
     def block_users(self, request, queryset):
+        """
+        Block users in the given queryset and send a confirmation message.
+
+            Args:
+                request: The HTTP request object.
+                queryset: A queryset of user objects to be blocked.
+
+            Returns:
+                None
+
+        """
         count = queryset.update(is_blocked=True)
         self.message_user(request, f"{count} users blocked.")
 
     @admin.action(description="Unblock selected users")
     def unblock_users(self, request, queryset):
+        """
+        Unblocks users in the given queryset and sends a confirmation message.
+
+        Args:
+            request: HttpRequest object representing the current request.
+            queryset: QuerySet of users to be unblocked.
+
+        Returns:
+            None
+
+        """
         count = queryset.update(is_blocked=False)
         self.message_user(request, f"{count} users unblocked.")
 
     @admin.action(description="Reset today's quota for selected users")
     def reset_quotas(self, request, queryset):
+        """
+        Reset quotas for users in the given queryset.
+
+            Args:
+                request: The HTTP request object.
+                queryset: A queryset of user objects whose quotas will be reset.
+
+            Returns:
+                None: Displays a message indicating the number of users whose quotas were reset.
+
+        """
         from django_redis import get_redis_connection
         from api.utils.quotas import _key
 
@@ -128,6 +209,17 @@ class ApiUserAdmin(admin.ModelAdmin):
 # Update existing JobAdmin to use existing download URLs for both input and output
 @admin.register(Job)
 class JobAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing Job objects.
+
+    Args:
+        obj (Job): The Job instance to display.
+
+    Returns:
+        str: HTML formatted links for downloading job input and results.
+
+    """
+
     list_display = [
         "public_id",
         "user_ip",
@@ -153,6 +245,16 @@ class JobAdmin(admin.ModelAdmin):
 
     @admin.display(description="User IP")
     def user_ip(self, obj):
+        """
+        Generates an HTML link to the user's admin page with their IP address.
+
+            Args:
+                obj (YourModelType): An instance containing user information.
+
+            Returns:
+                str: An HTML anchor element linking to the user's admin page.
+
+        """
         if obj.user:
             user_url = reverse("admin:api_apiuser_change", args=[obj.user.pk])
             return format_html('<a href="{}">{}</a>', user_url, obj.user.ip_address)
@@ -160,6 +262,16 @@ class JobAdmin(admin.ModelAdmin):
 
     @admin.display(description="Downloads")
     def download_links(self, obj):
+        """
+        Generate download links for job input and output based on job status.
+
+        Args:
+            obj (Job): The job object containing public_id, status, and output_file attributes.
+
+        Returns:
+            str: HTML formatted string of download links or status messages.
+
+        """
         links = []
 
         # Always show input download link
@@ -180,6 +292,17 @@ class JobAdmin(admin.ModelAdmin):
 
 @admin.register(JobProgressStage)
 class JobProgressStageAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing job progress stages.
+
+        Args:
+            admin (ModelAdmin): Base class for Django admin interface.
+
+        Returns:
+            None: This class does not return a value.
+
+    """
+
     list_display = [
         "job",
         "stage_index",
@@ -242,22 +365,66 @@ class ApiKeyAdmin(admin.ModelAdmin):
 
     @admin.display(description="User IP")
     def user_ip(self, obj):
+        """
+        Generate a hyperlink to the user's IP address if available; otherwise, return the object's
+        IP address.
+
+        Args:
+            obj (object): The object containing user information.
+
+        Returns:
+            str: A formatted HTML link to the user's IP address or the object's IP address.
+
+        """
         user_url = reverse("admin:api_apiuser_change", args=[obj.user.pk])
         return format_html('<a href="{}">{}</a>', user_url, obj.user.ip_address)
 
     @admin.action(description="Revoke selected API keys")
     def revoke_keys(self, request, queryset):
+        """
+        Revoke API keys by updating their status to inactive.
+
+            Args:
+                request: The HTTP request object.
+                queryset: A queryset of API key objects to be updated.
+
+            Returns:
+                None: This function does not return a value.
+
+        """
         count = queryset.update(is_active=False)
         self.message_user(request, f"{count} API key(s) revoked.")
 
     @admin.action(description="Re-activate selected API keys")
     def activate_keys(self, request, queryset):
+        """
+        Re-activates API keys in the given queryset.
+
+        Args:
+            request: HttpRequest object for the current request.
+            queryset: QuerySet of API keys to be updated.
+
+        Returns:
+            None
+
+        """
         count = queryset.update(is_active=True)
         self.message_user(request, f"{count} API key(s) re-activated.")
 
 
 @admin.register(Sequence)
 class SequenceAdmin(admin.ModelAdmin):
+    """
+    Admin interface for managing Sequence models.
+
+        Args:
+            admin: The Django admin module for model administration.
+
+        Returns:
+            None: This class does not return a value.
+
+    """
+
     list_display = ("id", "len", "uses_count", "last_seen_at")
     search_fields = ("id", "seq", "sha256")
     readonly_fields = [f.name for f in Sequence._meta.fields]

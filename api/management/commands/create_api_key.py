@@ -19,9 +19,31 @@ from api.utils.quotas import get_or_create_user
 
 
 class Command(BaseCommand):
+    """
+    Create a new API key associated with a specified IP address.
+
+    Args:
+        --ip (str): The IP address to associate with this key (IPv4 or IPv6).
+        --label (str, optional): A human-readable label for the key.
+
+    Returns:
+        None: Outputs the created API key and associated details to stdout.
+
+    """
+
     help = "Create a new API key and associate it with the given IP address."
 
     def add_arguments(self, parser):
+        """
+        Add command-line arguments for IP address and label.
+
+            Args:
+                parser (argparse.ArgumentParser): The argument parser to add arguments to.
+
+            Returns:
+                None: This function does not return a value.
+
+        """
         parser.add_argument(
             "--ip",
             required=True,
@@ -34,6 +56,17 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handles the creation of an API key for a user based on their IP address and label.
+
+        Args:
+            ip (str): The user's IP address to validate.
+            label (str): An optional label for the API key.
+
+        Returns:
+            ApiKey: The created API key object.
+
+        """
         ip = options["ip"].strip()
         label = options["label"].strip()
 
@@ -69,6 +102,8 @@ class Command(BaseCommand):
         self.stdout.write(f"  Quota:  {user.effective_daily_limit:,} predictions/day")
         self.stdout.write("")
         self.stdout.write(
-            self.style.WARNING("⚠  Store this key securely — it will not be shown again.")
+            self.style.WARNING(
+                "⚠  Store this key securely — it will not be shown again."
+            )
         )
         self.stdout.write("")

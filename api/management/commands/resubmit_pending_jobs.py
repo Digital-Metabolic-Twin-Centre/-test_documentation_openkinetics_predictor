@@ -18,7 +18,6 @@ Run with:
 import ast
 
 from django.core.management.base import BaseCommand
-from django.utils import timezone
 
 from api.models import Job
 from api.tasks import run_multi_prediction
@@ -42,6 +41,16 @@ class Command(BaseCommand):
     help = "Flush all Pending jobs and resubmit them as fresh Celery tasks"
 
     def add_arguments(self, parser):
+        """
+        Configure command-line arguments for job resubmission.
+
+            Args:
+                parser (argparse.ArgumentParser): The argument parser to configure.
+
+            Returns:
+                None: This function does not return a value.
+
+        """
         parser.add_argument(
             "--ids",
             nargs="+",
@@ -55,6 +64,13 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        """
+        Handles the processing of pending jobs, including purging the Celery queue, revoking tasks,
+        and resubmitting jobs.\n\n    Args:\n        args: Variable length argument list.\n
+        options (dict): Options containing 'dry_run' (bool) and 'ids' (list) for specific job
+        filtering.\n\n    Returns:\n        None: Outputs the status of operations performed on the
+        jobs.
+        """
         dry_run = options["dry_run"]
         specific_ids = options.get("ids")
 
@@ -65,12 +81,16 @@ class Command(BaseCommand):
         jobs = list(qs.select_related("user"))
 
         if not jobs:
-            self.stdout.write(self.style.WARNING("No Pending jobs found — nothing to do."))
+            self.stdout.write(
+                self.style.WARNING("No Pending jobs found — nothing to do.")
+            )
             return
 
         self.stdout.write(f"Found {len(jobs)} Pending job(s):")
         for j in jobs:
-            self.stdout.write(f"  {j.public_id}  {j.prediction_type}  rows={j.requested_rows}")
+            self.stdout.write(
+                f"  {j.public_id}  {j.prediction_type}  rows={j.requested_rows}"
+            )
 
         if dry_run:
             self.stdout.write(self.style.WARNING("Dry-run mode — no changes made."))
@@ -107,7 +127,9 @@ class Command(BaseCommand):
             purged = app.control.purge()
             self.stdout.write(f"  Purged {purged} message(s) from the broker queue.")
         except Exception as exc:
-            self.stdout.write(self.style.WARNING(f"  Queue purge failed (non-fatal): {exc}"))
+            self.stdout.write(
+                self.style.WARNING(f"  Queue purge failed (non-fatal): {exc}")
+            )
 
         # ------------------------------------------------------------------
         # Step 3: revoke tasks that are already being worked on by a worker
@@ -119,7 +141,9 @@ class Command(BaseCommand):
             reserved = insp.reserved() or {}
             scheduled = insp.scheduled() or {}
         except Exception as exc:
-            self.stdout.write(self.style.WARNING(f"  Inspect failed (non-fatal): {exc}"))
+            self.stdout.write(
+                self.style.WARNING(f"  Inspect failed (non-fatal): {exc}")
+            )
             active = reserved = scheduled = {}
 
         revoked = []
@@ -147,7 +171,9 @@ class Command(BaseCommand):
             for bucket, tid, pid in revoked:
                 self.stdout.write(f"  Revoked [{bucket}] task {tid} for job {pid}")
         else:
-            self.stdout.write("  No active/reserved/scheduled tasks found for these jobs.")
+            self.stdout.write(
+                "  No active/reserved/scheduled tasks found for these jobs."
+            )
 
         # ------------------------------------------------------------------
         # Step 4: delete stale DB rows
@@ -214,4 +240,6 @@ class Command(BaseCommand):
                 )
             )
 
-        self.stdout.write(self.style.SUCCESS(f"\nDone — {len(snapshots)} job(s) resubmitted."))
+        self.stdout.write(
+            self.style.SUCCESS(f"\nDone — {len(snapshots)} job(s) resubmitted.")
+        )
