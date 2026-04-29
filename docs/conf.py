@@ -1,6 +1,6 @@
 from datetime import datetime
 
-project = "Open Kinetic Predictor"
+project = "Student Project Documentation"
 author = "Digital Metabolic Twin Centre"
 copyright = f"{datetime.now().year}, {author}"
 
